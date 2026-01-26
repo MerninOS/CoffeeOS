@@ -1,0 +1,469 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { format } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Search,
+  MoreHorizontal,
+  Trash2,
+  Eye,
+  Package,
+  Plus,
+} from "lucide-react";
+import { deleteBatch, createComponentFromBatch } from "../actions";
+
+interface Batch {
+  id: string;
+  coffee_name: string;
+  lot_code: string | null;
+  price_basis: "per_lb" | "per_kg";
+  price_value: number;
+  green_weight_g: number;
+  roasted_weight_g: number;
+  rejects_g: number;
+  sellable_g: number;
+  loss_percent: number;
+  roast_minutes: number;
+  batch_date: string;
+  energy_kwh: number | null;
+  kwh_rate: number | null;
+  green_cost_per_g: number;
+  component_id: string | null;
+  created_at: string;
+  roasting_sessions: {
+    id: string;
+    session_date: string;
+    vendor_name: string;
+  } | null;
+  components: {
+    id: string;
+    name: string;
+  } | null;
+}
+
+interface BatchesClientProps {
+  initialBatches: Batch[];
+}
+
+const UNITS = ["g", "oz", "lb", "kg"];
+
+export function BatchesClient({ initialBatches }: BatchesClientProps) {
+  const [batches, setBatches] = useState(initialBatches);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [createComponentBatch, setCreateComponentBatch] =
+    useState<Batch | null>(null);
+  const [componentFormData, setComponentFormData] = useState({
+    name: "",
+    costPerUnit: "",
+    unit: "g",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const filteredBatches = batches.filter((batch) => {
+    const query = searchQuery.toLowerCase();
+    return (
+      batch.coffee_name?.toLowerCase().includes(query) ||
+      batch.lot_code?.toLowerCase().includes(query)
+    );
+  });
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+
+    const result = await deleteBatch(deleteId);
+    if (result.error) {
+      alert(result.error);
+    } else {
+      setBatches(batches.filter((b) => b.id !== deleteId));
+    }
+    setDeleteId(null);
+  };
+
+  const openCreateComponent = (batch: Batch) => {
+    setCreateComponentBatch(batch);
+    // Pre-fill with suggested values
+    const suggestedName = `Roasted ${batch.coffee_name}`;
+    // Calculate cost per gram from the batch data
+    const totalGreenCost = batch.green_cost_per_g * batch.green_weight_g;
+    const costPerG = batch.sellable_g > 0 ? totalGreenCost / batch.sellable_g : 0;
+    setComponentFormData({
+      name: suggestedName,
+      costPerUnit: costPerG.toFixed(4),
+      unit: "g",
+    });
+  };
+
+  const handleCreateComponent = async () => {
+    if (!createComponentBatch) return;
+    setIsSubmitting(true);
+
+    const result = await createComponentFromBatch(createComponentBatch.id, {
+      name: componentFormData.name,
+      costPerUnit: parseFloat(componentFormData.costPerUnit),
+      unit: componentFormData.unit,
+    });
+    setIsSubmitting(false);
+
+    if (result.error) {
+      alert(result.error);
+      return;
+    }
+
+    if (result.component) {
+      // Update the batch in our local state to show it's linked
+      setBatches(
+        batches.map((b) =>
+          b.id === createComponentBatch.id
+            ? {
+                ...b,
+                component_id: result.component.id,
+                components: { id: result.component.id, name: result.component.name },
+              }
+            : b
+        )
+      );
+      setCreateComponentBatch(null);
+      setComponentFormData({ name: "", costPerUnit: "", unit: "g" });
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">All Batches</h2>
+          <p className="text-sm text-muted-foreground">
+            View all roasting batches across sessions
+          </p>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search by coffee name or lot code..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
+      {batches.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="rounded-full bg-muted p-4 mb-4">
+              <Package className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">No Batches Yet</h3>
+            <p className="text-muted-foreground text-center mb-4">
+              Create a roasting session and add batches to see them here
+            </p>
+            <Button asChild>
+              <Link href="/roasting">Go to Sessions</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Coffee</TableHead>
+                  <TableHead>Session</TableHead>
+                  <TableHead>Lot Code</TableHead>
+                  <TableHead className="text-right">Green (g)</TableHead>
+                  <TableHead className="text-right">Roasted (g)</TableHead>
+                  <TableHead className="text-right">Loss %</TableHead>
+                  <TableHead className="text-right">Sellable (g)</TableHead>
+                  <TableHead>Component</TableHead>
+                  <TableHead className="w-[50px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredBatches.map((batch) => (
+                  <TableRow key={batch.id}>
+                    <TableCell className="font-medium">
+                      {batch.coffee_name}
+                    </TableCell>
+                    <TableCell>
+                      {batch.roasting_sessions ? (
+                        <Link
+                          href={`/roasting/sessions/${batch.roasting_sessions.id}`}
+                          className="hover:underline"
+                        >
+                          {format(
+                            new Date(batch.roasting_sessions.session_date),
+                            "MMM d, yyyy"
+                          )}
+                        </Link>
+                      ) : (
+                        format(new Date(batch.batch_date), "MMM d, yyyy")
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {batch.lot_code ? (
+                        <Badge variant="outline">{batch.lot_code}</Badge>
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {batch.green_weight_g.toFixed(0)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {batch.roasted_weight_g.toFixed(0)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span
+                        className={
+                          batch.loss_percent > 18
+                            ? "text-destructive"
+                            : batch.loss_percent < 12
+                              ? "text-amber-600"
+                              : "text-green-600"
+                        }
+                      >
+                        {batch.loss_percent.toFixed(1)}%
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {batch.sellable_g.toFixed(0)}
+                    </TableCell>
+                    <TableCell>
+                      {batch.components ? (
+                        <Link
+                          href="/components"
+                          className="text-sm hover:underline flex items-center gap-1"
+                        >
+                          <Package className="h-3 w-3" />
+                          {batch.components.name}
+                        </Link>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => openCreateComponent(batch)}
+                        >
+                          <Plus className="mr-1 h-3 w-3" />
+                          Create
+                        </Button>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {batch.roasting_sessions && (
+                            <DropdownMenuItem asChild>
+                              <Link
+                                href={`/roasting/sessions/${batch.roasting_sessions.id}`}
+                              >
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Session
+                              </Link>
+                            </DropdownMenuItem>
+                          )}
+                          {!batch.component_id && (
+                            <DropdownMenuItem
+                              onClick={() => openCreateComponent(batch)}
+                            >
+                              <Package className="mr-2 h-4 w-4" />
+                              Create Component
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => setDeleteId(batch.id)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Create Component Dialog */}
+      <Dialog
+        open={!!createComponentBatch}
+        onOpenChange={() => setCreateComponentBatch(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Component from Batch</DialogTitle>
+            <DialogDescription>
+              Create a cost component from this roasted batch to use in product
+              COGS calculations
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="componentName">Component Name</Label>
+              <Input
+                id="componentName"
+                value={componentFormData.name}
+                onChange={(e) =>
+                  setComponentFormData({
+                    ...componentFormData,
+                    name: e.target.value,
+                  })
+                }
+                placeholder="e.g., Roasted Ethiopia Yirgacheffe"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="costPerUnit">Cost per Unit</Label>
+                <Input
+                  id="costPerUnit"
+                  type="number"
+                  step="0.0001"
+                  value={componentFormData.costPerUnit}
+                  onChange={(e) =>
+                    setComponentFormData({
+                      ...componentFormData,
+                      costPerUnit: e.target.value,
+                    })
+                  }
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="unit">Unit</Label>
+                <Select
+                  value={componentFormData.unit}
+                  onValueChange={(value) =>
+                    setComponentFormData({ ...componentFormData, unit: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UNITS.map((unit) => (
+                      <SelectItem key={unit} value={unit}>
+                        {unit}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {createComponentBatch && (
+              <div className="rounded-lg border bg-muted/50 p-3 text-sm">
+                <p className="font-medium mb-1">Batch Details:</p>
+                <ul className="text-muted-foreground space-y-0.5">
+                  <li>Coffee: {createComponentBatch.coffee_name}</li>
+                  <li>Lot: {createComponentBatch.lot_code || "N/A"}</li>
+                  <li>Sellable Weight: {createComponentBatch.sellable_g.toFixed(0)}g</li>
+                  <li>Loss: {createComponentBatch.loss_percent.toFixed(1)}%</li>
+                </ul>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCreateComponentBatch(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateComponent}
+              disabled={
+                isSubmitting ||
+                !componentFormData.name ||
+                !componentFormData.costPerUnit
+              }
+            >
+              {isSubmitting ? "Creating..." : "Create Component"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Batch?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this batch. This action cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

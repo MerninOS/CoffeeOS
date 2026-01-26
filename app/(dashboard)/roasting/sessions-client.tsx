@@ -1,0 +1,467 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { format } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, MoreHorizontal, Trash2, Eye, Flame } from "lucide-react";
+import { createSession, deleteSession } from "./actions";
+
+interface Session {
+  id: string;
+  session_date: string;
+  vendor_name: string;
+  rate_per_hour: number;
+  setup_minutes: number;
+  cleanup_minutes: number;
+  billing_granularity_minutes: number;
+  allocation_mode: string;
+  billable_minutes: number | null;
+  session_toll_cost: number | null;
+  notes: string | null;
+  created_at: string;
+  batch_count: number;
+  total_green_weight_g: number;
+  total_roasted_weight_g: number;
+}
+
+interface SessionsClientProps {
+  initialSessions: Session[];
+}
+
+export function SessionsClient({ initialSessions }: SessionsClientProps) {
+  const router = useRouter();
+  const [sessions, setSessions] = useState(initialSessions);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    sessionDate: format(new Date(), "yyyy-MM-dd"),
+    vendorName: "",
+    ratePerHour: "",
+    setupMinutes: "0",
+    cleanupMinutes: "0",
+    billingGranularityMinutes: "15",
+    allocationMode: "time_weighted",
+    notes: "",
+  });
+
+  const handleCreate = async () => {
+    if (!formData.vendorName || !formData.ratePerHour) {
+      alert("Please fill in vendor name and hourly rate");
+      return;
+    }
+
+    setIsSubmitting(true);
+    const result = await createSession({
+      sessionDate: formData.sessionDate,
+      vendorName: formData.vendorName,
+      ratePerHour: parseFloat(formData.ratePerHour),
+      setupMinutes: parseInt(formData.setupMinutes) || 0,
+      cleanupMinutes: parseInt(formData.cleanupMinutes) || 0,
+      billingGranularityMinutes: parseInt(formData.billingGranularityMinutes) || 15,
+      allocationMode: formData.allocationMode,
+      notes: formData.notes || undefined,
+    });
+    setIsSubmitting(false);
+
+    if (result.error) {
+      alert(result.error);
+      return;
+    }
+
+    if (result.session) {
+      setSessions([
+        {
+          ...result.session,
+          batch_count: 0,
+          total_green_weight_g: 0,
+          total_roasted_weight_g: 0,
+        },
+        ...sessions,
+      ]);
+      setIsCreateOpen(false);
+      setFormData({
+        sessionDate: format(new Date(), "yyyy-MM-dd"),
+        vendorName: "",
+        ratePerHour: "",
+        setupMinutes: "0",
+        cleanupMinutes: "0",
+        billingGranularityMinutes: "15",
+        allocationMode: "time_weighted",
+        notes: "",
+      });
+      // Navigate to the new session
+      router.push(`/roasting/sessions/${result.session.id}`);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+
+    const result = await deleteSession(deleteId);
+    if (result.error) {
+      alert(result.error);
+    } else {
+      setSessions(sessions.filter((s) => s.id !== deleteId));
+    }
+    setDeleteId(null);
+  };
+
+  const calculateWeightLoss = (green: number, roasted: number) => {
+    if (!green || !roasted) return null;
+    return ((green - roasted) / green) * 100;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Roasting Sessions</h2>
+          <p className="text-sm text-muted-foreground">
+            View and manage your roasting sessions
+          </p>
+        </div>
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              New Session
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create Roasting Session</DialogTitle>
+              <DialogDescription>
+                Start a new roasting session to track your batches
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="sessionDate">Session Date</Label>
+                  <Input
+                    id="sessionDate"
+                    type="date"
+                    value={formData.sessionDate}
+                    onChange={(e) =>
+                      setFormData({ ...formData, sessionDate: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="vendorName">Vendor / Roastery Name</Label>
+                  <Input
+                    id="vendorName"
+                    value={formData.vendorName}
+                    onChange={(e) =>
+                      setFormData({ ...formData, vendorName: e.target.value })
+                    }
+                    placeholder="e.g., Mill City Roasters"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="ratePerHour">Rate per Hour ($)</Label>
+                  <Input
+                    id="ratePerHour"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.ratePerHour}
+                    onChange={(e) =>
+                      setFormData({ ...formData, ratePerHour: e.target.value })
+                    }
+                    placeholder="e.g., 75.00"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="billingGranularityMinutes">Billing Granularity (min)</Label>
+                  <Input
+                    id="billingGranularityMinutes"
+                    type="number"
+                    min="1"
+                    value={formData.billingGranularityMinutes}
+                    onChange={(e) =>
+                      setFormData({ ...formData, billingGranularityMinutes: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="setupMinutes">Setup Time (min)</Label>
+                  <Input
+                    id="setupMinutes"
+                    type="number"
+                    min="0"
+                    value={formData.setupMinutes}
+                    onChange={(e) =>
+                      setFormData({ ...formData, setupMinutes: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cleanupMinutes">Cleanup Time (min)</Label>
+                  <Input
+                    id="cleanupMinutes"
+                    type="number"
+                    min="0"
+                    value={formData.cleanupMinutes}
+                    onChange={(e) =>
+                      setFormData({ ...formData, cleanupMinutes: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes (optional)</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) =>
+                    setFormData({ ...formData, notes: e.target.value })
+                  }
+                  placeholder="Any notes for this session..."
+                  rows={2}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleCreate} disabled={isSubmitting}>
+                {isSubmitting ? "Creating..." : "Create Session"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {sessions.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="rounded-full bg-muted p-4 mb-4">
+              <Flame className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">No Sessions Yet</h3>
+            <p className="text-muted-foreground text-center mb-4">
+              Start tracking your roasting by creating your first session
+            </p>
+            <Button onClick={() => setIsCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create First Session
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Summary Cards */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Sessions
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{sessions.length}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Batches
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {sessions.reduce((sum, s) => sum + s.batch_count, 0)}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Roasted (g)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {sessions
+                    .reduce((sum, s) => sum + s.total_roasted_weight_g, 0)
+                    .toFixed(0)}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Sessions Table */}
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Vendor</TableHead>
+                    <TableHead className="text-center">Batches</TableHead>
+                    <TableHead className="text-right">Green (g)</TableHead>
+                    <TableHead className="text-right">Roasted (g)</TableHead>
+                    <TableHead className="text-right">Weight Loss</TableHead>
+                    <TableHead className="text-right">Toll Cost</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sessions.map((session) => {
+                    const weightLoss = calculateWeightLoss(
+                      session.total_green_weight_g,
+                      session.total_roasted_weight_g
+                    );
+
+                    return (
+                      <TableRow key={session.id}>
+                        <TableCell>
+                          <Link
+                            href={`/roasting/sessions/${session.id}`}
+                            className="font-medium hover:underline"
+                          >
+                            {format(new Date(session.session_date), "MMM d, yyyy")}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {session.vendor_name}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {session.batch_count}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {session.total_green_weight_g.toFixed(0)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {session.total_roasted_weight_g.toFixed(0)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {weightLoss !== null ? (
+                            <span
+                              className={
+                                weightLoss > 18
+                                  ? "text-destructive"
+                                  : weightLoss < 12
+                                    ? "text-amber-600"
+                                    : "text-green-600"
+                              }
+                            >
+                              {weightLoss.toFixed(1)}%
+                            </span>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {session.session_toll_cost !== null
+                            ? `$${session.session_toll_cost.toFixed(2)}`
+                            : "-"}
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link href={`/roasting/sessions/${session.id}`}>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  View Details
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => setDeleteId(session.id)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this roasting session and all its
+              batches. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
