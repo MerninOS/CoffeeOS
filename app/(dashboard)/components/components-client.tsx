@@ -306,7 +306,7 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
                               {component.notes || "-"}
                             </TableCell>
                             <TableCell className="text-right">
-                              ${component.cost_per_unit.toFixed(2)}/
+                              ${component.cost_per_unit.toFixed(4)}/
                               {component.unit}
                             </TableCell>
                             <TableCell className="text-right">

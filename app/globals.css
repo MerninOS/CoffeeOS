@@ -10,7 +10,7 @@
   --card-foreground: oklch(0.25 0.02 45);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.25 0.02 45);
-  --primary: rgb(230, 82, 53);
+  --primary: #ff3131;
   --primary-foreground: rgb(255, 255, 255);
   --secondary: rgb(255, 255, 255);
   --secondary-foreground: oklch(0.35 0.05 55);
@@ -31,7 +31,7 @@
   --radius: 1rem;
   --sidebar: rgb(255, 255, 255);
   --sidebar-foreground: rgb(47, 47, 47);
-  --sidebar-primary: rgb(230, 82, 53);
+  --sidebar-primary: #ff3131;
   --sidebar-primary-foreground: rgb(255, 255, 255);
   --sidebar-accent: rgb(243, 239, 239);
   --sidebar-accent-foreground: oklch(0.95 0.01 75);
