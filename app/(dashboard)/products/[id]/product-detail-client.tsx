@@ -184,7 +184,7 @@ export function ProductDetailClient({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 mb-40">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" asChild>
           <Link href="/products">
@@ -206,6 +206,60 @@ export function ProductDetailClient({
           {message.text}
         </div>
       )}
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Selling Price</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatMoney(priceValue)}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total COGS</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatMoney(calculatedCogs)}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Profit per Unit</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${profit >= 0 ? "text-green-600" : "text-destructive"}`}>
+              {formatMoney(profit)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Profit Margin</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <div className="text-2xl font-bold">{margin.toFixed(1)}%</div>
+              <Badge
+                variant="secondary"
+                className={
+                  margin >= 30
+                    ? "bg-green-500/10 text-green-600"
+                    : margin >= 15
+                      ? "bg-amber-500/10 text-amber-600"
+                      : "bg-red-500/10 text-red-600"
+                }
+              >
+                <TrendingUp className="mr-1 h-3 w-3" />
+                {margin >= 30 ? "Healthy" : margin >= 15 ? "Fair" : "Low"}
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Product Info */}
@@ -550,60 +604,7 @@ export function ProductDetailClient({
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Selling Price</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatMoney(priceValue)}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total COGS</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatMoney(calculatedCogs)}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Profit per Unit</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${profit >= 0 ? "text-green-600" : "text-destructive"}`}>
-              {formatMoney(profit)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Profit Margin</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <div className="text-2xl font-bold">{margin.toFixed(1)}%</div>
-              <Badge
-                variant="secondary"
-                className={
-                  margin >= 30
-                    ? "bg-green-500/10 text-green-600"
-                    : margin >= 15
-                      ? "bg-amber-500/10 text-amber-600"
-                      : "bg-red-500/10 text-red-600"
-                }
-              >
-                <TrendingUp className="mr-1 h-3 w-3" />
-                {margin >= 30 ? "Healthy" : margin >= 15 ? "Fair" : "Low"}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      
     </div>
   );
 }
