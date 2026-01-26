@@ -206,13 +206,13 @@ export function ProductDetailClient({
           {message.text}
         </div>
       )}
-      <div className="grid gap-4 grid-cols-2 sm:grid-cols-2 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
         <Card>
           <CardHeader className="md:pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Selling Price</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-lg md:text-2xl font-bold">{formatMoney(priceValue)}</div>
+            <div className="text-2xl font-bold">{formatMoney(priceValue)}</div>
           </CardContent>
         </Card>
 
@@ -221,7 +221,7 @@ export function ProductDetailClient({
             <CardTitle className="text-sm font-medium text-muted-foreground">Total COGS</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-lg md:text-2xl font-bold">{formatMoney(calculatedCogs)}</div>
+            <div className="text-2xl font-bold">{formatMoney(calculatedCogs)}</div>
           </CardContent>
         </Card>
 
@@ -230,7 +230,7 @@ export function ProductDetailClient({
             <CardTitle className="text-sm font-medium text-muted-foreground">Profit per Unit</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className={`text-lg md:text-2xl font-bold ${profit >= 0 ? "text-green-600" : "text-destructive"}`}>
+            <div className={`text-2xl font-bold ${profit >= 0 ? "text-green-600" : "text-destructive"}`}>
               {formatMoney(profit)}
             </div>
           </CardContent>
@@ -242,7 +242,7 @@ export function ProductDetailClient({
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <div className="text-lg md:text-2xl font-bold">{margin.toFixed(1)}%</div>
+              <div className="text-2xl font-bold">{margin.toFixed(1)}%</div>
               <Badge
                 variant="secondary"
                 className={
@@ -451,7 +451,7 @@ export function ProductDetailClient({
                               value={sc.componentId}
                               onValueChange={(value) => updateComponent(index, "componentId", value)}
                             >
-                              <SelectTrigger className="w-full">
+                              <SelectTrigger className="w-full max-w-60">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
