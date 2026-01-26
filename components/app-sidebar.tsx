@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image"
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -33,6 +34,8 @@ import {
   Settings,
   LogOut,
   ChevronUp,
+  Crown,
+  Snowflake
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -95,14 +98,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <Coffee className="h-4 w-4" />
-                </div>
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold text-foreground">CoffeeOS</span>
-                  <span className="text-xs text-foreground">
-                    Cost Calculator
-                  </span>
+                <Image alt={"coffee os logo"} width={200} height={100} src="/coffee_os_logo.png" />
                 </div>
               </Link>
             </SidebarMenuButton>
@@ -150,6 +147,33 @@ export function AppSidebar({ user }: AppSidebarProps) {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+        <SidebarGroup>
+            <SidebarGroupLabel className="text-sidebar-foreground">Apps</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                  >
+                    <Link href="https://v0-new-chat-eight-topaz.vercel.app/auth/login" target="_blank">
+                      <Snowflake className="h-4 w-4 text-sidebar-foreground" />
+                      <span className="text-foreground">Soluble</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                  >
+                    <Link href="/settings">
+                      <Crown className="h-4 w-4 text-sidebar-foreground" />
+                      <span className="text-foreground">CrowdRoast</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react"
+import Image from "next/image"
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -52,8 +53,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary">
-            <Coffee className="h-6 w-6 text-primary-foreground" />
+        <div className="mx-auto mb-4 flexitems-center justify-center">
+            <Image alt={"coffee os logo"} width={250} height={100} src="/coffee_os_logo.png" />
           </div>
           <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
           <CardDescription>

@@ -1,34 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { updateProductComponents, updateProductPrice } from "./actions";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft,
@@ -41,6 +22,8 @@ import {
   TrendingUp,
   AlertCircle,
 } from "lucide-react";
+
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 interface Component {
   id: string;
@@ -77,6 +60,19 @@ interface SelectedComponent {
   quantity: number;
 }
 
+const formatMoney = (n: number) => `$${n.toFixed(3)}`;
+
+const chartColors = [
+  "#2563eb", // blue
+  "#16a34a", // green
+  "#f97316", // orange
+  "#a855f7", // purple
+  "#dc2626", // red
+  "#0ea5e9", // sky
+  "#eab308", // yellow
+  "#64748b", // slate
+];
+
 export function ProductDetailClient({
   product,
   availableComponents,
@@ -88,9 +84,8 @@ export function ProductDetailClient({
       quantity: pc.quantity,
     }))
   );
-  const [sellingPrice, setSellingPrice] = useState(
-    product.price?.toString() || ""
-  );
+
+  const [sellingPrice, setSellingPrice] = useState(product.price?.toString() || "");
   const [isSaving, setIsSaving] = useState(false);
   const [isPriceUpdating, setIsPriceUpdating] = useState(false);
   const [message, setMessage] = useState<{
@@ -98,32 +93,47 @@ export function ProductDetailClient({
     text: string;
   } | null>(null);
 
-  // Calculate COGS from selected components
-  const calculatedCogs = selectedComponents.reduce((sum, sc) => {
-    const component = availableComponents.find((c) => c.id === sc.componentId);
-    if (component) {
-      return sum + sc.quantity * component.cost_per_unit;
-    }
-    return sum;
-  }, 0);
+  const calculatedCogs = useMemo(() => {
+    return selectedComponents.reduce((sum, sc) => {
+      const component = availableComponents.find((c) => c.id === sc.componentId);
+      if (component) return sum + sc.quantity * component.cost_per_unit;
+      return sum;
+    }, 0);
+  }, [selectedComponents, availableComponents]);
 
   const priceValue = parseFloat(sellingPrice) || 0;
   const margin = priceValue > 0 ? ((priceValue - calculatedCogs) / priceValue) * 100 : 0;
   const profit = priceValue - calculatedCogs;
 
+  const cogsBreakdown = useMemo(() => {
+    const map = new Map<string, { name: string; value: number }>();
+
+    for (const sc of selectedComponents) {
+      const component = availableComponents.find((c) => c.id === sc.componentId);
+      if (!component) continue;
+
+      const value = sc.quantity * component.cost_per_unit;
+      if (value <= 0) continue;
+
+      const prev = map.get(component.id);
+      map.set(component.id, {
+        name: component.name,
+        value: (prev?.value ?? 0) + value,
+      });
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.value - a.value);
+  }, [selectedComponents, availableComponents]);
+
   const addComponent = () => {
     if (availableComponents.length === 0) return;
 
-    // Find first component not already selected
     const unusedComponent = availableComponents.find(
       (c) => !selectedComponents.some((sc) => sc.componentId === c.id)
     );
 
     if (unusedComponent) {
-      setSelectedComponents([
-        ...selectedComponents,
-        { componentId: unusedComponent.id, quantity: 1 },
-      ]);
+      setSelectedComponents([...selectedComponents, { componentId: unusedComponent.id, quantity: 1 }]);
     }
   };
 
@@ -131,11 +141,7 @@ export function ProductDetailClient({
     setSelectedComponents(selectedComponents.filter((_, i) => i !== index));
   };
 
-  const updateComponent = (
-    index: number,
-    field: keyof SelectedComponent,
-    value: string | number
-  ) => {
+  const updateComponent = (index: number, field: keyof SelectedComponent, value: string | number) => {
     const updated = [...selectedComponents];
     updated[index] = { ...updated[index], [field]: value };
     setSelectedComponents(updated);
@@ -201,39 +207,40 @@ export function ProductDetailClient({
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-2">
         {/* Product Info */}
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle>Product Details</CardTitle>
           </CardHeader>
+
           <CardContent className="space-y-4">
-            {product.image_url ? (
-              <Image
-                src={product.image_url || "/placeholder.svg"}
-                alt={product.title}
-                width={300}
-                height={300}
-                className="w-full rounded-lg object-cover"
-              />
-            ) : (
-              <div className="flex h-48 w-full items-center justify-center rounded-lg bg-muted">
-                <Package className="h-16 w-16 text-muted-foreground" />
-              </div>
-            )}
-            <div>
-              <h2 className="text-xl font-semibold">{product.title}</h2>
-              {product.sku && (
-                <p className="mt-1 font-mono text-sm text-muted-foreground">
-                  SKU: {product.sku}
-                </p>
+            {/* Mobile-friendly: slightly shorter on small screens */}
+            <div className="relative w-full overflow-hidden rounded-lg bg-muted aspect-[4/3] sm:aspect-square">
+              {product.image_url ? (
+                <Image
+                  src={product.image_url}
+                  alt={product.title}
+                  fill
+                  sizes="(min-width: 1024px) 50vw, 100vw"
+                  className="object-cover"
+                  priority={false}
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <Package className="h-10 w-10 text-muted-foreground" />
+                </div>
               )}
             </div>
-            {product.description && (
-              <p className="text-sm text-muted-foreground">{product.description}</p>
-            )}
 
-            <div className="space-y-3 pt-4">
+            <div className="min-w-0">
+              <h2 className="truncate text-xl font-semibold">{product.title}</h2>
+              {product.sku && (
+                <p className="mt-1 font-mono text-sm text-muted-foreground">SKU: {product.sku}</p>
+              )}
+            </div>
+
+            <div className="space-y-3 pt-2">
               <div>
                 <Label htmlFor="sellingPrice">Selling Price</Label>
                 <div className="mt-1 flex gap-2">
@@ -242,6 +249,7 @@ export function ProductDetailClient({
                     <Input
                       id="sellingPrice"
                       type="number"
+                      inputMode="decimal"
                       step="0.01"
                       min="0"
                       value={sellingPrice}
@@ -267,15 +275,74 @@ export function ProductDetailClient({
           </CardContent>
         </Card>
 
+        {/* COGS Breakdown */}
+        <Card className="lg:col-span-1">
+          <CardHeader>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle>COGS Breakdown</CardTitle>
+              <span className="text-2xl font-bold">{formatMoney(calculatedCogs)}</span>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            {calculatedCogs > 0 && cogsBreakdown.length > 0 ? (
+              <>
+                <div className="h-56 w-full sm:h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={cogsBreakdown}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius="55%"
+                        outerRadius="80%"
+                        paddingAngle={2}
+                      >
+                        {cogsBreakdown.map((_, i) => (
+                          <Cell key={`cell-${i}`} fill={chartColors[i % chartColors.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v) => formatMoney(Number(v))} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Custom legend list (mobile-friendly, wraps nicely) */}
+                <div className="mt-2 space-y-2">
+                  {cogsBreakdown.map((d, i) => (
+                    <div key={d.name} className="flex items-center justify-between gap-3 text-sm">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="h-2 w-2 shrink-0 rounded-sm"
+                          style={{ backgroundColor: chartColors[i % chartColors.length] }}
+                        />
+                        <span className="truncate">{d.name}</span>
+                      </div>
+                      <div className="shrink-0 tabular-nums">
+                        {formatMoney(d.value)}{" "}
+                        <span className="text-muted-foreground">
+                          ({((d.value / calculatedCogs) * 100).toFixed(0)}%)
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Add quantities (and make sure your components have costs) to see the breakdown.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         {/* COGS Calculator */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle>COGS Calculator</CardTitle>
-                <CardDescription>
-                  Add cost components to calculate total COGS
-                </CardDescription>
+                <CardDescription>Add cost components to calculate total COGS</CardDescription>
               </div>
               <Button
                 onClick={addComponent}
@@ -284,12 +351,14 @@ export function ProductDetailClient({
                   selectedComponents.length >= availableComponents.length
                 }
                 size="sm"
+                className="w-full sm:w-auto"
               >
                 <Plus className="mr-2 h-4 w-4" />
                 Add Component
               </Button>
             </div>
           </CardHeader>
+
           <CardContent>
             {availableComponents.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -312,6 +381,81 @@ export function ProductDetailClient({
               </div>
             ) : (
               <div className="space-y-4">
+              {/* Mobile layout: stacked rows (no horizontal scroll) */}
+              <div className="space-y-3 sm:hidden">
+                {selectedComponents.map((sc, index) => {
+                  const component = availableComponents.find((c) => c.id === sc.componentId);
+                  const lineTotal = component ? sc.quantity * component.cost_per_unit : 0;
+          
+                  return (
+                    <div key={index} className="rounded-lg border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <Label className="text-xs text-muted-foreground">Component</Label>
+                          <div className="mt-1">
+                            <Select
+                              value={sc.componentId}
+                              onValueChange={(value) => updateComponent(index, "componentId", value)}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableComponents.map((c) => (
+                                  <SelectItem key={c.id} value={c.id}>
+                                    {c.name} ({c.unit})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+          
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeComponent(index)}
+                          className="shrink-0 text-destructive hover:text-destructive"
+                          aria-label="Remove component"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+          
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Quantity</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={sc.quantity}
+                            onChange={(e) =>
+                              updateComponent(index, "quantity", parseFloat(e.target.value) || 0)
+                            }
+                            className="mt-1"
+                          />
+                        </div>
+          
+                        <div className="rounded-md bg-muted/40 p-2">
+                          <div className="text-xs text-muted-foreground">Line total</div>
+                          <div className="mt-0.5 font-medium tabular-nums">
+                            {formatMoney(lineTotal)}
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {component
+                              ? `${formatMoney(component.cost_per_unit)}/${component.unit}`
+                              : "-"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+          
+              {/* Desktop layout: table (unchanged) */}
+              <div className="hidden sm:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -324,21 +468,15 @@ export function ProductDetailClient({
                   </TableHeader>
                   <TableBody>
                     {selectedComponents.map((sc, index) => {
-                      const component = availableComponents.find(
-                        (c) => c.id === sc.componentId
-                      );
-                      const lineTotal = component
-                        ? sc.quantity * component.cost_per_unit
-                        : 0;
-
+                      const component = availableComponents.find((c) => c.id === sc.componentId);
+                      const lineTotal = component ? sc.quantity * component.cost_per_unit : 0;
+          
                       return (
                         <TableRow key={index}>
                           <TableCell>
                             <Select
                               value={sc.componentId}
-                              onValueChange={(value) =>
-                                updateComponent(index, "componentId", value)
-                              }
+                              onValueChange={(value) => updateComponent(index, "componentId", value)}
                             >
                               <SelectTrigger>
                                 <SelectValue />
@@ -352,6 +490,7 @@ export function ProductDetailClient({
                               </SelectContent>
                             </Select>
                           </TableCell>
+          
                           <TableCell>
                             <Input
                               type="number"
@@ -359,22 +498,19 @@ export function ProductDetailClient({
                               step="0.01"
                               value={sc.quantity}
                               onChange={(e) =>
-                                updateComponent(
-                                  index,
-                                  "quantity",
-                                  parseFloat(e.target.value) || 0
-                                )
+                                updateComponent(index, "quantity", parseFloat(e.target.value) || 0)
                               }
                             />
                           </TableCell>
+          
                           <TableCell className="text-right">
-                            {component
-                              ? `$${component.cost_per_unit.toFixed(2)}/${component.unit}`
-                              : "-"}
+                            {component ? `${formatMoney(component.cost_per_unit)}/${component.unit}` : "-"}
                           </TableCell>
+          
                           <TableCell className="text-right font-medium">
-                            ${lineTotal.toFixed(2)}
+                            {formatMoney(lineTotal)}
                           </TableCell>
+          
                           <TableCell>
                             <Button
                               variant="ghost"
@@ -390,69 +526,63 @@ export function ProductDetailClient({
                     })}
                   </TableBody>
                 </Table>
-
-                <div className="flex justify-end">
-                  <Button onClick={handleSaveComponents} disabled={isSaving}>
-                    {isSaving ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Save className="mr-2 h-4 w-4" />
-                    )}
-                    Save Components
-                  </Button>
-                </div>
               </div>
+          
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSaveComponents}
+                  disabled={isSaving}
+                  className="w-full sm:w-auto"
+                >
+                  {isSaving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  Save Components
+                </Button>
+              </div>
+            </div>
+          
             )}
           </CardContent>
         </Card>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Selling Price
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Selling Price</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              ${priceValue.toFixed(2)}
+            <div className="text-2xl font-bold">{formatMoney(priceValue)}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total COGS</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatMoney(calculatedCogs)}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Profit per Unit</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${profit >= 0 ? "text-green-600" : "text-destructive"}`}>
+              {formatMoney(profit)}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total COGS
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${calculatedCogs.toFixed(2)}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Profit per Unit
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div
-              className={`text-2xl font-bold ${profit >= 0 ? "text-green-600" : "text-destructive"}`}
-            >
-              ${profit.toFixed(2)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Profit Margin
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Profit Margin</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
