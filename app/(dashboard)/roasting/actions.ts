@@ -124,6 +124,7 @@ export async function deleteSession(id: string) {
 // Batch Actions
 export async function createBatch(data: {
   sessionId: string;
+  coffeeInventoryId?: string;
   coffeeName: string;
   lotCode?: string;
   priceBasis: "per_lb" | "per_kg";
@@ -156,11 +157,51 @@ export async function createBatch(data: {
     : data.priceValue / 1000;
   const greenCostPerG = pricePerG;
 
+  // If using inventory, deduct the green weight
+  if (data.coffeeInventoryId) {
+    const greenWeightLbs = data.greenWeightG / 453.592;
+    
+    // Get current inventory
+    const { data: coffee, error: fetchError } = await supabase
+      .from("green_coffee_inventory")
+      .select("quantity_lbs")
+      .eq("id", data.coffeeInventoryId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (fetchError || !coffee) {
+      return { error: "Coffee inventory not found" };
+    }
+
+    if (coffee.quantity_lbs < greenWeightLbs) {
+      return { error: `Insufficient inventory. Available: ${coffee.quantity_lbs.toFixed(2)} lbs, Needed: ${greenWeightLbs.toFixed(2)} lbs` };
+    }
+
+    // Deduct from inventory
+    const { error: updateError } = await supabase
+      .from("green_coffee_inventory")
+      .update({ quantity_lbs: coffee.quantity_lbs - greenWeightLbs })
+      .eq("id", data.coffeeInventoryId);
+
+    if (updateError) {
+      return { error: updateError.message };
+    }
+
+    // Record the inventory change
+    await supabase.from("coffee_inventory_changes").insert({
+      coffee_id: data.coffeeInventoryId,
+      change_type: "roast",
+      quantity_change: -greenWeightLbs,
+      notes: `Roasted batch: ${data.coffeeName}`,
+    });
+  }
+
   const { data: batch, error } = await supabase
     .from("roasting_batches")
     .insert({
       user_id: user.id,
       session_id: data.sessionId,
+      coffee_inventory_id: data.coffeeInventoryId || null,
       coffee_name: data.coffeeName,
       lot_code: data.lotCode || null,
       price_basis: data.priceBasis,
@@ -186,6 +227,7 @@ export async function createBatch(data: {
   revalidatePath("/roasting");
   revalidatePath(`/roasting/sessions/${data.sessionId}`);
   revalidatePath("/roasting/batches");
+  revalidatePath("/inventory");
   return { batch };
 }
 

@@ -6,7 +6,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Package, Layers, DollarSign, TrendingUp } from "lucide-react";
+import { Package, Layers, DollarSign, TrendingUp, Warehouse, Flame, ShoppingCart, AlertTriangle } from "lucide-react";
+import Link from "next/link";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -15,18 +16,22 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
 
   // Fetch stats
-  const [productsResult, componentsResult, productComponentsResult] = await Promise.all([
-    supabase.from("products").select("id, price", { count: "exact" }),
-    supabase.from("components").select("id", { count: "exact" }),
+  const [productsResult, componentsResult, productComponentsResult, inventoryResult, ordersResult, batchesResult] = await Promise.all([
+    supabase.from("products").select("id, price", { count: "exact" }).eq("user_id", user?.id),
+    supabase.from("components").select("id", { count: "exact" }).eq("user_id", user?.id),
     supabase.from("product_components").select(`
       product_id,
       quantity,
       components (cost_per_unit)
     `),
+    supabase.from("green_coffee_inventory").select("id, name, quantity_lbs, cost_per_lb").eq("user_id", user?.id),
+    supabase.from("orders").select("id, total_price, status, created_at", { count: "exact" }).eq("user_id", user?.id),
+    supabase.from("roasting_batches").select("id, sellable_g, created_at").eq("user_id", user?.id),
   ]);
 
   const totalProducts = productsResult.count || 0;
   const totalComponents = componentsResult.count || 0;
+  const totalOrders = ordersResult.count || 0;
 
   // Calculate COGS per product from product_components
   const productCogs: Record<string, number> = {};
@@ -58,30 +63,49 @@ export default async function DashboardPage() {
     }
   }
 
+  // Calculate inventory stats
+  const inventory = inventoryResult.data || [];
+  const totalInventoryLbs = inventory.reduce((sum, c) => sum + c.quantity_lbs, 0);
+  const totalInventoryValue = inventory.reduce((sum, c) => sum + (c.quantity_lbs * c.cost_per_lb), 0);
+  const lowStockCoffees = inventory.filter((c) => c.quantity_lbs < 5);
+
+  // Calculate roasting stats
+  const batches = batchesResult.data || [];
+  const totalRoastedG = batches.reduce((sum, b) => sum + (b.sellable_g || 0), 0);
+
+  // Calculate order revenue
+  const orders = ordersResult.data || [];
+  const totalOrderRevenue = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+  const pendingOrders = orders.filter((o) => o.status === "pending" || o.status === "processing");
+
   const stats = [
+    {
+      name: "Green Coffee Inventory",
+      value: `${totalInventoryLbs.toFixed(1)} lbs`,
+      icon: Warehouse,
+      description: `$${totalInventoryValue.toFixed(2)} total value`,
+      href: "/inventory",
+    },
+    {
+      name: "Total Roasted",
+      value: `${(totalRoastedG / 1000).toFixed(1)} kg`,
+      icon: Flame,
+      description: `${batches.length} batches completed`,
+      href: "/roasting",
+    },
     {
       name: "Total Products",
       value: totalProducts.toString(),
       icon: Package,
-      description: "Products imported from Shopify",
+      description: `${totalComponents} components defined`,
+      href: "/products",
     },
     {
-      name: "Total Components",
-      value: totalComponents.toString(),
-      icon: Layers,
-      description: "Cost components defined",
-    },
-    {
-      name: "Avg. Profit Margin",
-      value: `${avgMargin.toFixed(1)}%`,
-      icon: TrendingUp,
-      description: "Across all products",
-    },
-    {
-      name: "Total Catalog Value",
-      value: `$${totalRevenue.toFixed(2)}`,
-      icon: DollarSign,
-      description: "Sum of selling prices",
+      name: "Order Revenue",
+      value: `$${totalOrderRevenue.toFixed(2)}`,
+      icon: ShoppingCart,
+      description: `${totalOrders} total orders`,
+      href: "/orders",
     },
   ];
 
@@ -100,18 +124,51 @@ export default async function DashboardPage() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <Card className="shadow-md border-primary-foreground" key={stat.name}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{stat.name}</CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground">{stat.description}</p>
-            </CardContent>
-          </Card>
+          <Link href={stat.href} key={stat.name}>
+            <Card className="shadow-md border-primary-foreground hover:bg-accent/50 transition-colors cursor-pointer h-full">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{stat.name}</CardTitle>
+                <stat.icon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stat.value}</div>
+                <p className="text-xs text-muted-foreground">{stat.description}</p>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
+
+      {/* Low Stock Warning */}
+      {lowStockCoffees.length > 0 && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+              Low Stock Alert
+            </CardTitle>
+            <CardDescription>
+              The following coffees are running low (less than 5 lbs remaining)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {lowStockCoffees.map((coffee) => (
+                <Link
+                  key={coffee.id}
+                  href="/inventory"
+                  className="flex items-center justify-between rounded-lg border border-amber-500/30 bg-background p-3 transition-colors hover:bg-accent"
+                >
+                  <span className="font-medium">{coffee.name}</span>
+                  <span className="text-sm text-amber-600 font-medium">
+                    {coffee.quantity_lbs.toFixed(1)} lbs remaining
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="border-0 border-primary-foreground shadow">

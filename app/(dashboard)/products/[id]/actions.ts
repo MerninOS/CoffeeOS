@@ -111,3 +111,77 @@ export async function updateProductPrice(productId: string, price: number) {
 
   return { success: true };
 }
+
+export async function updateWholesalePricing(
+  productId: string,
+  data: {
+    wholesale_enabled: boolean;
+    wholesale_price: number | null;
+    wholesale_minimum_qty: number;
+    price_tiers: Array<{ min_quantity: number; price: number }>;
+  }
+) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Verify product ownership
+  const { data: product } = await supabase
+    .from("products")
+    .select("id")
+    .eq("id", productId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!product) {
+    return { error: "Product not found" };
+  }
+
+  // Update product wholesale settings
+  const { error: updateError } = await supabase
+    .from("products")
+    .update({
+      wholesale_enabled: data.wholesale_enabled,
+      wholesale_price: data.wholesale_price,
+      wholesale_minimum_qty: data.wholesale_minimum_qty,
+    })
+    .eq("id", productId);
+
+  if (updateError) {
+    return { error: updateError.message };
+  }
+
+  // Delete existing price tiers
+  await supabase
+    .from("wholesale_price_tiers")
+    .delete()
+    .eq("product_id", productId);
+
+  // Insert new price tiers
+  if (data.price_tiers.length > 0) {
+    const { error: insertError } = await supabase
+      .from("wholesale_price_tiers")
+      .insert(
+        data.price_tiers.map((tier) => ({
+          product_id: productId,
+          min_quantity: tier.min_quantity,
+          price: tier.price,
+        }))
+      );
+
+    if (insertError) {
+      return { error: insertError.message };
+    }
+  }
+
+  revalidatePath(`/products/${productId}`, "max");
+  revalidatePath("/products", "max");
+
+  return { success: true };
+}

@@ -80,12 +80,24 @@ interface Session {
   notes: string | null;
 }
 
+interface CoffeeInventory {
+  id: string;
+  name: string;
+  origin: string;
+  region: string | null;
+  process: string | null;
+  cost_per_lb: number;
+  quantity_lbs: number;
+}
+
 interface SessionDetailClientProps {
   session: Session;
   batches: Batch[];
+  coffeeInventory: CoffeeInventory[];
 }
 
 const defaultBatchData = {
+  coffeeInventoryId: "",
   coffeeName: "",
   lotCode: "",
   priceBasis: "per_lb" as "per_lb" | "per_kg",
@@ -100,6 +112,7 @@ const defaultBatchData = {
 export function SessionDetailClient({
   session,
   batches: initialBatches,
+  coffeeInventory,
 }: SessionDetailClientProps) {
   const router = useRouter();
   const [batches, setBatches] = useState(initialBatches);
@@ -118,6 +131,7 @@ export function SessionDetailClient({
     setIsSubmitting(true);
     const result = await createBatch({
       sessionId: session.id,
+      coffeeInventoryId: batchData.coffeeInventoryId || undefined,
       coffeeName: batchData.coffeeName,
       lotCode: batchData.lotCode || undefined,
       priceBasis: batchData.priceBasis,
@@ -211,8 +225,58 @@ export function SessionDetailClient({
   const billableMinutes = Math.ceil(totalSessionMinutes / session.billing_granularity_minutes) * session.billing_granularity_minutes;
   const sessionTollCost = (billableMinutes / 60) * session.rate_per_hour;
 
+  // Handle coffee inventory selection
+  const handleCoffeeSelect = (coffeeId: string) => {
+    const coffee = coffeeInventory.find((c) => c.id === coffeeId);
+    if (coffee) {
+      setBatchData({
+        ...batchData,
+        coffeeInventoryId: coffeeId,
+        coffeeName: coffee.name,
+        priceBasis: "per_lb",
+        priceValue: coffee.cost_per_lb.toString(),
+      });
+    }
+  };
+
+  const selectedCoffee = coffeeInventory.find((c) => c.id === batchData.coffeeInventoryId);
+
   const batchFormFields = (
     <div className="grid gap-4 py-4">
+      {/* Coffee Inventory Selection */}
+      {coffeeInventory.length > 0 && (
+        <div className="space-y-2">
+          <Label>Select from Inventory</Label>
+          <Select
+            value={batchData.coffeeInventoryId}
+            onValueChange={handleCoffeeSelect}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select coffee from inventory..." />
+            </SelectTrigger>
+            <SelectContent>
+              {coffeeInventory.map((coffee) => (
+                <SelectItem key={coffee.id} value={coffee.id}>
+                  <div className="flex items-center justify-between gap-4">
+                    <span>{coffee.name}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {coffee.quantity_lbs.toFixed(1)} lbs @ ${coffee.cost_per_lb.toFixed(2)}/lb
+                    </span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedCoffee && (
+            <p className="text-xs text-muted-foreground">
+              {selectedCoffee.origin} {selectedCoffee.region ? `- ${selectedCoffee.region}` : ""} 
+              {selectedCoffee.process ? ` | ${selectedCoffee.process}` : ""}
+              {" | "}Available: {selectedCoffee.quantity_lbs.toFixed(1)} lbs
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="coffeeName">Coffee Name *</Label>
