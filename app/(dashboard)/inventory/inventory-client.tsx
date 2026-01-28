@@ -52,16 +52,20 @@ interface CoffeeInventory {
   id: string;
   name: string;
   origin: string;
-  region: string | null;
-  farm: string | null;
-  process: string | null;
-  variety: string | null;
-  harvest_date: string | null;
-  cost_per_lb: number;
-  quantity_lbs: number;
+  lot_code: string | null;
+  supplier: string | null;
+  price_per_lb: number;
+  initial_quantity_g: number;
+  current_green_quantity_g: number;
+  current_roasted_quantity_g: number;
+  purchase_date: string | null;
   notes: string | null;
+  is_active: boolean;
   created_at: string;
 }
+
+// Conversion: 1 lb = 453.592 grams
+const LBS_TO_GRAMS = 453.592;
 
 interface InventoryClientProps {
   initialInventory: CoffeeInventory[];
@@ -80,19 +84,17 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
   const [formData, setFormData] = useState({
     name: "",
     origin: "",
-    region: "",
-    farm: "",
-    process: "",
-    variety: "",
-    harvest_date: "",
-    cost_per_lb: "",
+    lot_code: "",
+    supplier: "",
+    price_per_lb: "",
     quantity_lbs: "",
+    purchase_date: "",
     notes: "",
   });
 
   // Adjustment form state
   const [adjustmentData, setAdjustmentData] = useState({
-    change_type: "purchase" as "purchase" | "roast" | "adjustment" | "waste",
+    change_type: "manual_green_adjust" as "manual_green_adjust" | "roast_deduct" | "sale_deduct",
     quantity: "",
     notes: "",
   });
@@ -101,26 +103,29 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
     (coffee) =>
       coffee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       coffee.origin.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (coffee.region?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+      (coffee.supplier?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
   );
 
-  // Calculate totals
-  const totalWeight = inventory.reduce((sum, c) => sum + c.quantity_lbs, 0);
-  const totalValue = inventory.reduce((sum, c) => sum + c.quantity_lbs * c.cost_per_lb, 0);
-  const avgCostPerLb = totalWeight > 0 ? totalValue / totalWeight : 0;
-  const lowStockCount = inventory.filter((c) => c.quantity_lbs < 5).length;
+  // Helper to convert grams to lbs
+  const gramsToLbs = (g: number) => g / LBS_TO_GRAMS;
+
+  // Calculate totals (convert grams to lbs for display)
+  const totalWeightLbs = inventory.reduce((sum, c) => sum + gramsToLbs(c.current_green_quantity_g), 0);
+  const totalValue = inventory.reduce((sum, c) => sum + gramsToLbs(c.current_green_quantity_g) * c.price_per_lb, 0);
+  const avgCostPerLb = totalWeightLbs > 0 ? totalValue / totalWeightLbs : 0;
+  const lowStockCount = inventory.filter((c) => gramsToLbs(c.current_green_quantity_g) < 5).length;
+
+  const totalWeight = totalWeightLbs; // Declaration of totalWeight variable
 
   const resetForm = () => {
     setFormData({
       name: "",
       origin: "",
-      region: "",
-      farm: "",
-      process: "",
-      variety: "",
-      harvest_date: "",
-      cost_per_lb: "",
+      lot_code: "",
+      supplier: "",
+      price_per_lb: "",
       quantity_lbs: "",
+      purchase_date: "",
       notes: "",
     });
     setEditingCoffee(null);
@@ -133,12 +138,9 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
         const result = await updateCoffeeInventory(editingCoffee.id, {
           name: formData.name,
           origin: formData.origin,
-          region: formData.region || undefined,
-          farm: formData.farm || undefined,
-          process: formData.process || undefined,
-          variety: formData.variety || undefined,
-          harvest_date: formData.harvest_date || undefined,
-          cost_per_lb: parseFloat(formData.cost_per_lb),
+          lot_code: formData.lot_code || undefined,
+          supplier: formData.supplier || undefined,
+          price_per_lb: parseFloat(formData.price_per_lb),
           notes: formData.notes || undefined,
         });
         if (result.error) {
@@ -152,13 +154,11 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
         const result = await createCoffeeInventory({
           name: formData.name,
           origin: formData.origin,
-          region: formData.region || undefined,
-          farm: formData.farm || undefined,
-          process: formData.process || undefined,
-          variety: formData.variety || undefined,
-          harvest_date: formData.harvest_date || undefined,
-          cost_per_lb: parseFloat(formData.cost_per_lb),
+          lot_code: formData.lot_code || undefined,
+          supplier: formData.supplier || undefined,
+          price_per_lb: parseFloat(formData.price_per_lb),
           quantity_lbs: parseFloat(formData.quantity_lbs),
+          purchase_date: formData.purchase_date || undefined,
           notes: formData.notes || undefined,
         });
         if (result.error) {
@@ -179,7 +179,11 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
     setIsSubmitting(true);
     try {
       const quantity = parseFloat(adjustmentData.quantity);
-      const actualChange = adjustmentData.change_type === "purchase" ? Math.abs(quantity) : -Math.abs(quantity);
+      // For manual_green_adjust, use the signed value from the user
+      // For deductions (roast, sale), always negative
+      const actualChange = adjustmentData.change_type === "manual_green_adjust" 
+        ? quantity  // User enters positive to add, negative to subtract
+        : -Math.abs(quantity);  // Always deduct for roast/sale
       
       const result = await adjustInventoryQuantity(
         adjustingCoffee.id,
@@ -193,7 +197,7 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
       } else {
         setIsAdjustDialogOpen(false);
         setAdjustingCoffee(null);
-        setAdjustmentData({ change_type: "purchase", quantity: "", notes: "" });
+        setAdjustmentData({ change_type: "manual_green_adjust", quantity: "", notes: "" });
         window.location.reload();
       }
     } finally {
@@ -218,13 +222,11 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
     setFormData({
       name: coffee.name,
       origin: coffee.origin,
-      region: coffee.region || "",
-      farm: coffee.farm || "",
-      process: coffee.process || "",
-      variety: coffee.variety || "",
-      harvest_date: coffee.harvest_date || "",
-      cost_per_lb: coffee.cost_per_lb.toString(),
-      quantity_lbs: coffee.quantity_lbs.toString(),
+      lot_code: coffee.lot_code || "",
+      supplier: coffee.supplier || "",
+      price_per_lb: coffee.price_per_lb.toString(),
+      quantity_lbs: (coffee.initial_quantity_g / LBS_TO_GRAMS).toFixed(2),
+      purchase_date: coffee.purchase_date || "",
       notes: coffee.notes || "",
     });
     setIsAddDialogOpen(true);
@@ -232,7 +234,7 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
 
   const openAdjustDialog = (coffee: CoffeeInventory) => {
     setAdjustingCoffee(coffee);
-    setAdjustmentData({ change_type: "purchase", quantity: "", notes: "" });
+    setAdjustmentData({ change_type: "manual_green_adjust", quantity: "", notes: "" });
     setIsAdjustDialogOpen(true);
   };
 
@@ -283,78 +285,56 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="region">Region</Label>
+                  <Label htmlFor="lot_code">Lot Code</Label>
                   <Input
-                    id="region"
-                    value={formData.region}
-                    onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                    placeholder="e.g., Yirgacheffe"
+                    id="lot_code"
+                    value={formData.lot_code}
+                    onChange={(e) => setFormData({ ...formData, lot_code: e.target.value })}
+                    placeholder="e.g., 12345"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="farm">Farm/Cooperative</Label>
+                  <Label htmlFor="supplier">Supplier</Label>
                   <Input
-                    id="farm"
-                    value={formData.farm}
-                    onChange={(e) => setFormData({ ...formData, farm: e.target.value })}
-                    placeholder="e.g., Kochere Washing Station"
+                    id="supplier"
+                    value={formData.supplier}
+                    onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
+                    placeholder="e.g., Supplier Name"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="process">Process</Label>
+                  <Label htmlFor="price_per_lb">Price per lb ($) *</Label>
                   <Input
-                    id="process"
-                    value={formData.process}
-                    onChange={(e) => setFormData({ ...formData, process: e.target.value })}
-                    placeholder="e.g., Washed, Natural"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="variety">Variety</Label>
-                  <Input
-                    id="variety"
-                    value={formData.variety}
-                    onChange={(e) => setFormData({ ...formData, variety: e.target.value })}
-                    placeholder="e.g., Heirloom"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="harvest_date">Harvest Date</Label>
-                  <Input
-                    id="harvest_date"
-                    type="date"
-                    value={formData.harvest_date}
-                    onChange={(e) => setFormData({ ...formData, harvest_date: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="cost_per_lb">Cost per lb ($) *</Label>
-                  <Input
-                    id="cost_per_lb"
+                    id="price_per_lb"
                     type="number"
                     step="0.01"
-                    value={formData.cost_per_lb}
-                    onChange={(e) => setFormData({ ...formData, cost_per_lb: e.target.value })}
+                    value={formData.price_per_lb}
+                    onChange={(e) => setFormData({ ...formData, price_per_lb: e.target.value })}
                     placeholder="e.g., 6.50"
                   />
                 </div>
-                {!editingCoffee && (
-                  <div className="space-y-2">
-                    <Label htmlFor="quantity_lbs">Initial Quantity (lbs) *</Label>
-                    <Input
-                      id="quantity_lbs"
-                      type="number"
-                      step="0.01"
-                      value={formData.quantity_lbs}
-                      onChange={(e) => setFormData({ ...formData, quantity_lbs: e.target.value })}
-                      placeholder="e.g., 50"
-                    />
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label htmlFor="quantity_lbs">Initial Quantity (lbs) *</Label>
+                  <Input
+                    id="quantity_lbs"
+                    type="number"
+                    step="0.01"
+                    value={formData.quantity_lbs}
+                    onChange={(e) => setFormData({ ...formData, quantity_lbs: e.target.value })}
+                    placeholder="e.g., 50"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="purchase_date">Purchase Date</Label>
+                  <Input
+                    id="purchase_date"
+                    type="date"
+                    value={formData.purchase_date}
+                    onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes</Label>
@@ -376,7 +356,7 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
               </Button>
               <Button
                 onClick={handleAddOrEdit}
-                disabled={isSubmitting || !formData.name || !formData.origin || !formData.cost_per_lb || (!editingCoffee && !formData.quantity_lbs)}
+                disabled={isSubmitting || !formData.name || !formData.origin || !formData.price_per_lb || !formData.quantity_lbs}
               >
                 {isSubmitting ? "Saving..." : editingCoffee ? "Save Changes" : "Add Coffee"}
               </Button>
@@ -441,7 +421,7 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Search by name, origin, or region..."
+          placeholder="Search by name, origin, or supplier..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-9"
@@ -456,8 +436,8 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
               <TableRow>
                 <TableHead>Coffee</TableHead>
                 <TableHead>Origin</TableHead>
-                <TableHead>Process</TableHead>
-                <TableHead className="text-right">Cost/lb</TableHead>
+                <TableHead>Supplier</TableHead>
+                <TableHead className="text-right">Price/lb</TableHead>
                 <TableHead className="text-right">Quantity</TableHead>
                 <TableHead className="text-right">Value</TableHead>
                 <TableHead className="w-[120px]"></TableHead>
@@ -475,34 +455,28 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
                   <TableRow key={coffee.id}>
                     <TableCell>
                       <div className="font-medium">{coffee.name}</div>
-                      {coffee.variety && (
-                        <div className="text-xs text-muted-foreground">{coffee.variety}</div>
-                      )}
                     </TableCell>
                     <TableCell>
                       <div>{coffee.origin}</div>
-                      {coffee.region && (
-                        <div className="text-xs text-muted-foreground">{coffee.region}</div>
-                      )}
                     </TableCell>
                     <TableCell>
-                      {coffee.process || "-"}
+                      {coffee.supplier || "-"}
                     </TableCell>
                     <TableCell className="text-right">
-                      ${coffee.cost_per_lb.toFixed(2)}
+                      ${coffee.price_per_lb.toFixed(2)}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {coffee.quantity_lbs < 5 && (
+                        {gramsToLbs(coffee.current_green_quantity_g) < 5 && (
                           <Badge variant="outline" className="bg-amber-500/10 text-amber-600 text-xs">
                             Low
                           </Badge>
                         )}
-                        {coffee.quantity_lbs.toFixed(1)} lbs
+                        {gramsToLbs(coffee.current_green_quantity_g).toFixed(1)} lbs
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      ${(coffee.quantity_lbs * coffee.cost_per_lb).toFixed(2)}
+                      ${(gramsToLbs(coffee.current_green_quantity_g) * coffee.price_per_lb).toFixed(2)}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
@@ -560,28 +534,22 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="purchase">
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4 text-green-600" />
-                      Purchase (Add Stock)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="roast">
-                    <div className="flex items-center gap-2">
-                      <TrendingDown className="h-4 w-4 text-amber-600" />
-                      Roast (Use Stock)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="adjustment">
+                  <SelectItem value="manual_green_adjust">
                     <div className="flex items-center gap-2">
                       <Scale className="h-4 w-4 text-blue-600" />
-                      Adjustment (Correction)
+                      Manual Adjustment (+/-)
                     </div>
                   </SelectItem>
-                  <SelectItem value="waste">
+                  <SelectItem value="roast_deduct">
+                    <div className="flex items-center gap-2">
+                      <TrendingDown className="h-4 w-4 text-amber-600" />
+                      Roast (Deduct Stock)
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="sale_deduct">
                     <div className="flex items-center gap-2">
                       <TrendingDown className="h-4 w-4 text-red-600" />
-                      Waste (Loss)
+                      Sale (Deduct Stock)
                     </div>
                   </SelectItem>
                 </SelectContent>
@@ -598,13 +566,13 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
                 placeholder="Enter amount"
               />
               <p className="text-xs text-muted-foreground">
-                Current stock: {adjustingCoffee?.quantity_lbs.toFixed(1)} lbs
+                Current stock: {gramsToLbs(adjustingCoffee?.current_green_quantity_g || 0).toFixed(1)} lbs
                 {adjustmentData.quantity && (
                   <>
                     {" → "}
-                    {adjustmentData.change_type === "purchase"
-                      ? (adjustingCoffee?.quantity_lbs || 0) + Math.abs(parseFloat(adjustmentData.quantity) || 0)
-                      : (adjustingCoffee?.quantity_lbs || 0) - Math.abs(parseFloat(adjustmentData.quantity) || 0)
+                    {adjustmentData.change_type === "manual_green_adjust"
+                      ? ((gramsToLbs(adjustingCoffee?.current_green_quantity_g || 0) || 0) + (parseFloat(adjustmentData.quantity) || 0)).toFixed(1)
+                      : ((gramsToLbs(adjustingCoffee?.current_green_quantity_g || 0) || 0) - Math.abs(parseFloat(adjustmentData.quantity) || 0)).toFixed(1)
                     } lbs after adjustment
                   </>
                 )}

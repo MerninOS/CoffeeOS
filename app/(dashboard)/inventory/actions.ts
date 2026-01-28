@@ -3,16 +3,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
+// Conversion: 1 lb = 453.592 grams
+const LBS_TO_GRAMS = 453.592;
+
 export async function createCoffeeInventory(data: {
   name: string;
   origin: string;
-  region?: string;
-  farm?: string;
-  process?: string;
-  variety?: string;
-  harvest_date?: string;
-  cost_per_lb: number;
+  lot_code?: string;
+  supplier?: string;
+  price_per_lb: number;
   quantity_lbs: number;
+  purchase_date?: string;
   notes?: string;
 }) {
   const supabase = await createClient();
@@ -25,11 +26,22 @@ export async function createCoffeeInventory(data: {
     return { error: "Unauthorized" };
   }
 
+  // Convert lbs to grams for storage
+  const quantityGrams = data.quantity_lbs * LBS_TO_GRAMS;
+
   const { data: inventory, error } = await supabase
     .from("green_coffee_inventory")
     .insert({
       user_id: user.id,
-      ...data,
+      name: data.name,
+      origin: data.origin,
+      lot_code: data.lot_code || null,
+      supplier: data.supplier || null,
+      price_per_lb: data.price_per_lb,
+      initial_quantity_g: quantityGrams,
+      current_green_quantity_g: quantityGrams,
+      purchase_date: data.purchase_date || null,
+      notes: data.notes || null,
     })
     .select()
     .single();
@@ -41,8 +53,10 @@ export async function createCoffeeInventory(data: {
   // Record the initial addition
   await supabase.from("coffee_inventory_changes").insert({
     coffee_id: inventory.id,
-    change_type: "purchase",
-    quantity_change: data.quantity_lbs,
+    user_id: user.id,
+    changed_by_user_id: user.id,
+    change_type: "initial",
+    green_quantity_change_g: quantityGrams,
     notes: "Initial inventory",
   });
 
@@ -55,12 +69,10 @@ export async function updateCoffeeInventory(
   data: {
     name?: string;
     origin?: string;
-    region?: string;
-    farm?: string;
-    process?: string;
-    variety?: string;
-    harvest_date?: string;
-    cost_per_lb?: number;
+    lot_code?: string;
+    supplier?: string;
+    price_per_lb?: number;
+    purchase_date?: string;
     notes?: string;
   }
 ) {
@@ -90,10 +102,11 @@ export async function updateCoffeeInventory(
 
 export async function adjustInventoryQuantity(
   coffeeId: string,
-  changeType: "purchase" | "roast" | "adjustment" | "waste",
-  quantityChange: number,
+  changeType: "manual_green_adjust" | "roast_deduct" | "roast_add" | "sale_deduct",
+  quantityChangeLbs: number,
   notes?: string,
-  roastBatchId?: string
+  referenceId?: string,
+  referenceType?: "roasting_batch" | "order" | "manual"
 ) {
   const supabase = await createClient();
 
@@ -108,7 +121,7 @@ export async function adjustInventoryQuantity(
   // Get current inventory
   const { data: coffee, error: fetchError } = await supabase
     .from("green_coffee_inventory")
-    .select("quantity_lbs, user_id")
+    .select("current_green_quantity_g, user_id")
     .eq("id", coffeeId)
     .single();
 
@@ -120,15 +133,17 @@ export async function adjustInventoryQuantity(
     return { error: "Unauthorized" };
   }
 
-  const newQuantity = coffee.quantity_lbs + quantityChange;
-  if (newQuantity < 0) {
+  const quantityChangeGrams = quantityChangeLbs * LBS_TO_GRAMS;
+  const newQuantityGrams = coffee.current_green_quantity_g + quantityChangeGrams;
+  
+  if (newQuantityGrams < 0) {
     return { error: "Insufficient inventory" };
   }
 
   // Update quantity
   const { error: updateError } = await supabase
     .from("green_coffee_inventory")
-    .update({ quantity_lbs: newQuantity })
+    .update({ current_green_quantity_g: newQuantityGrams })
     .eq("id", coffeeId);
 
   if (updateError) {
@@ -140,9 +155,12 @@ export async function adjustInventoryQuantity(
     .from("coffee_inventory_changes")
     .insert({
       coffee_id: coffeeId,
+      user_id: user.id,
+      changed_by_user_id: user.id,
       change_type: changeType,
-      quantity_change: quantityChange,
-      roast_batch_id: roastBatchId,
+      green_quantity_change_g: quantityChangeGrams,
+      reference_id: referenceId || null,
+      reference_type: referenceType || "manual",
       notes,
     });
 
