@@ -35,12 +35,12 @@ export default async function SessionDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  // Fetch green coffee inventory for selection
+  // Fetch green coffee inventory for selection (only show coffees with stock)
   const { data: coffeeInventory } = await supabase
     .from("green_coffee_inventory")
-    .select("*")
+    .select("id, name, origin, lot_code, supplier, price_per_lb, current_green_quantity_g")
     .eq("user_id", user.id)
-    .gt("quantity_lbs", 0)
+    .gt("current_green_quantity_g", 0)
     .order("name");
 
   return (

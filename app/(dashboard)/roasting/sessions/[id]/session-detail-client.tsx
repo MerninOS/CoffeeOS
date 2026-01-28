@@ -84,11 +84,14 @@ interface CoffeeInventory {
   id: string;
   name: string;
   origin: string;
-  region: string | null;
-  process: string | null;
-  cost_per_lb: number;
-  quantity_lbs: number;
+  lot_code: string | null;
+  supplier: string | null;
+  price_per_lb: number;
+  current_green_quantity_g: number;
 }
+
+// Conversion: 1 lb = 453.592 grams
+const LBS_TO_GRAMS = 453.592;
 
 interface SessionDetailClientProps {
   session: Session;
@@ -200,6 +203,7 @@ export function SessionDetailClient({
   const openEditBatch = (batch: Batch) => {
     setEditingBatch(batch);
     setBatchData({
+      coffeeInventoryId: "",
       coffeeName: batch.coffee_name,
       lotCode: batch.lot_code || "",
       priceBasis: batch.price_basis,
@@ -233,13 +237,17 @@ export function SessionDetailClient({
         ...batchData,
         coffeeInventoryId: coffeeId,
         coffeeName: coffee.name,
+        lotCode: coffee.lot_code || "",
         priceBasis: "per_lb",
-        priceValue: coffee.cost_per_lb.toString(),
+        priceValue: coffee.price_per_lb.toString(),
       });
     }
   };
 
   const selectedCoffee = coffeeInventory.find((c) => c.id === batchData.coffeeInventoryId);
+  
+  // Helper to convert grams to lbs
+  const gramsToLbs = (g: number) => g / LBS_TO_GRAMS;
 
   const batchFormFields = (
     <div className="grid gap-4 py-4">
@@ -260,7 +268,7 @@ export function SessionDetailClient({
                   <div className="flex items-center justify-between gap-4">
                     <span>{coffee.name}</span>
                     <span className="text-muted-foreground text-xs">
-                      {coffee.quantity_lbs.toFixed(1)} lbs @ ${coffee.cost_per_lb.toFixed(2)}/lb
+                      {gramsToLbs(coffee.current_green_quantity_g).toFixed(1)} lbs @ ${coffee.price_per_lb.toFixed(2)}/lb
                     </span>
                   </div>
                 </SelectItem>
@@ -269,9 +277,9 @@ export function SessionDetailClient({
           </Select>
           {selectedCoffee && (
             <p className="text-xs text-muted-foreground">
-              {selectedCoffee.origin} {selectedCoffee.region ? `- ${selectedCoffee.region}` : ""} 
-              {selectedCoffee.process ? ` | ${selectedCoffee.process}` : ""}
-              {" | "}Available: {selectedCoffee.quantity_lbs.toFixed(1)} lbs
+              {selectedCoffee.origin} {selectedCoffee.supplier ? `- ${selectedCoffee.supplier}` : ""} 
+              {selectedCoffee.lot_code ? ` | Lot: ${selectedCoffee.lot_code}` : ""}
+              {" | "}Available: {gramsToLbs(selectedCoffee.current_green_quantity_g).toFixed(1)} lbs
             </p>
           )}
         </div>
