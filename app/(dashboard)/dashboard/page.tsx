@@ -24,8 +24,8 @@ export default async function DashboardPage() {
       quantity,
       components (cost_per_unit)
     `),
-    supabase.from("green_coffee_inventory").select("id, name, quantity_lbs, cost_per_lb").eq("user_id", user?.id),
-    supabase.from("orders").select("id, total_price, status, created_at", { count: "exact" }).eq("user_id", user?.id),
+    supabase.from("green_coffee_inventory").select("id, name, current_green_quantity_g, price_per_lb").eq("user_id", user?.id),
+    supabase.from("orders").select("id, total_price, financial_status, created_at", { count: "exact" }).eq("user_id", user?.id),
     supabase.from("roasting_batches").select("id, sellable_g, created_at").eq("user_id", user?.id),
   ]);
 
@@ -63,11 +63,12 @@ export default async function DashboardPage() {
     }
   }
 
-  // Calculate inventory stats
+  // Calculate inventory stats (convert grams to lbs: 1 lb = 453.592 g)
+  const LBS_TO_GRAMS = 453.592;
   const inventory = inventoryResult.data || [];
-  const totalInventoryLbs = inventory.reduce((sum, c) => sum + c.quantity_lbs, 0);
-  const totalInventoryValue = inventory.reduce((sum, c) => sum + (c.quantity_lbs * c.cost_per_lb), 0);
-  const lowStockCoffees = inventory.filter((c) => c.quantity_lbs < 5);
+  const totalInventoryLbs = inventory.reduce((sum, c) => sum + (c.current_green_quantity_g || 0) / LBS_TO_GRAMS, 0);
+  const totalInventoryValue = inventory.reduce((sum, c) => sum + ((c.current_green_quantity_g || 0) / LBS_TO_GRAMS * (c.price_per_lb || 0)), 0);
+  const lowStockCoffees = inventory.filter((c) => (c.current_green_quantity_g || 0) / LBS_TO_GRAMS < 5);
 
   // Calculate roasting stats
   const batches = batchesResult.data || [];
@@ -76,7 +77,6 @@ export default async function DashboardPage() {
   // Calculate order revenue
   const orders = ordersResult.data || [];
   const totalOrderRevenue = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
-  const pendingOrders = orders.filter((o) => o.status === "pending" || o.status === "processing");
 
   const stats = [
     {
@@ -161,7 +161,7 @@ export default async function DashboardPage() {
                 >
                   <span className="font-medium">{coffee.name}</span>
                   <span className="text-sm text-amber-600 font-medium">
-                    {coffee.quantity_lbs.toFixed(1)} lbs remaining
+                    {((coffee.current_green_quantity_g || 0) / LBS_TO_GRAMS).toFixed(1)} lbs remaining
                   </span>
                 </Link>
               ))}
