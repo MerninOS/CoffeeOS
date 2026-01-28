@@ -157,14 +157,12 @@ export async function createBatch(data: {
     : data.priceValue / 1000;
   const greenCostPerG = pricePerG;
 
-  // If using inventory, deduct the green weight
+  // If using inventory, deduct the green weight (stored in grams)
   if (data.coffeeInventoryId) {
-    const greenWeightLbs = data.greenWeightG / 453.592;
-    
-    // Get current inventory
+    // Get current inventory (quantity stored in grams)
     const { data: coffee, error: fetchError } = await supabase
       .from("green_coffee_inventory")
-      .select("quantity_lbs")
+      .select("current_green_quantity_g")
       .eq("id", data.coffeeInventoryId)
       .eq("user_id", user.id)
       .single();
@@ -173,25 +171,30 @@ export async function createBatch(data: {
       return { error: "Coffee inventory not found" };
     }
 
-    if (coffee.quantity_lbs < greenWeightLbs) {
-      return { error: `Insufficient inventory. Available: ${coffee.quantity_lbs.toFixed(2)} lbs, Needed: ${greenWeightLbs.toFixed(2)} lbs` };
+    if (coffee.current_green_quantity_g < data.greenWeightG) {
+      const availableLbs = (coffee.current_green_quantity_g / 453.592).toFixed(2);
+      const neededLbs = (data.greenWeightG / 453.592).toFixed(2);
+      return { error: `Insufficient inventory. Available: ${availableLbs} lbs, Needed: ${neededLbs} lbs` };
     }
 
-    // Deduct from inventory
+    // Deduct from inventory (in grams)
     const { error: updateError } = await supabase
       .from("green_coffee_inventory")
-      .update({ quantity_lbs: coffee.quantity_lbs - greenWeightLbs })
+      .update({ current_green_quantity_g: coffee.current_green_quantity_g - data.greenWeightG })
       .eq("id", data.coffeeInventoryId);
 
     if (updateError) {
       return { error: updateError.message };
     }
 
-    // Record the inventory change
+    // Record the inventory change (in grams)
     await supabase.from("coffee_inventory_changes").insert({
       coffee_id: data.coffeeInventoryId,
-      change_type: "roast",
-      quantity_change: -greenWeightLbs,
+      user_id: user.id,
+      changed_by_user_id: user.id,
+      change_type: "roast_deduct",
+      green_quantity_change_g: -data.greenWeightG,
+      reference_type: "roasting_batch",
       notes: `Roasted batch: ${data.coffeeName}`,
     });
   }
