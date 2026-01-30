@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,15 +31,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   Plus,
-  Package,
   TrendingDown,
-  TrendingUp,
   Edit,
   Trash2,
   Search,
-  Coffee,
   Scale,
-  DollarSign,
 } from "lucide-react";
 import {
   createCoffeeInventory,
@@ -110,12 +106,9 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
   const gramsToLbs = (g: number) => g / LBS_TO_GRAMS;
 
   // Calculate totals (convert grams to lbs for display)
-  const totalWeightLbs = inventory.reduce((sum, c) => sum + gramsToLbs(c.current_green_quantity_g), 0);
+  const totalGreenLbs = inventory.reduce((sum, c) => sum + gramsToLbs(c.current_green_quantity_g), 0);
+  const totalRoastedLbs = inventory.reduce((sum, c) => sum + gramsToLbs(c.current_roasted_quantity_g || 0), 0);
   const totalValue = inventory.reduce((sum, c) => sum + gramsToLbs(c.current_green_quantity_g) * c.price_per_lb, 0);
-  const avgCostPerLb = totalWeightLbs > 0 ? totalValue / totalWeightLbs : 0;
-  const lowStockCount = inventory.filter((c) => gramsToLbs(c.current_green_quantity_g) < 5).length;
-
-  const totalWeight = totalWeightLbs; // Declaration of totalWeight variable
 
   const resetForm = () => {
     setFormData({
@@ -241,11 +234,11 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Green Coffee Inventory</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Coffee Inventory</h1>
           <p className="text-muted-foreground">
-            Track your green coffee beans, costs, and stock levels
+            Manage your green and roasted coffee stock
           </p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
@@ -365,58 +358,6 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
         </Dialog>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Inventory</CardTitle>
-            <Scale className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalWeight.toFixed(1)} lbs</div>
-            <p className="text-xs text-muted-foreground">
-              {inventory.length} coffee{inventory.length !== 1 ? "s" : ""} in stock
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Inventory Value</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${totalValue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              Total green coffee value
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Cost/lb</CardTitle>
-            <Coffee className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${avgCostPerLb.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              Weighted average
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{lowStockCount}</div>
-            <p className="text-xs text-muted-foreground">
-              Below 5 lbs remaining
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Search */}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -431,89 +372,199 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
       {/* Inventory Table */}
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Coffee</TableHead>
-                <TableHead>Origin</TableHead>
-                <TableHead>Supplier</TableHead>
-                <TableHead className="text-right">Price/lb</TableHead>
-                <TableHead className="text-right">Quantity</TableHead>
-                <TableHead className="text-right">Value</TableHead>
-                <TableHead className="w-[120px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredInventory.length === 0 ? (
+          {/* Desktop Table */}
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
-                    {searchQuery ? "No coffees found matching your search." : "No coffees in inventory. Add your first coffee to get started!"}
-                  </TableCell>
+                  <TableHead>Coffee</TableHead>
+                  <TableHead>Origin</TableHead>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead className="text-right">Price/lb</TableHead>
+                  <TableHead className="text-right">Green Qty</TableHead>
+                  <TableHead className="text-right">Roasted Qty</TableHead>
+                  <TableHead className="text-right">Total Value</TableHead>
+                  <TableHead className="w-[100px]"></TableHead>
                 </TableRow>
-              ) : (
-                filteredInventory.map((coffee) => (
-                  <TableRow key={coffee.id}>
-                    <TableCell>
-                      <div className="font-medium">{coffee.name}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div>{coffee.origin}</div>
-                    </TableCell>
-                    <TableCell>
-                      {coffee.supplier || "-"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      ${coffee.price_per_lb.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {gramsToLbs(coffee.current_green_quantity_g) < 5 && (
-                          <Badge variant="outline" className="bg-amber-500/10 text-amber-600 text-xs">
-                            Low
-                          </Badge>
-                        )}
-                        {gramsToLbs(coffee.current_green_quantity_g).toFixed(1)} lbs
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      ${(gramsToLbs(coffee.current_green_quantity_g) * coffee.price_per_lb).toFixed(2)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => openAdjustDialog(coffee)}
-                          title="Adjust quantity"
-                        >
-                          <Scale className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => openEditDialog(coffee)}
-                          title="Edit"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(coffee.id)}
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {filteredInventory.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="h-24 text-center">
+                      {searchQuery ? "No coffees found matching your search." : "No coffees in inventory. Add your first coffee to get started!"}
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  <>
+                    {filteredInventory.map((coffee) => {
+                      const greenLbs = gramsToLbs(coffee.current_green_quantity_g);
+                      const roastedLbs = gramsToLbs(coffee.current_roasted_quantity_g || 0);
+                      const totalCoffeeValue = greenLbs * coffee.price_per_lb;
+                      return (
+                        <TableRow key={coffee.id}>
+                          <TableCell>
+                            <div className="font-medium">{coffee.name}</div>
+                          </TableCell>
+                          <TableCell>{coffee.origin}</TableCell>
+                          <TableCell className="text-muted-foreground">{coffee.supplier || "-"}</TableCell>
+                          <TableCell className="text-right">${coffee.price_per_lb.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {greenLbs < 5 && greenLbs > 0 && (
+                                <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-xs">
+                                  Low
+                                </Badge>
+                              )}
+                              <span>{greenLbs.toFixed(1)} lbs</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">{roastedLbs.toFixed(1)} lbs</TableCell>
+                          <TableCell className="text-right font-medium">${totalCoffeeValue.toFixed(2)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => openAdjustDialog(coffee)}
+                                title="Adjust quantity"
+                              >
+                                <Scale className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => openEditDialog(coffee)}
+                                title="Edit"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                onClick={() => handleDelete(coffee.id)}
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {/* Totals Row */}
+                    <TableRow className="bg-muted/50 font-medium">
+                      <TableCell colSpan={4} className="text-right">Totals</TableCell>
+                      <TableCell className="text-right">{totalGreenLbs.toFixed(1)} lbs</TableCell>
+                      <TableCell className="text-right">{totalRoastedLbs.toFixed(1)} lbs</TableCell>
+                      <TableCell className="text-right">${totalValue.toFixed(2)}</TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
+                  </>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Mobile Card Layout */}
+          <div className="md:hidden divide-y">
+            {filteredInventory.length === 0 ? (
+              <div className="p-6 text-center text-muted-foreground">
+                {searchQuery ? "No coffees found matching your search." : "No coffees in inventory. Add your first coffee to get started!"}
+              </div>
+            ) : (
+              <>
+                {filteredInventory.map((coffee) => {
+                  const greenLbs = gramsToLbs(coffee.current_green_quantity_g);
+                  const roastedLbs = gramsToLbs(coffee.current_roasted_quantity_g || 0);
+                  const totalCoffeeValue = greenLbs * coffee.price_per_lb;
+                  return (
+                    <div key={coffee.id} className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-medium">{coffee.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {coffee.origin} {coffee.supplier ? `• ${coffee.supplier}` : ""}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => openAdjustDialog(coffee)}
+                          >
+                            <Scale className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => openEditDialog(coffee)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => handleDelete(coffee.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 text-sm">
+                        <div>
+                          <div className="text-muted-foreground">Price/lb</div>
+                          <div className="font-medium">${coffee.price_per_lb.toFixed(2)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Total Value</div>
+                          <div className="font-medium">${totalCoffeeValue.toFixed(2)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Green Qty</div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{greenLbs.toFixed(1)} lbs</span>
+                            {greenLbs < 5 && greenLbs > 0 && (
+                              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-xs">
+                                Low
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Roasted Qty</div>
+                          <div className="font-medium">{roastedLbs.toFixed(1)} lbs</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Mobile Totals */}
+                <div className="p-4 bg-muted/50">
+                  <div className="text-sm font-medium text-muted-foreground mb-2">Totals</div>
+                  <div className="grid grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <div className="text-muted-foreground">Green</div>
+                      <div className="font-medium">{totalGreenLbs.toFixed(1)} lbs</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Roasted</div>
+                      <div className="font-medium">{totalRoastedLbs.toFixed(1)} lbs</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Value</div>
+                      <div className="font-medium">${totalValue.toFixed(2)}</div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </CardContent>
       </Card>
 
