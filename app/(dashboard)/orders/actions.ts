@@ -494,9 +494,9 @@ export async function removeOrderCustomCost(customCostId: string) {
 
 export async function createRoastRequestForOrder(data: {
   orderId: string;
-  orderLineItemId?: string;
-  coffeeInventoryId: string;
-  requestedQuantityG: number;
+  greenCoffeeId: string;
+  coffeeName: string;
+  requestedRoastedG: number;
   priority?: "low" | "normal" | "high" | "urgent";
   dueDate?: string;
   notes?: string;
@@ -528,14 +528,14 @@ export async function createRoastRequestForOrder(data: {
     .from("roast_requests")
     .insert({
       user_id: user.id,
-      coffee_inventory_id: data.coffeeInventoryId,
-      requested_quantity_g: data.requestedQuantityG,
-      fulfilled_quantity_g: 0,
+      green_coffee_id: data.greenCoffeeId,
+      coffee_name: data.coffeeName,
+      requested_roasted_g: data.requestedRoastedG,
+      fulfilled_roasted_g: 0,
       priority: data.priority || "normal",
       status: "pending",
       due_date: data.dueDate || null,
       order_id: data.orderId,
-      order_line_item_id: data.orderLineItemId || null,
       notes: data.notes || `Roast request for order ${order.order_name}`,
     })
     .select()

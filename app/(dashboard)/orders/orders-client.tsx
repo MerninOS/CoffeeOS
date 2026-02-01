@@ -148,7 +148,7 @@ export function OrdersClient({
   // Roast request state
   const [roastRequestOrder, setRoastRequestOrder] = useState<Order | null>(null);
   const [roastRequestData, setRoastRequestData] = useState({
-    coffeeInventoryId: "",
+    greenCoffeeId: "",
     quantityG: "",
     priority: "normal" as "low" | "normal" | "high" | "urgent",
     dueDate: "",
@@ -283,15 +283,19 @@ export function OrdersClient({
 
   // Handle creating a roast request
   const handleCreateRoastRequest = async () => {
-    if (!roastRequestOrder || !roastRequestData.coffeeInventoryId || !roastRequestData.quantityG) return;
+    if (!roastRequestOrder || !roastRequestData.greenCoffeeId || !roastRequestData.quantityG) return;
+    
+    const selectedCoffee = coffeeInventory.find(c => c.id === roastRequestData.greenCoffeeId);
+    if (!selectedCoffee) return;
     
     setIsCreatingRoastRequest(true);
     const quantityG = parseFloat(roastRequestData.quantityG);
     
     const result = await createRoastRequestForOrder({
       orderId: roastRequestOrder.id,
-      coffeeInventoryId: roastRequestData.coffeeInventoryId,
-      requestedQuantityG: quantityG,
+      greenCoffeeId: roastRequestData.greenCoffeeId,
+      coffeeName: selectedCoffee.name,
+      requestedRoastedG: quantityG,
       priority: roastRequestData.priority,
       dueDate: roastRequestData.dueDate || undefined,
     });
@@ -303,7 +307,7 @@ export function OrdersClient({
     } else {
       setRoastRequestOrder(null);
       setRoastRequestData({
-        coffeeInventoryId: "",
+        greenCoffeeId: "",
         quantityG: "",
         priority: "normal",
         dueDate: "",
@@ -984,9 +988,9 @@ export function OrdersClient({
             <div className="space-y-2">
               <Label>Coffee to Roast</Label>
               <Select
-                value={roastRequestData.coffeeInventoryId}
+                value={roastRequestData.greenCoffeeId}
                 onValueChange={(value) =>
-                  setRoastRequestData({ ...roastRequestData, coffeeInventoryId: value })
+                  setRoastRequestData({ ...roastRequestData, greenCoffeeId: value })
                 }
               >
                 <SelectTrigger>
@@ -1060,7 +1064,7 @@ export function OrdersClient({
               onClick={handleCreateRoastRequest}
               disabled={
                 isCreatingRoastRequest ||
-                !roastRequestData.coffeeInventoryId ||
+                !roastRequestData.greenCoffeeId ||
                 !roastRequestData.quantityG
               }
             >

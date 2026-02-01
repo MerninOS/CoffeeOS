@@ -424,12 +424,12 @@ export async function saveRoastingSettings(data: {
 
 // Roast Request Actions
 export async function createRoastRequest(data: {
-  coffeeInventoryId: string;
-  requestedQuantityG: number;
+  greenCoffeeId: string;
+  coffeeName: string;
+  requestedRoastedG: number;
   priority?: "low" | "normal" | "high" | "urgent";
   dueDate?: string;
   orderId?: string;
-  orderLineItemId?: string;
   notes?: string;
 }) {
   const supabase = await createClient();
@@ -446,14 +446,14 @@ export async function createRoastRequest(data: {
     .from("roast_requests")
     .insert({
       user_id: user.id,
-      coffee_inventory_id: data.coffeeInventoryId,
-      requested_quantity_g: data.requestedQuantityG,
-      fulfilled_quantity_g: 0,
+      green_coffee_id: data.greenCoffeeId,
+      coffee_name: data.coffeeName,
+      requested_roasted_g: data.requestedRoastedG,
+      fulfilled_roasted_g: 0,
       priority: data.priority || "normal",
       status: "pending",
       due_date: data.dueDate || null,
       order_id: data.orderId || null,
-      order_line_item_id: data.orderLineItemId || null,
       notes: data.notes || null,
     })
     .select()
@@ -471,9 +471,9 @@ export async function createRoastRequest(data: {
 export async function updateRoastRequest(
   id: string,
   data: {
-    requestedQuantityG?: number;
+    requestedRoastedG?: number;
     priority?: "low" | "normal" | "high" | "urgent";
-    status?: "pending" | "in_progress" | "completed" | "cancelled";
+    status?: "pending" | "in_progress" | "fulfilled" | "cancelled";
     dueDate?: string;
     notes?: string;
   }
@@ -489,7 +489,7 @@ export async function updateRoastRequest(
   }
 
   const updateData: Record<string, unknown> = {};
-  if (data.requestedQuantityG !== undefined) updateData.requested_quantity_g = data.requestedQuantityG;
+  if (data.requestedRoastedG !== undefined) updateData.requested_roasted_g = data.requestedRoastedG;
   if (data.priority !== undefined) updateData.priority = data.priority;
   if (data.status !== undefined) updateData.status = data.status;
   if (data.dueDate !== undefined) updateData.due_date = data.dueDate;
@@ -565,9 +565,10 @@ export async function fulfillRoastRequest(data: {
   const { error: fulfillError } = await supabase
     .from("roast_request_fulfillments")
     .insert({
-      request_id: data.requestId,
-      batch_id: data.batchId,
+      roast_request_id: data.requestId,
+      roasting_batch_id: data.batchId,
       quantity_g: data.quantityG,
+      source_type: "batch",
     });
 
   if (fulfillError) {
@@ -575,14 +576,15 @@ export async function fulfillRoastRequest(data: {
   }
 
   // Update the request's fulfilled quantity and status
-  const newFulfilledQuantity = request.fulfilled_quantity_g + data.quantityG;
-  const newStatus = newFulfilledQuantity >= request.requested_quantity_g ? "completed" : "in_progress";
+  const newFulfilledQuantity = (request.fulfilled_roasted_g || 0) + data.quantityG;
+  const newStatus = newFulfilledQuantity >= request.requested_roasted_g ? "fulfilled" : "in_progress";
 
   const { error: updateError } = await supabase
     .from("roast_requests")
     .update({
-      fulfilled_quantity_g: newFulfilledQuantity,
+      fulfilled_roasted_g: newFulfilledQuantity,
       status: newStatus,
+      ...(newStatus === "fulfilled" ? { fulfilled_at: new Date().toISOString() } : {}),
     })
     .eq("id", data.requestId);
 

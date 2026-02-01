@@ -99,9 +99,10 @@ const LBS_TO_GRAMS = 453.592;
 
 interface RoastRequest {
   id: string;
-  coffee_inventory_id: string;
-  requested_quantity_g: number;
-  fulfilled_quantity_g: number;
+  green_coffee_id: string;
+  coffee_name: string;
+  requested_roasted_g: number;
+  fulfilled_roasted_g: number;
   priority: "low" | "normal" | "high" | "urgent";
   status: "pending" | "in_progress";
   due_date: string | null;
@@ -295,7 +296,7 @@ export function SessionDetailClient({
     const request = pendingRequests.find((r) => r.id === requestId);
     if (request) {
       // Find the matching coffee in inventory
-      const coffee = coffeeInventory.find((c) => c.id === request.coffee_inventory_id);
+      const coffee = coffeeInventory.find((c) => c.id === request.green_coffee_id);
       if (coffee) {
         handleCoffeeSelect(coffee.id);
       }
@@ -322,7 +323,7 @@ export function SessionDetailClient({
             </SelectTrigger>
             <SelectContent>
               {pendingRequests.map((request) => {
-                const remainingG = request.requested_quantity_g - request.fulfilled_quantity_g;
+                const remainingG = request.requested_roasted_g - request.fulfilled_roasted_g;
                 const isOverdue = request.due_date && new Date(request.due_date) < new Date();
                 return (
                   <SelectItem key={request.id} value={request.id}>
@@ -342,7 +343,7 @@ export function SessionDetailClient({
           </Select>
           {selectedRequest && (
             <p className="text-xs text-muted-foreground">
-              Request needs {(selectedRequest.requested_quantity_g - selectedRequest.fulfilled_quantity_g).toLocaleString()} g
+              Request needs {(selectedRequest.requested_roasted_g - selectedRequest.fulfilled_roasted_g).toLocaleString()} g
               {selectedRequest.due_date && ` by ${new Date(selectedRequest.due_date).toLocaleDateString()}`}
               {selectedRequest.notes && ` - ${selectedRequest.notes}`}
             </p>

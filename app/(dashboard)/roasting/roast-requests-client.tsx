@@ -61,11 +61,12 @@ interface CoffeeInventory {
 
 interface RoastRequest {
   id: string;
-  coffee_inventory_id: string;
-  requested_quantity_g: number;
-  fulfilled_quantity_g: number;
+  green_coffee_id: string;
+  coffee_name: string;
+  requested_roasted_g: number;
+  fulfilled_roasted_g: number;
   priority: "low" | "normal" | "high" | "urgent";
-  status: "pending" | "in_progress" | "completed" | "cancelled";
+  status: "pending" | "in_progress" | "fulfilled" | "cancelled";
   due_date: string | null;
   order_id: string | null;
   notes: string | null;
@@ -94,7 +95,7 @@ const priorityConfig = {
 const statusConfig = {
   pending: { label: "Pending", icon: Clock, className: "bg-muted text-muted-foreground" },
   in_progress: { label: "In Progress", icon: Coffee, className: "bg-blue-500/10 text-blue-600 border-blue-500/30" },
-  completed: { label: "Completed", icon: CheckCircle2, className: "bg-green-500/10 text-green-600 border-green-500/30" },
+  fulfilled: { label: "Fulfilled", icon: CheckCircle2, className: "bg-green-500/10 text-green-600 border-green-500/30" },
   cancelled: { label: "Cancelled", icon: XCircle, className: "bg-red-500/10 text-red-600 border-red-500/30" },
 };
 
@@ -103,7 +104,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
   const [editingRequest, setEditingRequest] = useState<RoastRequest | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    coffeeInventoryId: "",
+    greenCoffeeId: "",
     quantityG: "",
     priority: "normal" as "low" | "normal" | "high" | "urgent",
     dueDate: "",
@@ -112,7 +113,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
 
   const resetForm = () => {
     setFormData({
-      coffeeInventoryId: "",
+      greenCoffeeId: "",
       quantityG: "",
       priority: "normal",
       dueDate: "",
@@ -129,8 +130,8 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
   const openEditDialog = (request: RoastRequest) => {
     setEditingRequest(request);
     setFormData({
-      coffeeInventoryId: request.coffee_inventory_id,
-      quantityG: request.requested_quantity_g.toString(),
+      greenCoffeeId: request.green_coffee_id,
+      quantityG: request.requested_roasted_g.toString(),
       priority: request.priority,
       dueDate: request.due_date || "",
       notes: request.notes || "",
@@ -138,8 +139,11 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
     setIsDialogOpen(true);
   };
 
+  // Get selected coffee name for creating request
+  const selectedCoffee = coffeeInventory.find((c) => c.id === formData.greenCoffeeId);
+
   const handleSubmit = async () => {
-    if (!formData.coffeeInventoryId || !formData.quantityG) return;
+    if (!formData.greenCoffeeId || !formData.quantityG) return;
     setIsSubmitting(true);
 
     try {
@@ -147,7 +151,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
 
       if (editingRequest) {
         const result = await updateRoastRequest(editingRequest.id, {
-          requestedQuantityG: quantityG,
+          requestedRoastedG: quantityG,
           priority: formData.priority,
           dueDate: formData.dueDate || undefined,
           notes: formData.notes || undefined,
@@ -157,9 +161,11 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
           return;
         }
       } else {
+        if (!selectedCoffee) return;
         const result = await createRoastRequest({
-          coffeeInventoryId: formData.coffeeInventoryId,
-          requestedQuantityG: quantityG,
+          greenCoffeeId: formData.greenCoffeeId,
+          coffeeName: selectedCoffee.name,
+          requestedRoastedG: quantityG,
           priority: formData.priority,
           dueDate: formData.dueDate || undefined,
           notes: formData.notes || undefined,
@@ -189,7 +195,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
     window.location.reload();
   };
 
-  const handleStatusChange = async (id: string, status: "pending" | "in_progress" | "completed" | "cancelled") => {
+  const handleStatusChange = async (id: string, status: "pending" | "in_progress" | "fulfilled" | "cancelled") => {
     const result = await updateRoastRequest(id, { status });
     if (result.error) {
       alert(result.error);
@@ -213,7 +219,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
   });
 
   const pendingRequests = sortedRequests.filter(r => r.status === "pending" || r.status === "in_progress");
-  const completedRequests = sortedRequests.filter(r => r.status === "completed" || r.status === "cancelled");
+  const completedRequests = sortedRequests.filter(r => r.status === "fulfilled" || r.status === "cancelled");
 
   return (
     <div className="space-y-6">
@@ -252,8 +258,8 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                 <TableBody>
                   {pendingRequests.map((request) => {
                     const StatusIcon = statusConfig[request.status].icon;
-                    const progressPercent = (request.fulfilled_quantity_g / request.requested_quantity_g) * 100;
-                    const isOverdue = request.due_date && new Date(request.due_date) < new Date() && request.status !== "completed";
+                    const progressPercent = (request.fulfilled_roasted_g / request.requested_roasted_g) * 100;
+                    const isOverdue = request.due_date && new Date(request.due_date) < new Date() && request.status !== "fulfilled";
                     
                     return (
                       <TableRow key={request.id}>
@@ -266,8 +272,8 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                           </div>
                         </TableCell>
 <TableCell>
-                                          {request.requested_quantity_g.toLocaleString()} g
-                                        </TableCell>
+                          {request.requested_roasted_g.toLocaleString()} g
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
@@ -277,8 +283,8 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                               />
                             </div>
 <span className="text-sm text-muted-foreground">
-                                              {request.fulfilled_quantity_g.toLocaleString()} / {request.requested_quantity_g.toLocaleString()} g
-                                            </span>
+                              {request.fulfilled_roasted_g.toLocaleString()} / {request.requested_roasted_g.toLocaleString()} g
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -316,9 +322,9 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleStatusChange(request.id, "completed")}>
+                              <DropdownMenuItem onClick={() => handleStatusChange(request.id, "fulfilled")}>
                                 <CheckCircle2 className="mr-2 h-4 w-4" />
-                                Mark Complete
+                                Mark Fulfilled
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleStatusChange(request.id, "cancelled")}>
                                 <XCircle className="mr-2 h-4 w-4" />
@@ -345,8 +351,8 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
             <div className="md:hidden divide-y">
               {pendingRequests.map((request) => {
                 const StatusIcon = statusConfig[request.status].icon;
-                const progressPercent = (request.fulfilled_quantity_g / request.requested_quantity_g) * 100;
-                const isOverdue = request.due_date && new Date(request.due_date) < new Date() && request.status !== "completed";
+                const progressPercent = (request.fulfilled_roasted_g / request.requested_roasted_g) * 100;
+                const isOverdue = request.due_date && new Date(request.due_date) < new Date() && request.status !== "fulfilled";
 
                 return (
                   <div key={request.id} className="p-4 space-y-3">
@@ -374,9 +380,9 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                               <Edit className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleStatusChange(request.id, "completed")}>
+                            <DropdownMenuItem onClick={() => handleStatusChange(request.id, "fulfilled")}>
                               <CheckCircle2 className="mr-2 h-4 w-4" />
-                              Mark Complete
+                              Mark Fulfilled
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleStatusChange(request.id, "cancelled")}>
                               <XCircle className="mr-2 h-4 w-4" />
@@ -396,7 +402,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Progress</span>
-                        <span>{request.fulfilled_quantity_g.toLocaleString()} / {request.requested_quantity_g.toLocaleString()} g</span>
+                        <span>{request.fulfilled_roasted_g.toLocaleString()} / {request.requested_roasted_g.toLocaleString()} g</span>
                       </div>
                       <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                         <div
@@ -447,7 +453,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
       {/* Completed Requests */}
       {completedRequests.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-medium text-muted-foreground">Completed & Cancelled</h3>
+          <h3 className="text-lg font-medium text-muted-foreground">Fulfilled & Cancelled</h3>
           <Card>
             <CardContent className="p-0">
               <div className="hidden md:block">
@@ -472,8 +478,8 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                             </div>
                           </TableCell>
 <TableCell>
-                                            {request.requested_quantity_g.toLocaleString()} g
-                                          </TableCell>
+                            {request.requested_roasted_g.toLocaleString()} g
+                          </TableCell>
                           <TableCell>
                             <Badge variant="outline" className={statusConfig[request.status].className}>
                               <StatusIcon className="mr-1 h-3 w-3" />
@@ -510,8 +516,8 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                             {request.green_coffee_inventory?.name || "Unknown"}
                           </div>
 <div className="text-sm text-muted-foreground">
-                                            {request.requested_quantity_g.toLocaleString()} g
-                                          </div>
+                            {request.requested_roasted_g.toLocaleString()} g
+                          </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className={statusConfig[request.status].className}>
@@ -549,8 +555,8 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
             <div className="space-y-2">
               <Label>Coffee</Label>
               <Select
-                value={formData.coffeeInventoryId}
-                onValueChange={(value) => setFormData({ ...formData, coffeeInventoryId: value })}
+                value={formData.greenCoffeeId}
+                onValueChange={(value) => setFormData({ ...formData, greenCoffeeId: value })}
                 disabled={!!editingRequest}
               >
                 <SelectTrigger>
@@ -627,7 +633,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={isSubmitting || !formData.coffeeInventoryId || !formData.quantityG}
+              disabled={isSubmitting || !formData.greenCoffeeId || !formData.quantityG}
             >
               {isSubmitting ? "Saving..." : editingRequest ? "Update" : "Create"}
             </Button>
