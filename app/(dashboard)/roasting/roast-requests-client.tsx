@@ -104,7 +104,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     coffeeInventoryId: "",
-    quantityLbs: "",
+    quantityG: "",
     priority: "normal" as "low" | "normal" | "high" | "urgent",
     dueDate: "",
     notes: "",
@@ -113,7 +113,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
   const resetForm = () => {
     setFormData({
       coffeeInventoryId: "",
-      quantityLbs: "",
+      quantityG: "",
       priority: "normal",
       dueDate: "",
       notes: "",
@@ -130,7 +130,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
     setEditingRequest(request);
     setFormData({
       coffeeInventoryId: request.coffee_inventory_id,
-      quantityLbs: gramsToLbs(request.requested_quantity_g).toFixed(2),
+      quantityG: request.requested_quantity_g.toString(),
       priority: request.priority,
       dueDate: request.due_date || "",
       notes: request.notes || "",
@@ -139,11 +139,11 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
   };
 
   const handleSubmit = async () => {
-    if (!formData.coffeeInventoryId || !formData.quantityLbs) return;
+    if (!formData.coffeeInventoryId || !formData.quantityG) return;
     setIsSubmitting(true);
 
     try {
-      const quantityG = parseFloat(formData.quantityLbs) * LBS_TO_GRAMS;
+      const quantityG = parseFloat(formData.quantityG);
 
       if (editingRequest) {
         const result = await updateRoastRequest(editingRequest.id, {
@@ -265,9 +265,9 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                             {request.green_coffee_inventory?.origin || ""}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          {gramsToLbs(request.requested_quantity_g).toFixed(1)} lbs
-                        </TableCell>
+<TableCell>
+                                          {request.requested_quantity_g.toLocaleString()} g
+                                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
@@ -276,9 +276,9 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                                 style={{ width: `${Math.min(progressPercent, 100)}%` }}
                               />
                             </div>
-                            <span className="text-sm text-muted-foreground">
-                              {gramsToLbs(request.fulfilled_quantity_g).toFixed(1)} / {gramsToLbs(request.requested_quantity_g).toFixed(1)}
-                            </span>
+<span className="text-sm text-muted-foreground">
+                                              {request.fulfilled_quantity_g.toLocaleString()} / {request.requested_quantity_g.toLocaleString()} g
+                                            </span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -396,7 +396,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Progress</span>
-                        <span>{gramsToLbs(request.fulfilled_quantity_g).toFixed(1)} / {gramsToLbs(request.requested_quantity_g).toFixed(1)} lbs</span>
+                        <span>{request.fulfilled_quantity_g.toLocaleString()} / {request.requested_quantity_g.toLocaleString()} g</span>
                       </div>
                       <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                         <div
@@ -471,9 +471,9 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                               {request.green_coffee_inventory?.name || "Unknown"}
                             </div>
                           </TableCell>
-                          <TableCell>
-                            {gramsToLbs(request.requested_quantity_g).toFixed(1)} lbs
-                          </TableCell>
+<TableCell>
+                                            {request.requested_quantity_g.toLocaleString()} g
+                                          </TableCell>
                           <TableCell>
                             <Badge variant="outline" className={statusConfig[request.status].className}>
                               <StatusIcon className="mr-1 h-3 w-3" />
@@ -509,9 +509,9 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                           <div className="font-medium">
                             {request.green_coffee_inventory?.name || "Unknown"}
                           </div>
-                          <div className="text-sm text-muted-foreground">
-                            {gramsToLbs(request.requested_quantity_g).toFixed(1)} lbs
-                          </div>
+<div className="text-sm text-muted-foreground">
+                                            {request.requested_quantity_g.toLocaleString()} g
+                                          </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className={statusConfig[request.status].className}>
@@ -561,9 +561,9 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                     <SelectItem key={coffee.id} value={coffee.id}>
                       <div className="flex items-center justify-between gap-4">
                         <span>{coffee.name}</span>
-                        <span className="text-muted-foreground text-xs">
-                          {gramsToLbs(coffee.current_green_quantity_g).toFixed(1)} lbs available
-                        </span>
+<span className="text-muted-foreground text-xs">
+                                          {coffee.current_green_quantity_g.toLocaleString()} g available
+                                        </span>
                       </div>
                     </SelectItem>
                   ))}
@@ -572,13 +572,13 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
             </div>
 
             <div className="space-y-2">
-              <Label>Quantity (lbs)</Label>
+              <Label>Quantity (grams)</Label>
               <Input
                 type="number"
-                step="0.1"
-                value={formData.quantityLbs}
-                onChange={(e) => setFormData({ ...formData, quantityLbs: e.target.value })}
-                placeholder="Enter quantity in lbs"
+                step="1"
+                value={formData.quantityG}
+                onChange={(e) => setFormData({ ...formData, quantityG: e.target.value })}
+                placeholder="Enter quantity in grams"
               />
             </div>
 
@@ -627,7 +627,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={isSubmitting || !formData.coffeeInventoryId || !formData.quantityLbs}
+              disabled={isSubmitting || !formData.coffeeInventoryId || !formData.quantityG}
             >
               {isSubmitting ? "Saving..." : editingRequest ? "Update" : "Create"}
             </Button>

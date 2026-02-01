@@ -149,7 +149,7 @@ export function OrdersClient({
   const [roastRequestOrder, setRoastRequestOrder] = useState<Order | null>(null);
   const [roastRequestData, setRoastRequestData] = useState({
     coffeeInventoryId: "",
-    quantityLbs: "",
+    quantityG: "",
     priority: "normal" as "low" | "normal" | "high" | "urgent",
     dueDate: "",
   });
@@ -283,10 +283,10 @@ export function OrdersClient({
 
   // Handle creating a roast request
   const handleCreateRoastRequest = async () => {
-    if (!roastRequestOrder || !roastRequestData.coffeeInventoryId || !roastRequestData.quantityLbs) return;
+    if (!roastRequestOrder || !roastRequestData.coffeeInventoryId || !roastRequestData.quantityG) return;
     
     setIsCreatingRoastRequest(true);
-    const quantityG = parseFloat(roastRequestData.quantityLbs) * LBS_TO_GRAMS;
+    const quantityG = parseFloat(roastRequestData.quantityG);
     
     const result = await createRoastRequestForOrder({
       orderId: roastRequestOrder.id,
@@ -304,7 +304,7 @@ export function OrdersClient({
       setRoastRequestOrder(null);
       setRoastRequestData({
         coffeeInventoryId: "",
-        quantityLbs: "",
+        quantityG: "",
         priority: "normal",
         dueDate: "",
       });
@@ -998,7 +998,7 @@ export function OrdersClient({
                       <div className="flex items-center justify-between gap-4">
                         <span>{coffee.name}</span>
                         <span className="text-muted-foreground text-xs">
-                          {gramsToLbs(coffee.current_green_quantity_g).toFixed(1)} lbs available
+                          {coffee.current_green_quantity_g.toLocaleString()} g available
                         </span>
                       </div>
                     </SelectItem>
@@ -1008,16 +1008,16 @@ export function OrdersClient({
             </div>
 
             <div className="space-y-2">
-              <Label>Quantity Needed (lbs)</Label>
+              <Label>Quantity Needed (grams)</Label>
               <Input
                 type="number"
-                step="0.1"
+                step="1"
                 min="0"
-                value={roastRequestData.quantityLbs}
+                value={roastRequestData.quantityG}
                 onChange={(e) =>
-                  setRoastRequestData({ ...roastRequestData, quantityLbs: e.target.value })
+                  setRoastRequestData({ ...roastRequestData, quantityG: e.target.value })
                 }
-                placeholder="e.g., 5.0"
+                placeholder="e.g., 500"
               />
             </div>
 
@@ -1061,7 +1061,7 @@ export function OrdersClient({
               disabled={
                 isCreatingRoastRequest ||
                 !roastRequestData.coffeeInventoryId ||
-                !roastRequestData.quantityLbs
+                !roastRequestData.quantityG
               }
             >
               {isCreatingRoastRequest ? "Creating..." : "Create Request"}

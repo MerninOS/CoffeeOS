@@ -331,7 +331,7 @@ export function SessionDetailClient({
                       {request.priority === "high" && <Clock className="h-3 w-3 text-amber-500" />}
                       <span>{request.green_coffee_inventory?.name || "Unknown"}</span>
                       <span className="text-muted-foreground text-xs">
-                        - {gramsToLbs(remainingG).toFixed(1)} lbs needed
+                        - {remainingG.toLocaleString()} g needed
                         {isOverdue && " (overdue)"}
                       </span>
                     </div>
@@ -342,7 +342,7 @@ export function SessionDetailClient({
           </Select>
           {selectedRequest && (
             <p className="text-xs text-muted-foreground">
-              Request needs {gramsToLbs(selectedRequest.requested_quantity_g - selectedRequest.fulfilled_quantity_g).toFixed(1)} lbs
+              Request needs {(selectedRequest.requested_quantity_g - selectedRequest.fulfilled_quantity_g).toLocaleString()} g
               {selectedRequest.due_date && ` by ${new Date(selectedRequest.due_date).toLocaleDateString()}`}
               {selectedRequest.notes && ` - ${selectedRequest.notes}`}
             </p>
