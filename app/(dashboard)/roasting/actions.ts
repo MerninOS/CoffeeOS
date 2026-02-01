@@ -422,6 +422,179 @@ export async function saveRoastingSettings(data: {
   return { success: true };
 }
 
+// Roast Request Actions
+export async function createRoastRequest(data: {
+  coffeeInventoryId: string;
+  requestedQuantityG: number;
+  priority?: "low" | "normal" | "high" | "urgent";
+  dueDate?: string;
+  orderId?: string;
+  orderLineItemId?: string;
+  notes?: string;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  const { data: request, error } = await supabase
+    .from("roast_requests")
+    .insert({
+      user_id: user.id,
+      coffee_inventory_id: data.coffeeInventoryId,
+      requested_quantity_g: data.requestedQuantityG,
+      fulfilled_quantity_g: 0,
+      priority: data.priority || "normal",
+      status: "pending",
+      due_date: data.dueDate || null,
+      order_id: data.orderId || null,
+      order_line_item_id: data.orderLineItemId || null,
+      notes: data.notes || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/roasting");
+  revalidatePath("/orders");
+  return { request };
+}
+
+export async function updateRoastRequest(
+  id: string,
+  data: {
+    requestedQuantityG?: number;
+    priority?: "low" | "normal" | "high" | "urgent";
+    status?: "pending" | "in_progress" | "completed" | "cancelled";
+    dueDate?: string;
+    notes?: string;
+  }
+) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  const updateData: Record<string, unknown> = {};
+  if (data.requestedQuantityG !== undefined) updateData.requested_quantity_g = data.requestedQuantityG;
+  if (data.priority !== undefined) updateData.priority = data.priority;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.dueDate !== undefined) updateData.due_date = data.dueDate;
+  if (data.notes !== undefined) updateData.notes = data.notes;
+
+  const { error } = await supabase
+    .from("roast_requests")
+    .update(updateData)
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/roasting");
+  return { success: true };
+}
+
+export async function deleteRoastRequest(id: string) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  const { error } = await supabase
+    .from("roast_requests")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/roasting");
+  return { success: true };
+}
+
+export async function fulfillRoastRequest(data: {
+  requestId: string;
+  batchId: string;
+  quantityG: number;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Get the current request
+  const { data: request, error: fetchError } = await supabase
+    .from("roast_requests")
+    .select("*")
+    .eq("id", data.requestId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (fetchError || !request) {
+    return { error: "Request not found" };
+  }
+
+  // Create fulfillment record
+  const { error: fulfillError } = await supabase
+    .from("roast_request_fulfillments")
+    .insert({
+      request_id: data.requestId,
+      batch_id: data.batchId,
+      quantity_g: data.quantityG,
+    });
+
+  if (fulfillError) {
+    return { error: fulfillError.message };
+  }
+
+  // Update the request's fulfilled quantity and status
+  const newFulfilledQuantity = request.fulfilled_quantity_g + data.quantityG;
+  const newStatus = newFulfilledQuantity >= request.requested_quantity_g ? "completed" : "in_progress";
+
+  const { error: updateError } = await supabase
+    .from("roast_requests")
+    .update({
+      fulfilled_quantity_g: newFulfilledQuantity,
+      status: newStatus,
+    })
+    .eq("id", data.requestId);
+
+  if (updateError) {
+    return { error: updateError.message };
+  }
+
+  revalidatePath("/roasting");
+  revalidatePath("/orders");
+  return { success: true };
+}
+
 // Create component from batch
 export async function createComponentFromBatch(
   batchId: string,

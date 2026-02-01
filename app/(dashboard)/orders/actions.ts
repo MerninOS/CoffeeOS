@@ -491,3 +491,61 @@ export async function removeOrderCustomCost(customCostId: string) {
   revalidatePath("/orders");
   return { success: true };
 }
+
+export async function createRoastRequestForOrder(data: {
+  orderId: string;
+  orderLineItemId?: string;
+  coffeeInventoryId: string;
+  requestedQuantityG: number;
+  priority?: "low" | "normal" | "high" | "urgent";
+  dueDate?: string;
+  notes?: string;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Verify the order belongs to the user
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, order_name")
+    .eq("id", data.orderId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!order) {
+    return { error: "Order not found" };
+  }
+
+  // Create the roast request
+  const { data: request, error } = await supabase
+    .from("roast_requests")
+    .insert({
+      user_id: user.id,
+      coffee_inventory_id: data.coffeeInventoryId,
+      requested_quantity_g: data.requestedQuantityG,
+      fulfilled_quantity_g: 0,
+      priority: data.priority || "normal",
+      status: "pending",
+      due_date: data.dueDate || null,
+      order_id: data.orderId,
+      order_line_item_id: data.orderLineItemId || null,
+      notes: data.notes || `Roast request for order ${order.order_name}`,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/orders");
+  revalidatePath("/roasting");
+  return { request };
+}

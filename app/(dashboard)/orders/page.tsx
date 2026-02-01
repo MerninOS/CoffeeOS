@@ -55,6 +55,14 @@ export default async function OrdersPage() {
     .eq("user_id", user.id)
     .order("name");
 
+  // Fetch coffee inventory for roast requests
+  const { data: coffeeInventory } = await supabase
+    .from("green_coffee_inventory")
+    .select("id, name, origin, current_green_quantity_g")
+    .eq("user_id", user.id)
+    .gt("current_green_quantity_g", 0)
+    .order("name");
+
   // Fetch all products with their components and component costs
   // This allows us to calculate COGS for each line item
   const { data: productsWithCogs } = await supabase
@@ -99,6 +107,7 @@ export default async function OrdersPage() {
       initialOrders={orders || []}
       productCogsMap={productCogsMap}
       allComponents={allComponents || []}
+      coffeeInventory={coffeeInventory || []}
       isAdminConfigured={isAdminConfigured}
     />
   );

@@ -43,11 +43,27 @@ export default async function SessionDetailPage({ params }: PageProps) {
     .gt("current_green_quantity_g", 0)
     .order("name");
 
+  // Fetch pending roast requests to allow fulfilling them
+  const { data: pendingRequests } = await supabase
+    .from("roast_requests")
+    .select(`
+      *,
+      green_coffee_inventory (
+        name,
+        origin
+      )
+    `)
+    .eq("user_id", user.id)
+    .in("status", ["pending", "in_progress"])
+    .order("priority", { ascending: true })
+    .order("due_date", { ascending: true });
+
   return (
     <SessionDetailClient
       session={session}
       batches={session.roasting_batches || []}
       coffeeInventory={coffeeInventory || []}
+      pendingRequests={pendingRequests || []}
     />
   );
 }

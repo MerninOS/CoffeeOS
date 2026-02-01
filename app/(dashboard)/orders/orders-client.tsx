@@ -49,7 +49,16 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 
-import { syncShopifyOrders, addOrderComponent, updateOrderComponentQuantity, removeOrderComponent, addOrderCustomCost, removeOrderCustomCost } from "./actions";
+import { syncShopifyOrders, addOrderComponent, updateOrderComponentQuantity, removeOrderComponent, addOrderCustomCost, removeOrderCustomCost, createRoastRequestForOrder } from "./actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Flame } from "lucide-react";
 
 interface OrderLineItem {
   id: string;
@@ -100,10 +109,21 @@ interface Order {
   order_custom_costs: OrderCustomCost[];
 }
 
+interface CoffeeInventory {
+  id: string;
+  name: string;
+  origin: string;
+  current_green_quantity_g: number;
+}
+
+const LBS_TO_GRAMS = 453.592;
+const gramsToLbs = (g: number) => g / LBS_TO_GRAMS;
+
 interface OrdersClientProps {
   initialOrders: Order[];
   productCogsMap: Record<string, number>;
   allComponents: ComponentData[];
+  coffeeInventory: CoffeeInventory[];
   isAdminConfigured: boolean;
 }
 
@@ -111,6 +131,7 @@ export function OrdersClient({
   initialOrders,
   productCogsMap,
   allComponents,
+  coffeeInventory,
   isAdminConfigured,
 }: OrdersClientProps) {
   const [orders, setOrders] = useState(initialOrders);
@@ -123,6 +144,16 @@ export function OrdersClient({
   const [addingCustomCostTo, setAddingCustomCostTo] = useState<string | null>(null);
   const [customCostDescription, setCustomCostDescription] = useState<string>("");
   const [customCostAmount, setCustomCostAmount] = useState<string>("");
+  
+  // Roast request state
+  const [roastRequestOrder, setRoastRequestOrder] = useState<Order | null>(null);
+  const [roastRequestData, setRoastRequestData] = useState({
+    coffeeInventoryId: "",
+    quantityLbs: "",
+    priority: "normal" as "low" | "normal" | "high" | "urgent",
+    dueDate: "",
+  });
+  const [isCreatingRoastRequest, setIsCreatingRoastRequest] = useState(false);
   
   const filteredOrders = orders.filter(
     (order) =>
@@ -247,6 +278,37 @@ export function OrdersClient({
       alert(result.error);
     } else {
       window.location.reload();
+    }
+  };
+
+  // Handle creating a roast request
+  const handleCreateRoastRequest = async () => {
+    if (!roastRequestOrder || !roastRequestData.coffeeInventoryId || !roastRequestData.quantityLbs) return;
+    
+    setIsCreatingRoastRequest(true);
+    const quantityG = parseFloat(roastRequestData.quantityLbs) * LBS_TO_GRAMS;
+    
+    const result = await createRoastRequestForOrder({
+      orderId: roastRequestOrder.id,
+      coffeeInventoryId: roastRequestData.coffeeInventoryId,
+      requestedQuantityG: quantityG,
+      priority: roastRequestData.priority,
+      dueDate: roastRequestData.dueDate || undefined,
+    });
+    
+    setIsCreatingRoastRequest(false);
+    
+    if (result.error) {
+      alert(result.error);
+    } else {
+      setRoastRequestOrder(null);
+      setRoastRequestData({
+        coffeeInventoryId: "",
+        quantityLbs: "",
+        priority: "normal",
+        dueDate: "",
+      });
+      alert("Roast request created! View it in the Roasting page.");
     }
   };
 
@@ -869,6 +931,32 @@ export function OrdersClient({
                                   </div>
                                 </div>
                               )}
+
+                              {/* Roast Request Section */}
+                              {coffeeInventory.length > 0 && (
+                                <>
+                                  <Separator className="my-4" />
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <h4 className="text-sm font-semibold">Roasting</h4>
+                                      <p className="text-xs text-muted-foreground">
+                                        Create a roast request to fulfill this order
+                                      </p>
+                                    </div>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setRoastRequestOrder(order);
+                                      }}
+                                    >
+                                      <Flame className="mr-1 h-3 w-3" />
+                                      Create Roast Request
+                                    </Button>
+                                  </div>
+                                </>
+                              )}
                             </div>
                           </div>
                         </TableCell>
@@ -881,6 +969,106 @@ export function OrdersClient({
           </CardContent>
         </Card>
       )}
+
+      {/* Roast Request Dialog */}
+      <Dialog open={!!roastRequestOrder} onOpenChange={(open) => !open && setRoastRequestOrder(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Roast Request</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              Create a roast request for order <strong>{roastRequestOrder?.order_name}</strong>
+            </p>
+
+            <div className="space-y-2">
+              <Label>Coffee to Roast</Label>
+              <Select
+                value={roastRequestData.coffeeInventoryId}
+                onValueChange={(value) =>
+                  setRoastRequestData({ ...roastRequestData, coffeeInventoryId: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select coffee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {coffeeInventory.map((coffee) => (
+                    <SelectItem key={coffee.id} value={coffee.id}>
+                      <div className="flex items-center justify-between gap-4">
+                        <span>{coffee.name}</span>
+                        <span className="text-muted-foreground text-xs">
+                          {gramsToLbs(coffee.current_green_quantity_g).toFixed(1)} lbs available
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Quantity Needed (lbs)</Label>
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                value={roastRequestData.quantityLbs}
+                onChange={(e) =>
+                  setRoastRequestData({ ...roastRequestData, quantityLbs: e.target.value })
+                }
+                placeholder="e.g., 5.0"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Priority</Label>
+              <Select
+                value={roastRequestData.priority}
+                onValueChange={(value: "low" | "normal" | "high" | "urgent") =>
+                  setRoastRequestData({ ...roastRequestData, priority: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Due Date (optional)</Label>
+              <Input
+                type="date"
+                value={roastRequestData.dueDate}
+                onChange={(e) =>
+                  setRoastRequestData({ ...roastRequestData, dueDate: e.target.value })
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRoastRequestOrder(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateRoastRequest}
+              disabled={
+                isCreatingRoastRequest ||
+                !roastRequestData.coffeeInventoryId ||
+                !roastRequestData.quantityLbs
+              }
+            >
+              {isCreatingRoastRequest ? "Creating..." : "Create Request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

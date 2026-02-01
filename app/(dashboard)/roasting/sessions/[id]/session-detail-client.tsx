@@ -41,11 +41,15 @@ import {
   Trash2,
   Edit,
   Package,
+  ClipboardList,
+  AlertTriangle,
+  Clock,
 } from "lucide-react";
 import {
   createBatch,
   updateBatch,
   deleteBatch,
+  fulfillRoastRequest,
 } from "../../actions";
 
 interface Batch {
@@ -93,10 +97,27 @@ interface CoffeeInventory {
 // Conversion: 1 lb = 453.592 grams
 const LBS_TO_GRAMS = 453.592;
 
+interface RoastRequest {
+  id: string;
+  coffee_inventory_id: string;
+  requested_quantity_g: number;
+  fulfilled_quantity_g: number;
+  priority: "low" | "normal" | "high" | "urgent";
+  status: "pending" | "in_progress";
+  due_date: string | null;
+  order_id: string | null;
+  notes: string | null;
+  green_coffee_inventory?: {
+    name: string;
+    origin: string;
+  };
+}
+
 interface SessionDetailClientProps {
   session: Session;
   batches: Batch[];
   coffeeInventory: CoffeeInventory[];
+  pendingRequests: RoastRequest[];
 }
 
 const defaultBatchData = {
@@ -116,6 +137,7 @@ export function SessionDetailClient({
   session,
   batches: initialBatches,
   coffeeInventory,
+  pendingRequests,
 }: SessionDetailClientProps) {
   const router = useRouter();
   const [batches, setBatches] = useState(initialBatches);
@@ -124,6 +146,7 @@ export function SessionDetailClient({
   const [deleteBatchId, setDeleteBatchId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [batchData, setBatchData] = useState(defaultBatchData);
+  const [selectedRequestId, setSelectedRequestId] = useState<string>("");
 
   const handleAddBatch = async () => {
     if (!batchData.coffeeName || !batchData.greenWeightG || !batchData.roastedWeightG || !batchData.roastMinutes || !batchData.priceValue) {
@@ -146,17 +169,34 @@ export function SessionDetailClient({
       batchDate: session.session_date,
       energyKwh: batchData.energyKwh ? parseFloat(batchData.energyKwh) : undefined,
     });
-    setIsSubmitting(false);
 
     if (result.error) {
+      setIsSubmitting(false);
       alert(result.error);
       return;
     }
+
+    // If a roast request was selected, fulfill it with this batch
+    if (result.batch && selectedRequestId) {
+      const roastedWeightG = parseFloat(batchData.roastedWeightG);
+      const fulfillResult = await fulfillRoastRequest({
+        requestId: selectedRequestId,
+        batchId: result.batch.id,
+        quantityG: roastedWeightG,
+      });
+      if (fulfillResult.error) {
+        console.warn("Failed to fulfill roast request:", fulfillResult.error);
+      }
+    }
+
+    setIsSubmitting(false);
 
     if (result.batch) {
       setBatches([...batches, result.batch]);
       setIsAddBatchOpen(false);
       setBatchData(defaultBatchData);
+      setSelectedRequestId("");
+      router.refresh(); // Refresh to update pending requests
     }
   };
 
@@ -249,8 +289,67 @@ export function SessionDetailClient({
   // Helper to convert grams to lbs
   const gramsToLbs = (g: number) => g / LBS_TO_GRAMS;
 
+  // Helper function for selecting a roast request
+  const handleRequestSelect = (requestId: string) => {
+    setSelectedRequestId(requestId);
+    const request = pendingRequests.find((r) => r.id === requestId);
+    if (request) {
+      // Find the matching coffee in inventory
+      const coffee = coffeeInventory.find((c) => c.id === request.coffee_inventory_id);
+      if (coffee) {
+        handleCoffeeSelect(coffee.id);
+      }
+    }
+  };
+
+  const selectedRequest = pendingRequests.find((r) => r.id === selectedRequestId);
+
   const batchFormFields = (
     <div className="grid gap-4 py-4">
+      {/* Roast Request Selection */}
+      {pendingRequests.length > 0 && !editingBatch && (
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Fulfill a Roast Request (optional)
+          </Label>
+          <Select
+            value={selectedRequestId}
+            onValueChange={handleRequestSelect}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a request to fulfill..." />
+            </SelectTrigger>
+            <SelectContent>
+              {pendingRequests.map((request) => {
+                const remainingG = request.requested_quantity_g - request.fulfilled_quantity_g;
+                const isOverdue = request.due_date && new Date(request.due_date) < new Date();
+                return (
+                  <SelectItem key={request.id} value={request.id}>
+                    <div className="flex items-center gap-2">
+                      {request.priority === "urgent" && <AlertTriangle className="h-3 w-3 text-red-500" />}
+                      {request.priority === "high" && <Clock className="h-3 w-3 text-amber-500" />}
+                      <span>{request.green_coffee_inventory?.name || "Unknown"}</span>
+                      <span className="text-muted-foreground text-xs">
+                        - {gramsToLbs(remainingG).toFixed(1)} lbs needed
+                        {isOverdue && " (overdue)"}
+                      </span>
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+          {selectedRequest && (
+            <p className="text-xs text-muted-foreground">
+              Request needs {gramsToLbs(selectedRequest.requested_quantity_g - selectedRequest.fulfilled_quantity_g).toFixed(1)} lbs
+              {selectedRequest.due_date && ` by ${new Date(selectedRequest.due_date).toLocaleDateString()}`}
+              {selectedRequest.notes && ` - ${selectedRequest.notes}`}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Coffee Inventory Selection */}
       {coffeeInventory.length > 0 && (
         <div className="space-y-2">
@@ -527,6 +626,34 @@ export function SessionDetailClient({
           </CardContent>
         </Card>
       </div>
+
+      {/* Pending Roast Requests Banner */}
+      {pendingRequests.length > 0 && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent className="py-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-amber-500/10 p-2">
+                <ClipboardList className="h-5 w-5 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold">
+                  {pendingRequests.length} Pending Roast Request{pendingRequests.length !== 1 ? "s" : ""}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {pendingRequests.map((r) => r.green_coffee_inventory?.name || "Unknown").join(", ")}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setIsAddBatchOpen(true)}
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                Add Batch
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Batch Grid */}
       {batches.length === 0 ? (
