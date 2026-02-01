@@ -45,25 +45,25 @@ export function RoastingPageClient({
   ).length;
 
   return (
-    <div className="space-y-6 p-6">
-      {/* Header */}
+    <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
+      {/* Header - Condensed on mobile */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Roasting</h1>
-        <p className="text-muted-foreground">
-          Manage roasting sessions, batches, and fulfill roast requests
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Roasting</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
+          Manage sessions and roast requests
         </p>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="sessions" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="sessions" className="gap-2">
+      {/* Tabs - Full width on mobile for better touch targets */}
+      <Tabs defaultValue="sessions" className="space-y-4 sm:space-y-6">
+        <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:flex">
+          <TabsTrigger value="sessions" className="gap-2 flex-1 sm:flex-none">
             <Flame className="h-4 w-4" />
-            <span className="hidden sm:inline">Sessions</span>
+            <span>Sessions</span>
           </TabsTrigger>
-          <TabsTrigger value="requests" className="gap-2">
+          <TabsTrigger value="requests" className="gap-2 flex-1 sm:flex-none">
             <ClipboardList className="h-4 w-4" />
-            <span className="hidden sm:inline">Roast Requests</span>
+            <span>Requests</span>
             {pendingRequestCount > 0 && (
               <span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
                 {pendingRequestCount}
@@ -72,11 +72,11 @@ export function RoastingPageClient({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="sessions" className="mt-6">
+        <TabsContent value="sessions" className="mt-4 sm:mt-6">
           <SessionsClient initialSessions={initialSessions} hideHeader />
         </TabsContent>
 
-        <TabsContent value="requests" className="mt-6">
+        <TabsContent value="requests" className="mt-4 sm:mt-6">
           <RoastRequestsClient
             requests={roastRequests}
             coffeeInventory={coffeeInventory}

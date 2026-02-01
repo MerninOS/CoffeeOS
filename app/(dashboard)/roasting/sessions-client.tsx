@@ -304,8 +304,8 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
         </Card>
       ) : (
         <>
-          {/* Summary Cards */}
-          <div className="grid gap-4 md:grid-cols-3">
+          {/* Summary Cards - Hidden on mobile, show all 3 on desktop */}
+          <div className="hidden md:grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -344,8 +344,8 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
             </Card>
           </div>
 
-          {/* Sessions Table */}
-          <Card>
+          {/* Desktop Sessions Table */}
+          <Card className="hidden md:block">
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
@@ -442,6 +442,89 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
               </Table>
             </CardContent>
           </Card>
+
+          {/* Mobile Sessions List */}
+          <div className="md:hidden space-y-3">
+            {sessions.map((session) => {
+              const weightLoss = calculateWeightLoss(
+                session.total_green_weight_g,
+                session.total_roasted_weight_g
+              );
+
+              return (
+                <Card key={session.id}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <Link
+                          href={`/roasting/sessions/${session.id}`}
+                          className="font-semibold text-base hover:underline block"
+                        >
+                          {format(new Date(session.session_date), "MMM d, yyyy")}
+                        </Link>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {session.vendor_name}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="shrink-0">
+                        {session.batch_count} {session.batch_count === 1 ? "batch" : "batches"}
+                      </Badge>
+                    </div>
+                    
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground block text-xs">Roasted</span>
+                        <span className="font-medium">{session.total_roasted_weight_g.toFixed(0)}g</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block text-xs">Loss</span>
+                        {weightLoss !== null ? (
+                          <span
+                            className={`font-medium ${
+                              weightLoss > 18
+                                ? "text-destructive"
+                                : weightLoss < 12
+                                  ? "text-amber-600"
+                                  : "text-green-600"
+                            }`}
+                          >
+                            {weightLoss.toFixed(1)}%
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block text-xs">Cost</span>
+                        <span className="font-medium">
+                          {session.session_toll_cost !== null
+                            ? `$${session.session_toll_cost.toFixed(2)}`
+                            : "-"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex gap-2">
+                      <Button asChild variant="default" size="sm" className="flex-1">
+                        <Link href={`/roasting/sessions/${session.id}`}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          View Session
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDeleteId(session.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         </>
       )}
 

@@ -516,31 +516,30 @@ export function SessionDetailClient({
   );
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header - Stacked on mobile */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <Button variant="ghost" size="icon" asChild className="shrink-0">
             <Link href="/roasting">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold">
-                {format(new Date(session.session_date), "MMMM d, yyyy")}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base sm:text-lg font-semibold">
+                {format(new Date(session.session_date), "MMM d, yyyy")}
               </h2>
-              <Badge variant="outline">{session.vendor_name}</Badge>
+              <Badge variant="outline" className="shrink-0">{session.vendor_name}</Badge>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">
               ${session.rate_per_hour}/hr | {session.billing_granularity_minutes} min billing
-              {session.notes && ` | ${session.notes}`}
             </p>
           </div>
         </div>
         <Dialog open={isAddBatchOpen} onOpenChange={setIsAddBatchOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               Add Batch
             </Button>
@@ -571,8 +570,29 @@ export function SessionDetailClient({
         </Dialog>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-5">
+      {/* Summary Cards - Compact on mobile, full on desktop */}
+      {/* Mobile: Single card with key stats */}
+      <Card className="md:hidden">
+        <CardContent className="py-4">
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <div className="text-2xl font-bold">{batches.length}</div>
+              <div className="text-xs text-muted-foreground">Batches</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold">{(totalSellableG / 1000).toFixed(1)}<span className="text-sm">kg</span></div>
+              <div className="text-xs text-muted-foreground">Sellable</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold">${sessionTollCost.toFixed(0)}</div>
+              <div className="text-xs text-muted-foreground">Toll</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Desktop: Full stats grid */}
+      <div className="hidden md:grid gap-4 md:grid-cols-5">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -631,25 +651,28 @@ export function SessionDetailClient({
       {/* Pending Roast Requests Banner */}
       {pendingRequests.length > 0 && (
         <Card className="border-amber-500/50 bg-amber-500/5">
-          <CardContent className="py-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-amber-500/10 p-2">
-                <ClipboardList className="h-5 w-5 text-amber-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-sm font-semibold">
-                  {pendingRequests.length} Pending Roast Request{pendingRequests.length !== 1 ? "s" : ""}
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  {pendingRequests.map((r) => r.green_coffee_inventory?.name || "Unknown").join(", ")}
-                </p>
+          <CardContent className="py-3 sm:py-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="rounded-full bg-amber-500/10 p-2 shrink-0">
+                  <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold">
+                    {pendingRequests.length} Pending Request{pendingRequests.length !== 1 ? "s" : ""}
+                  </h3>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {pendingRequests.map((r) => r.green_coffee_inventory?.name || "Unknown").join(", ")}
+                  </p>
+                </div>
               </div>
               <Button
                 size="sm"
                 onClick={() => setIsAddBatchOpen(true)}
+                className="w-full sm:w-auto shrink-0"
               >
                 <Plus className="mr-1 h-4 w-4" />
-                Add Batch
+                Fulfill Request
               </Button>
             </div>
           </CardContent>
@@ -659,30 +682,37 @@ export function SessionDetailClient({
       {/* Batch Grid */}
       {batches.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <div className="rounded-full bg-muted p-4 mb-4">
-              <Package className="h-8 w-8 text-muted-foreground" />
+          <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12">
+            <div className="rounded-full bg-muted p-3 sm:p-4 mb-3 sm:mb-4">
+              <Package className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground" />
             </div>
-            <h3 className="text-lg font-semibold mb-2">No Batches Yet</h3>
-            <p className="text-muted-foreground text-center mb-4">
-              Add your first batch to start tracking this session
+            <h3 className="text-base sm:text-lg font-semibold mb-2">No Batches Yet</h3>
+            <p className="text-sm text-muted-foreground text-center mb-4 px-4">
+              Add your first batch to start tracking
             </p>
-            <Button onClick={() => setIsAddBatchOpen(true)}>
+            <Button onClick={() => setIsAddBatchOpen(true)} className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               Add First Batch
             </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-3 sm:space-y-0 sm:grid sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {batches.map((batch) => (
-            <Card key={batch.id} className="relative">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">
-                    {batch.coffee_name}
-                  </CardTitle>
-                  <div className="flex items-center gap-1">
+            <Card key={batch.id}>
+              <CardHeader className="pb-2 px-4 sm:px-6">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <CardTitle className="text-base truncate">
+                      {batch.coffee_name}
+                    </CardTitle>
+                    {batch.lot_code && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        Lot: {batch.lot_code}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
                     <Button
                       variant="ghost"
                       size="icon"
@@ -701,28 +731,19 @@ export function SessionDetailClient({
                     </Button>
                   </div>
                 </div>
-                {batch.lot_code && (
-                  <p className="text-sm text-muted-foreground">
-                    Lot: {batch.lot_code}
-                  </p>
-                )}
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 text-sm">
+              <CardContent className="px-4 sm:px-6 pb-4">
+                <div className="grid grid-cols-3 gap-x-2 gap-y-2 text-sm">
                   <div>
-                    <span className="text-muted-foreground">Green:</span>{" "}
+                    <span className="text-xs text-muted-foreground block">Green</span>
                     <span className="font-medium">{batch.green_weight_g}g</span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Roasted:</span>{" "}
+                    <span className="text-xs text-muted-foreground block">Roasted</span>
                     <span className="font-medium">{batch.roasted_weight_g}g</span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Sellable:</span>{" "}
-                    <span className="font-medium">{batch.sellable_g}g</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Loss:</span>{" "}
+                    <span className="text-xs text-muted-foreground block">Loss</span>
                     <span
                       className={`font-medium ${
                         batch.loss_percent > 18
@@ -736,11 +757,15 @@ export function SessionDetailClient({
                     </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Duration:</span>{" "}
-                    <span className="font-medium">{batch.roast_minutes} min</span>
+                    <span className="text-xs text-muted-foreground block">Sellable</span>
+                    <span className="font-medium">{batch.sellable_g}g</span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Price:</span>{" "}
+                    <span className="text-xs text-muted-foreground block">Time</span>
+                    <span className="font-medium">{batch.roast_minutes}min</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted-foreground block">Price</span>
                     <span className="font-medium">
                       ${batch.price_value}/{batch.price_basis === "per_lb" ? "lb" : "kg"}
                     </span>
