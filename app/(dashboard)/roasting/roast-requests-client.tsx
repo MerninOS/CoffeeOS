@@ -174,6 +174,9 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
           alert(result.error);
           return;
         }
+        if (result.merged) {
+          alert(`Added ${quantityG}g to existing roast request for ${selectedCoffee.name}.`);
+        }
       }
 
       setIsDialogOpen(false);

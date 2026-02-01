@@ -442,6 +442,56 @@ export async function createRoastRequest(data: {
     return { error: "Unauthorized" };
   }
 
+  // Check for existing unfulfilled request for the same coffee
+  const { data: existingRequest } = await supabase
+    .from("roast_requests")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("green_coffee_id", data.greenCoffeeId)
+    .in("status", ["pending", "in_progress"])
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .single();
+
+  if (existingRequest) {
+    // Add to existing request
+    const newRequestedAmount = existingRequest.requested_roasted_g + data.requestedRoastedG;
+    
+    // Use the higher priority if the new request has higher priority
+    const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
+    const newPriority = data.priority && priorityOrder[data.priority] < priorityOrder[existingRequest.priority as keyof typeof priorityOrder]
+      ? data.priority
+      : existingRequest.priority;
+    
+    // Use the earlier due date
+    let newDueDate = existingRequest.due_date;
+    if (data.dueDate) {
+      if (!existingRequest.due_date || new Date(data.dueDate) < new Date(existingRequest.due_date)) {
+        newDueDate = data.dueDate;
+      }
+    }
+
+    const { data: updatedRequest, error: updateError } = await supabase
+      .from("roast_requests")
+      .update({
+        requested_roasted_g: newRequestedAmount,
+        priority: newPriority,
+        due_date: newDueDate,
+      })
+      .eq("id", existingRequest.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      return { error: updateError.message };
+    }
+
+    revalidatePath("/roasting");
+    revalidatePath("/orders");
+    return { request: updatedRequest, merged: true };
+  }
+
+  // Create new request if no existing unfulfilled request for this coffee
   const { data: request, error } = await supabase
     .from("roast_requests")
     .insert({

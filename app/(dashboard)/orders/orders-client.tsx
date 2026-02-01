@@ -312,7 +312,11 @@ export function OrdersClient({
         priority: "normal",
         dueDate: "",
       });
-      alert("Roast request created! View it in the Roasting page.");
+      if (result.merged) {
+        alert(`Added ${quantityG}g to existing roast request for ${selectedCoffee.name}. View it in the Roasting page.`);
+      } else {
+        alert("Roast request created! View it in the Roasting page.");
+      }
     }
   };
 
