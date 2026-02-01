@@ -705,3 +705,114 @@ export async function createComponentFromBatch(
   revalidatePath("/components");
   return { component };
 }
+
+// Add roasted coffee to an existing component with averaged pricing
+export async function addToExistingComponent(
+  batchId: string,
+  componentId: string,
+  data: {
+    newQuantityG: number; // The sellable grams from this batch
+    newCostPerUnit: number; // The cost per unit for this batch
+  }
+) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Get the batch details
+  const { data: batch } = await supabase
+    .from("roasting_batches")
+    .select("*, roasting_sessions(session_date)")
+    .eq("id", batchId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!batch) {
+    return { error: "Batch not found" };
+  }
+
+  // Get the existing component
+  const { data: existingComponent } = await supabase
+    .from("components")
+    .select("*")
+    .eq("id", componentId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!existingComponent) {
+    return { error: "Component not found" };
+  }
+
+  // Count how many batches are already linked to this component to estimate existing quantity
+  const { count: linkedBatchCount } = await supabase
+    .from("roasting_batches")
+    .select("id", { count: "exact", head: true })
+    .eq("component_id", componentId);
+
+  // Get total sellable weight from existing linked batches
+  const { data: linkedBatches } = await supabase
+    .from("roasting_batches")
+    .select("sellable_g, green_cost_per_g, green_weight_g")
+    .eq("component_id", componentId);
+
+  // Calculate existing total cost and quantity
+  let existingTotalCost = 0;
+  let existingTotalQuantityG = 0;
+
+  if (linkedBatches && linkedBatches.length > 0) {
+    for (const lb of linkedBatches) {
+      const batchGreenCost = lb.green_cost_per_g * lb.green_weight_g;
+      existingTotalCost += batchGreenCost;
+      existingTotalQuantityG += lb.sellable_g;
+    }
+  } else {
+    // No linked batches, use component's current cost as baseline
+    // Assume some existing quantity based on the component being used
+    existingTotalCost = 0;
+    existingTotalQuantityG = 0;
+  }
+
+  // Add this batch's contribution
+  const newBatchTotalCost = batch.green_cost_per_g * batch.green_weight_g;
+  const totalQuantityG = existingTotalQuantityG + data.newQuantityG;
+  const totalCost = existingTotalCost + newBatchTotalCost;
+
+  // Calculate new averaged cost per gram
+  const newCostPerG = totalQuantityG > 0 ? totalCost / totalQuantityG : data.newCostPerUnit;
+
+  // Update the component with averaged cost
+  const { data: updatedComponent, error: updateError } = await supabase
+    .from("components")
+    .update({
+      cost_per_unit: newCostPerG,
+      notes: `${existingComponent.notes || ""}\nAdded batch "${batch.coffee_name}" (${batch.sellable_g}g) on ${batch.roasting_sessions?.session_date || batch.batch_date || "unknown date"}. Lot: ${batch.lot_code || "N/A"}`.trim(),
+    })
+    .eq("id", componentId)
+    .select()
+    .single();
+
+  if (updateError) {
+    return { error: updateError.message };
+  }
+
+  // Link the batch to the component
+  await supabase
+    .from("roasting_batches")
+    .update({ component_id: componentId })
+    .eq("id", batchId);
+
+  revalidatePath("/roasting/batches");
+  revalidatePath("/components");
+  return { 
+    component: updatedComponent,
+    previousCost: existingComponent.cost_per_unit,
+    newAveragedCost: newCostPerG,
+    totalQuantityG,
+  };
+}
