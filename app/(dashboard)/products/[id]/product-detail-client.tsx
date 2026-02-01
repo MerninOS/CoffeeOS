@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { updateProductComponents, updateProductPrice } from "./actions";
+import { updateProductComponents, updateProductPrice, updateWholesalePricing } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,9 @@ import {
   DollarSign,
   TrendingUp,
   AlertCircle,
+  Store,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
@@ -47,12 +49,22 @@ interface Product {
   sku: string | null;
   price: number | null;
   image_url: string | null;
+  wholesale_price: number | null;
+  wholesale_minimum_qty: number | null;
+  wholesale_enabled: boolean | null;
+}
+
+interface WholesaleTier {
+  id: string;
+  min_quantity: number;
+  price: number;
 }
 
 interface ProductDetailClientProps {
   product: Product;
   availableComponents: Component[];
   productComponents: ProductComponent[];
+  wholesaleTiers: WholesaleTier[];
 }
 
 interface SelectedComponent {
@@ -77,6 +89,7 @@ export function ProductDetailClient({
   product,
   availableComponents,
   productComponents: initialProductComponents,
+  wholesaleTiers: initialWholesaleTiers,
 }: ProductDetailClientProps) {
   const [selectedComponents, setSelectedComponents] = useState<SelectedComponent[]>(
     initialProductComponents.map((pc) => ({
@@ -92,6 +105,15 @@ export function ProductDetailClient({
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  // Wholesale state
+  const [wholesaleEnabled, setWholesaleEnabled] = useState(product.wholesale_enabled || false);
+  const [wholesalePrice, setWholesalePrice] = useState(product.wholesale_price?.toString() || "");
+  const [wholesaleMinQty, setWholesaleMinQty] = useState(product.wholesale_minimum_qty?.toString() || "1");
+  const [priceTiers, setPriceTiers] = useState<Array<{ min_quantity: number; price: number }>>(
+    initialWholesaleTiers.map((t) => ({ min_quantity: t.min_quantity, price: t.price }))
+  );
+  const [isWholesaleSaving, setIsWholesaleSaving] = useState(false);
 
   const calculatedCogs = useMemo(() => {
     return selectedComponents.reduce((sum, sc) => {
@@ -183,6 +205,47 @@ export function ProductDetailClient({
     setIsPriceUpdating(false);
   };
 
+  const addPriceTier = () => {
+    const lastTier = priceTiers[priceTiers.length - 1];
+    const newMinQty = lastTier ? lastTier.min_quantity + 10 : 10;
+    const newPrice = lastTier ? lastTier.price * 0.95 : parseFloat(wholesalePrice) || (priceValue * 0.8);
+    setPriceTiers([...priceTiers, { min_quantity: newMinQty, price: Math.round(newPrice * 100) / 100 }]);
+  };
+
+  const removePriceTier = (index: number) => {
+    setPriceTiers(priceTiers.filter((_, i) => i !== index));
+  };
+
+  const updatePriceTier = (index: number, field: "min_quantity" | "price", value: number) => {
+    const updated = [...priceTiers];
+    updated[index] = { ...updated[index], [field]: value };
+    setPriceTiers(updated);
+  };
+
+  const handleSaveWholesale = async () => {
+    setIsWholesaleSaving(true);
+    setMessage(null);
+
+    const result = await updateWholesalePricing(product.id, {
+      wholesale_enabled: wholesaleEnabled,
+      wholesale_price: wholesalePrice ? parseFloat(wholesalePrice) : null,
+      wholesale_minimum_qty: parseInt(wholesaleMinQty) || 1,
+      price_tiers: priceTiers,
+    });
+
+    if (result.error) {
+      setMessage({ type: "error", text: result.error });
+    } else {
+      setMessage({ type: "success", text: "Wholesale pricing saved successfully" });
+    }
+
+    setIsWholesaleSaving(false);
+  };
+
+  // Calculate wholesale margin
+  const wholesalePriceValue = parseFloat(wholesalePrice) || 0;
+  const wholesaleMargin = wholesalePriceValue > 0 ? ((wholesalePriceValue - calculatedCogs) / wholesalePriceValue) * 100 : 0;
+
   return (
     <div className="space-y-6 mb-40">
       <div className="flex items-center gap-4">
@@ -273,7 +336,7 @@ export function ProductDetailClient({
             <div className="relative w-full overflow-hidden rounded-lg bg-muted aspect-[4/3] sm:aspect-square">
               {product.image_url ? (
                 <Image
-                  src={product.image_url}
+                  src={product.image_url || "/placeholder.svg"}
                   alt={product.title}
                   fill
                   sizes="(min-width: 1024px) 50vw, 100vw"
@@ -435,117 +498,50 @@ export function ProductDetailClient({
               </div>
             ) : (
               <div className="space-y-4">
-              {/* Mobile layout: stacked rows (no horizontal scroll) */}
-              <div className="space-y-3 sm:hidden">
-                {selectedComponents.map((sc, index) => {
-                  const component = availableComponents.find((c) => c.id === sc.componentId);
-                  const lineTotal = component ? sc.quantity * component.cost_per_unit : 0;
+                {/* Mobile layout: stacked rows (no horizontal scroll) */}
+                <div className="space-y-3 sm:hidden">
+                  {selectedComponents.map((sc, index) => {
+                    const component = availableComponents.find((c) => c.id === sc.componentId);
+                    const lineTotal = component ? sc.quantity * component.cost_per_unit : 0;
           
-                  return (
-                    <div key={index} className="rounded-lg border p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <Label className="text-xs text-muted-foreground">Component</Label>
-                          <div className="mt-1">
-                            <Select
-                              value={sc.componentId}
-                              onValueChange={(value) => updateComponent(index, "componentId", value)}
-                            >
-                              <SelectTrigger className="w-full max-w-60">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {availableComponents.map((c) => (
-                                  <SelectItem key={c.id} value={c.id}>
-                                    {c.name} ({c.unit})
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                    return (
+                      <div key={index} className="rounded-lg border p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <Label className="text-xs text-muted-foreground">Component</Label>
+                            <div className="mt-1">
+                              <Select
+                                value={sc.componentId}
+                                onValueChange={(value) => updateComponent(index, "componentId", value)}
+                              >
+                                <SelectTrigger className="w-full max-w-60">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availableComponents.map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                      {c.name} ({c.unit})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
+          
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeComponent(index)}
+                            className="shrink-0 text-destructive hover:text-destructive"
+                            aria-label="Remove component"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
           
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeComponent(index)}
-                          className="shrink-0 text-destructive hover:text-destructive"
-                          aria-label="Remove component"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-          
-                      <div className="mt-3 grid grid-cols-2 gap-3">
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Quantity</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={sc.quantity}
-                            onChange={(e) =>
-                              updateComponent(index, "quantity", parseFloat(e.target.value) || 0)
-                            }
-                            className="mt-1"
-                          />
-                        </div>
-          
-                        <div className="rounded-md bg-muted/40 p-2">
-                          <div className="text-xs text-muted-foreground">Line total</div>
-                          <div className="mt-0.5 font-medium tabular-nums">
-                            {formatMoney(lineTotal)}
-                          </div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {component
-                              ? `${formatMoney(component.cost_per_unit)}/${component.unit}`
-                              : "-"}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-          
-              {/* Desktop layout: table (unchanged) */}
-              <div className="hidden sm:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Component</TableHead>
-                      <TableHead className="w-24">Quantity</TableHead>
-                      <TableHead className="text-right">Unit Cost</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="w-12" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selectedComponents.map((sc, index) => {
-                      const component = availableComponents.find((c) => c.id === sc.componentId);
-                      const lineTotal = component ? sc.quantity * component.cost_per_unit : 0;
-          
-                      return (
-                        <TableRow key={index}>
-                          <TableCell>
-                            <Select
-                              value={sc.componentId}
-                              onValueChange={(value) => updateComponent(index, "componentId", value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {availableComponents.map((c) => (
-                                  <SelectItem key={c.id} value={c.id}>
-                                    {c.name} ({c.unit})
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-          
-                          <TableCell>
+                        <div className="mt-3 grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Quantity</Label>
                             <Input
                               type="number"
                               min="0"
@@ -554,57 +550,273 @@ export function ProductDetailClient({
                               onChange={(e) =>
                                 updateComponent(index, "quantity", parseFloat(e.target.value) || 0)
                               }
+                              className="mt-1"
                             />
-                          </TableCell>
+                          </div>
           
-                          <TableCell className="text-right">
-                            {component ? `${formatMoney(component.cost_per_unit)}/${component.unit}` : "-"}
-                          </TableCell>
+                          <div className="rounded-md bg-muted/40 p-2">
+                            <div className="text-xs text-muted-foreground">Line total</div>
+                            <div className="mt-0.5 font-medium tabular-nums">
+                              {formatMoney(lineTotal)}
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {component
+                                ? `${formatMoney(component.cost_per_unit)}/${component.unit}`
+                                : "-"}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
           
-                          <TableCell className="text-right font-medium">
-                            {formatMoney(lineTotal)}
-                          </TableCell>
+                {/* Desktop layout: table (unchanged) */}
+                <div className="hidden sm:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Component</TableHead>
+                        <TableHead className="w-24">Quantity</TableHead>
+                        <TableHead className="text-right">Unit Cost</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="w-12" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedComponents.map((sc, index) => {
+                        const component = availableComponents.find((c) => c.id === sc.componentId);
+                        const lineTotal = component ? sc.quantity * component.cost_per_unit : 0;
           
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeComponent(index)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                        return (
+                          <TableRow key={index}>
+                            <TableCell>
+                              <Select
+                                value={sc.componentId}
+                                onValueChange={(value) => updateComponent(index, "componentId", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availableComponents.map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                      {c.name} ({c.unit})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+          
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={sc.quantity}
+                                onChange={(e) =>
+                                  updateComponent(index, "quantity", parseFloat(e.target.value) || 0)
+                                }
+                              />
+                            </TableCell>
+          
+                            <TableCell className="text-right">
+                              {component ? `${formatMoney(component.cost_per_unit)}/${component.unit}` : "-"}
+                            </TableCell>
+          
+                            <TableCell className="text-right font-medium">
+                              {formatMoney(lineTotal)}
+                            </TableCell>
+          
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeComponent(index)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+          
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSaveComponents}
+                    disabled={isSaving}
+                    className="w-full sm:w-auto"
+                  >
+                    {isSaving ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )}
+                    Save Components
+                  </Button>
+                </div>
               </div>
-          
-              <div className="flex justify-end">
-                <Button
-                  onClick={handleSaveComponents}
-                  disabled={isSaving}
-                  className="w-full sm:w-auto"
-                >
-                  {isSaving ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="mr-2 h-4 w-4" />
-                  )}
-                  Save Components
-                </Button>
-              </div>
-            </div>
-          
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Summary Cards */}
-      
+      {/* Wholesale Pricing Section */}
+      <div className="lg:col-span-2">
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <Store className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <CardTitle>Wholesale Pricing</CardTitle>
+                  <CardDescription>Set up volume discounts for wholesale customers</CardDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="wholesale-enabled" className="text-sm">Enable Wholesale</Label>
+                <Switch
+                  id="wholesale-enabled"
+                  checked={wholesaleEnabled}
+                  onCheckedChange={setWholesaleEnabled}
+                />
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent>
+            {!wholesaleEnabled ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Store className="mb-4 h-12 w-12 text-muted-foreground" />
+                <h3 className="text-lg font-medium">Wholesale pricing disabled</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Enable wholesale pricing to set up volume discounts
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Base wholesale price */}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="wholesale-price">Base Wholesale Price</Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="wholesale-price"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={wholesalePrice}
+                        onChange={(e) => setWholesalePrice(e.target.value)}
+                        className="pl-9"
+                        placeholder="e.g., 12.00"
+                      />
+                    </div>
+                    {wholesalePriceValue > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Margin: {wholesaleMargin.toFixed(1)}% | Profit: ${(wholesalePriceValue - calculatedCogs).toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="wholesale-min-qty">Minimum Order Quantity</Label>
+                    <Input
+                      id="wholesale-min-qty"
+                      type="number"
+                      min="1"
+                      value={wholesaleMinQty}
+                      onChange={(e) => setWholesaleMinQty(e.target.value)}
+                      placeholder="e.g., 12"
+                    />
+                  </div>
+                </div>
+
+                {/* Price tiers */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Volume Price Tiers</Label>
+                    <Button variant="outline" size="sm" onClick={addPriceTier}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Tier
+                    </Button>
+                  </div>
+
+                  {priceTiers.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">
+                      No price tiers configured. Add tiers for volume discounts.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {priceTiers.map((tier, index) => {
+                        const tierMargin = tier.price > 0 ? ((tier.price - calculatedCogs) / tier.price) * 100 : 0;
+                        return (
+                          <div key={index} className="flex items-center gap-3 rounded-lg border p-3">
+                            <div className="flex-1 grid grid-cols-2 gap-3">
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Min Quantity</Label>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  value={tier.min_quantity}
+                                  onChange={(e) => updatePriceTier(index, "min_quantity", parseInt(e.target.value) || 1)}
+                                  className="mt-1"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Price per Unit</Label>
+                                <div className="relative mt-1">
+                                  <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={tier.price}
+                                    onChange={(e) => updatePriceTier(index, "price", parseFloat(e.target.value) || 0)}
+                                    className="pl-9"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right min-w-[80px]">
+                              <div className="text-xs text-muted-foreground">Margin</div>
+                              <div className={`text-sm font-medium ${tierMargin >= 20 ? "text-green-600" : tierMargin >= 10 ? "text-amber-600" : "text-red-600"}`}>
+                                {tierMargin.toFixed(1)}%
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removePriceTier(index)}
+                              className="text-destructive hover:text-destructive shrink-0"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <Button onClick={handleSaveWholesale} disabled={isWholesaleSaving}>
+                    {isWholesaleSaving ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )}
+                    Save Wholesale Pricing
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

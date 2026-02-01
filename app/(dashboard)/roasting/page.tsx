@@ -1,8 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
-import { SessionsClient } from "./sessions-client";
+import { RoastingPageClient } from "./roasting-page-client";
 
 export default async function RoastingSessionsPage() {
   const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   // Fetch sessions with batch counts
   const { data: sessions } = await supabase
@@ -16,6 +20,27 @@ export default async function RoastingSessionsPage() {
       )
     `)
     .order("session_date", { ascending: false });
+
+  // Fetch roast requests with coffee info
+  const { data: roastRequests } = await supabase
+    .from("roast_requests")
+    .select(`
+      *,
+      green_coffee_inventory (
+        name,
+        origin
+      )
+    `)
+    .eq("user_id", user?.id)
+    .order("created_at", { ascending: false });
+
+  // Fetch coffee inventory for creating requests
+  const { data: coffeeInventory } = await supabase
+    .from("green_coffee_inventory")
+    .select("id, name, origin, current_green_quantity_g")
+    .eq("user_id", user?.id)
+    .gt("current_green_quantity_g", 0)
+    .order("name");
 
   // Transform data to include batch stats
   const sessionsWithStats = (sessions || []).map((session) => {
@@ -48,5 +73,11 @@ export default async function RoastingSessionsPage() {
     };
   });
 
-  return <SessionsClient initialSessions={sessionsWithStats} />;
+  return (
+    <RoastingPageClient
+      initialSessions={sessionsWithStats}
+      roastRequests={roastRequests || []}
+      coffeeInventory={coffeeInventory || []}
+    />
+  );
 }

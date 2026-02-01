@@ -41,11 +41,15 @@ import {
   Trash2,
   Edit,
   Package,
+  ClipboardList,
+  AlertTriangle,
+  Clock,
 } from "lucide-react";
 import {
   createBatch,
   updateBatch,
   deleteBatch,
+  fulfillRoastRequest,
 } from "../../actions";
 
 interface Batch {
@@ -80,12 +84,45 @@ interface Session {
   notes: string | null;
 }
 
+interface CoffeeInventory {
+  id: string;
+  name: string;
+  origin: string;
+  lot_code: string | null;
+  supplier: string | null;
+  price_per_lb: number;
+  current_green_quantity_g: number;
+}
+
+// Conversion: 1 lb = 453.592 grams
+const LBS_TO_GRAMS = 453.592;
+
+interface RoastRequest {
+  id: string;
+  green_coffee_id: string;
+  coffee_name: string;
+  requested_roasted_g: number;
+  fulfilled_roasted_g: number;
+  priority: "low" | "normal" | "high" | "urgent";
+  status: "pending" | "in_progress";
+  due_date: string | null;
+  order_id: string | null;
+  notes: string | null;
+  green_coffee_inventory?: {
+    name: string;
+    origin: string;
+  };
+}
+
 interface SessionDetailClientProps {
   session: Session;
   batches: Batch[];
+  coffeeInventory: CoffeeInventory[];
+  pendingRequests: RoastRequest[];
 }
 
 const defaultBatchData = {
+  coffeeInventoryId: "",
   coffeeName: "",
   lotCode: "",
   priceBasis: "per_lb" as "per_lb" | "per_kg",
@@ -100,6 +137,8 @@ const defaultBatchData = {
 export function SessionDetailClient({
   session,
   batches: initialBatches,
+  coffeeInventory,
+  pendingRequests,
 }: SessionDetailClientProps) {
   const router = useRouter();
   const [batches, setBatches] = useState(initialBatches);
@@ -108,6 +147,7 @@ export function SessionDetailClient({
   const [deleteBatchId, setDeleteBatchId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [batchData, setBatchData] = useState(defaultBatchData);
+  const [selectedRequestId, setSelectedRequestId] = useState<string>("");
 
   const handleAddBatch = async () => {
     if (!batchData.coffeeName || !batchData.greenWeightG || !batchData.roastedWeightG || !batchData.roastMinutes || !batchData.priceValue) {
@@ -118,6 +158,7 @@ export function SessionDetailClient({
     setIsSubmitting(true);
     const result = await createBatch({
       sessionId: session.id,
+      coffeeInventoryId: batchData.coffeeInventoryId || undefined,
       coffeeName: batchData.coffeeName,
       lotCode: batchData.lotCode || undefined,
       priceBasis: batchData.priceBasis,
@@ -129,17 +170,34 @@ export function SessionDetailClient({
       batchDate: session.session_date,
       energyKwh: batchData.energyKwh ? parseFloat(batchData.energyKwh) : undefined,
     });
-    setIsSubmitting(false);
 
     if (result.error) {
+      setIsSubmitting(false);
       alert(result.error);
       return;
     }
+
+    // If a roast request was selected, fulfill it with this batch
+    if (result.batch && selectedRequestId) {
+      const roastedWeightG = parseFloat(batchData.roastedWeightG);
+      const fulfillResult = await fulfillRoastRequest({
+        requestId: selectedRequestId,
+        batchId: result.batch.id,
+        quantityG: roastedWeightG,
+      });
+      if (fulfillResult.error) {
+        console.warn("Failed to fulfill roast request:", fulfillResult.error);
+      }
+    }
+
+    setIsSubmitting(false);
 
     if (result.batch) {
       setBatches([...batches, result.batch]);
       setIsAddBatchOpen(false);
       setBatchData(defaultBatchData);
+      setSelectedRequestId("");
+      router.refresh(); // Refresh to update pending requests
     }
   };
 
@@ -186,6 +244,7 @@ export function SessionDetailClient({
   const openEditBatch = (batch: Batch) => {
     setEditingBatch(batch);
     setBatchData({
+      coffeeInventoryId: "",
       coffeeName: batch.coffee_name,
       lotCode: batch.lot_code || "",
       priceBasis: batch.price_basis,
@@ -211,8 +270,121 @@ export function SessionDetailClient({
   const billableMinutes = Math.ceil(totalSessionMinutes / session.billing_granularity_minutes) * session.billing_granularity_minutes;
   const sessionTollCost = (billableMinutes / 60) * session.rate_per_hour;
 
+  // Handle coffee inventory selection
+  const handleCoffeeSelect = (coffeeId: string) => {
+    const coffee = coffeeInventory.find((c) => c.id === coffeeId);
+    if (coffee) {
+      setBatchData({
+        ...batchData,
+        coffeeInventoryId: coffeeId,
+        coffeeName: coffee.name,
+        lotCode: coffee.lot_code || "",
+        priceBasis: "per_lb",
+        priceValue: coffee.price_per_lb.toString(),
+      });
+    }
+  };
+
+  const selectedCoffee = coffeeInventory.find((c) => c.id === batchData.coffeeInventoryId);
+  
+  // Helper to convert grams to lbs
+  const gramsToLbs = (g: number) => g / LBS_TO_GRAMS;
+
+  // Helper function for selecting a roast request
+  const handleRequestSelect = (requestId: string) => {
+    setSelectedRequestId(requestId);
+    const request = pendingRequests.find((r) => r.id === requestId);
+    if (request) {
+      // Find the matching coffee in inventory
+      const coffee = coffeeInventory.find((c) => c.id === request.green_coffee_id);
+      if (coffee) {
+        handleCoffeeSelect(coffee.id);
+      }
+    }
+  };
+
+  const selectedRequest = pendingRequests.find((r) => r.id === selectedRequestId);
+
   const batchFormFields = (
     <div className="grid gap-4 py-4">
+      {/* Roast Request Selection */}
+      {pendingRequests.length > 0 && !editingBatch && (
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Fulfill a Roast Request (optional)
+          </Label>
+          <Select
+            value={selectedRequestId}
+            onValueChange={handleRequestSelect}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a request to fulfill..." />
+            </SelectTrigger>
+            <SelectContent>
+              {pendingRequests.map((request) => {
+                const remainingG = request.requested_roasted_g - request.fulfilled_roasted_g;
+                const isOverdue = request.due_date && new Date(request.due_date) < new Date();
+                return (
+                  <SelectItem key={request.id} value={request.id}>
+                    <div className="flex items-center gap-2">
+                      {request.priority === "urgent" && <AlertTriangle className="h-3 w-3 text-red-500" />}
+                      {request.priority === "high" && <Clock className="h-3 w-3 text-amber-500" />}
+                      <span>{request.green_coffee_inventory?.name || "Unknown"}</span>
+                      <span className="text-muted-foreground text-xs">
+                        - {remainingG.toLocaleString()} g needed
+                        {isOverdue && " (overdue)"}
+                      </span>
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+          {selectedRequest && (
+            <p className="text-xs text-muted-foreground">
+              Request needs {(selectedRequest.requested_roasted_g - selectedRequest.fulfilled_roasted_g).toLocaleString()} g
+              {selectedRequest.due_date && ` by ${new Date(selectedRequest.due_date).toLocaleDateString()}`}
+              {selectedRequest.notes && ` - ${selectedRequest.notes}`}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Coffee Inventory Selection */}
+      {coffeeInventory.length > 0 && (
+        <div className="space-y-2">
+          <Label>Select from Inventory</Label>
+          <Select
+            value={batchData.coffeeInventoryId}
+            onValueChange={handleCoffeeSelect}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select coffee from inventory..." />
+            </SelectTrigger>
+            <SelectContent>
+              {coffeeInventory.map((coffee) => (
+                <SelectItem key={coffee.id} value={coffee.id}>
+                  <div className="flex items-center justify-between gap-4">
+                    <span>{coffee.name}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {gramsToLbs(coffee.current_green_quantity_g).toFixed(1)} lbs @ ${coffee.price_per_lb.toFixed(2)}/lb
+                    </span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedCoffee && (
+            <p className="text-xs text-muted-foreground">
+              {selectedCoffee.origin} {selectedCoffee.supplier ? `- ${selectedCoffee.supplier}` : ""} 
+              {selectedCoffee.lot_code ? ` | Lot: ${selectedCoffee.lot_code}` : ""}
+              {" | "}Available: {gramsToLbs(selectedCoffee.current_green_quantity_g).toFixed(1)} lbs
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="coffeeName">Coffee Name *</Label>
@@ -455,6 +627,34 @@ export function SessionDetailClient({
           </CardContent>
         </Card>
       </div>
+
+      {/* Pending Roast Requests Banner */}
+      {pendingRequests.length > 0 && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent className="py-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-amber-500/10 p-2">
+                <ClipboardList className="h-5 w-5 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold">
+                  {pendingRequests.length} Pending Roast Request{pendingRequests.length !== 1 ? "s" : ""}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {pendingRequests.map((r) => r.green_coffee_inventory?.name || "Unknown").join(", ")}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setIsAddBatchOpen(true)}
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                Add Batch
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Batch Grid */}
       {batches.length === 0 ? (

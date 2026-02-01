@@ -35,7 +35,8 @@ import {
   LogOut,
   ChevronUp,
   Crown,
-  Snowflake
+  Snowflake,
+  Warehouse,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -57,6 +58,11 @@ const navigation = [
     name: "Products",
     href: "/products",
     icon: Package,
+  },
+  {
+    name: "Inventory",
+    href: "/inventory",
+    icon: Warehouse,
   },
   {
     name: "Orders",

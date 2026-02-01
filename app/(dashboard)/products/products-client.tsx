@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { syncShopifyProducts, deleteProduct } from "./actions";
+import { syncShopifyProducts, deleteProduct, createProduct } from "./actions";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,6 +21,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -32,6 +41,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   RefreshCw,
   Search,
@@ -40,6 +51,10 @@ import {
   Trash2,
   ExternalLink,
   Loader2,
+  Plus,
+  TrendingUp,
+  DollarSign,
+  Percent,
 } from "lucide-react";
 
 interface Product {
@@ -72,6 +87,14 @@ export function ProductsClient({
   } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    title: "",
+    description: "",
+    sku: "",
+    price: "",
+  });
 
   const filteredProducts = products.filter(
     (product) =>
@@ -121,6 +144,45 @@ export function ProductsClient({
     return ((price - cogs) / price) * 100;
   };
 
+  const handleCreateProduct = async () => {
+    if (!newProduct.title || !newProduct.price) {
+      setSyncMessage({ type: "error", text: "Title and price are required" });
+      return;
+    }
+
+    setIsCreating(true);
+    const result = await createProduct({
+      title: newProduct.title,
+      description: newProduct.description || undefined,
+      sku: newProduct.sku || undefined,
+      price: parseFloat(newProduct.price),
+    });
+
+    if (result.error) {
+      setSyncMessage({ type: "error", text: result.error });
+    } else {
+      setSyncMessage({ type: "success", text: "Product created successfully" });
+      setNewProduct({ title: "", description: "", sku: "", price: "" });
+      setIsAddDialogOpen(false);
+      window.location.reload();
+    }
+
+    setIsCreating(false);
+  };
+
+  // Calculate stats
+  const totalProducts = products.length;
+  const productsWithCogs = products.filter((p) => p.total_cogs && p.total_cogs > 0);
+  const totalRevenue = products.reduce((sum, p) => sum + (p.price || 0), 0);
+  const totalCogs = products.reduce((sum, p) => sum + (p.total_cogs || 0), 0);
+  const avgMargin = productsWithCogs.length > 0
+    ? productsWithCogs.reduce((sum, p) => {
+        const margin = calculateMargin(p.price, p.total_cogs);
+        return sum + (margin || 0);
+      }, 0) / productsWithCogs.length
+    : 0;
+  const productsNeedingCogs = products.filter((p) => !p.total_cogs || p.total_cogs === 0).length;
+
   return (
     <div className="space-y-6">
      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -130,14 +192,84 @@ export function ProductsClient({
             Manage your product catalog and COGS calculations
           </p>
         </div>
-        <Button onClick={handleSync} disabled={!isShopifyConfigured || isSyncing}>
-          {isSyncing ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-2 h-4 w-4" />
-          )}
-          Sync from Shopify
-        </Button>
+        <div className="flex items-center gap-2">
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Product
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Product</DialogTitle>
+                <DialogDescription>
+                  Create a product manually without Shopify
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Product Title *</Label>
+                  <Input
+                    id="title"
+                    value={newProduct.title}
+                    onChange={(e) => setNewProduct({ ...newProduct, title: e.target.value })}
+                    placeholder="e.g., Ethiopia Yirgacheffe 12oz"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="sku">SKU</Label>
+                    <Input
+                      id="sku"
+                      value={newProduct.sku}
+                      onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })}
+                      placeholder="e.g., COFFEE-ETH-12"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="price">Selling Price ($) *</Label>
+                    <Input
+                      id="price"
+                      type="number"
+                      step="0.01"
+                      value={newProduct.price}
+                      onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                      placeholder="e.g., 18.00"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={newProduct.description}
+                    onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                    placeholder="Product description..."
+                    rows={3}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleCreateProduct} disabled={isCreating || !newProduct.title || !newProduct.price}>
+                  {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Create Product
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Button onClick={handleSync} disabled={!isShopifyConfigured || isSyncing}>
+            {isSyncing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Sync from Shopify
+          </Button>
+        </div>
       </div>
 
       {syncMessage && (
@@ -152,6 +284,58 @@ export function ProductsClient({
           {syncMessage.text}
         </div>
       )}
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalProducts}</div>
+            <p className="text-xs text-muted-foreground">
+              {productsNeedingCogs} need COGS assigned
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Catalog Value</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">
+              Total selling prices
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total COGS</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${totalCogs.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">
+              Cost of goods sold
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Avg Margin</CardTitle>
+            <Percent className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{avgMargin.toFixed(1)}%</div>
+            <p className="text-xs text-muted-foreground">
+              Across {productsWithCogs.length} products
+            </p>
+          </CardContent>
+        </Card>
+      </div>
 
       {!isShopifyConfigured && (
         <Card className="border-amber-200 bg-amber-50">

@@ -86,6 +86,44 @@ export async function syncShopifyProducts() {
   }
 }
 
+export async function createProduct(data: {
+  title: string;
+  description?: string;
+  sku?: string;
+  price: number;
+  image_url?: string;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  const { data: product, error } = await supabase
+    .from("products")
+    .insert({
+      user_id: user.id,
+      title: data.title,
+      description: data.description || null,
+      sku: data.sku || null,
+      price: data.price,
+      image_url: data.image_url || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/products");
+  return { success: true, product };
+}
+
 export async function deleteProduct(productId: string) {
   const supabase = await createClient();
 

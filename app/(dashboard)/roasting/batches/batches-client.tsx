@@ -56,7 +56,8 @@ import {
   Package,
   Plus,
 } from "lucide-react";
-import { deleteBatch, createComponentFromBatch } from "../actions";
+import { deleteBatch, createComponentFromBatch, addToExistingComponent } from "../actions";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface Batch {
   id: string;
@@ -87,18 +88,29 @@ interface Batch {
   } | null;
 }
 
+interface ExistingComponent {
+  id: string;
+  name: string;
+  cost_per_unit: number;
+  unit: string;
+  type: string;
+}
+
 interface BatchesClientProps {
   initialBatches: Batch[];
+  existingComponents: ExistingComponent[];
 }
 
 const UNITS = ["g", "oz", "lb", "kg"];
 
-export function BatchesClient({ initialBatches }: BatchesClientProps) {
+export function BatchesClient({ initialBatches, existingComponents }: BatchesClientProps) {
   const [batches, setBatches] = useState(initialBatches);
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [createComponentBatch, setCreateComponentBatch] =
     useState<Batch | null>(null);
+  const [componentMode, setComponentMode] = useState<"new" | "existing">("new");
+  const [selectedComponentId, setSelectedComponentId] = useState<string>("");
   const [componentFormData, setComponentFormData] = useState({
     name: "",
     costPerUnit: "",
@@ -138,39 +150,80 @@ export function BatchesClient({ initialBatches }: BatchesClientProps) {
       costPerUnit: costPerG.toFixed(4),
       unit: "g",
     });
+    // Reset mode and selection
+    setComponentMode("new");
+    setSelectedComponentId("");
   };
 
   const handleCreateComponent = async () => {
     if (!createComponentBatch) return;
     setIsSubmitting(true);
 
-    const result = await createComponentFromBatch(createComponentBatch.id, {
-      name: componentFormData.name,
-      costPerUnit: parseFloat(componentFormData.costPerUnit),
-      unit: componentFormData.unit,
-    });
-    setIsSubmitting(false);
+    if (componentMode === "existing" && selectedComponentId) {
+      // Add to existing component
+      const totalGreenCost = createComponentBatch.green_cost_per_g * createComponentBatch.green_weight_g;
+      const costPerG = createComponentBatch.sellable_g > 0 ? totalGreenCost / createComponentBatch.sellable_g : 0;
 
-    if (result.error) {
-      alert(result.error);
-      return;
-    }
+      const result = await addToExistingComponent(createComponentBatch.id, selectedComponentId, {
+        newQuantityG: createComponentBatch.sellable_g,
+        newCostPerUnit: costPerG,
+      });
+      setIsSubmitting(false);
 
-    if (result.component) {
-      // Update the batch in our local state to show it's linked
-      setBatches(
-        batches.map((b) =>
-          b.id === createComponentBatch.id
-            ? {
-                ...b,
-                component_id: result.component.id,
-                components: { id: result.component.id, name: result.component.name },
-              }
-            : b
-        )
-      );
-      setCreateComponentBatch(null);
-      setComponentFormData({ name: "", costPerUnit: "", unit: "g" });
+      if (result.error) {
+        alert(result.error);
+        return;
+      }
+
+      if (result.component) {
+        const selectedComp = existingComponents.find(c => c.id === selectedComponentId);
+        // Update the batch in our local state to show it's linked
+        setBatches(
+          batches.map((b) =>
+            b.id === createComponentBatch.id
+              ? {
+                  ...b,
+                  component_id: result.component.id,
+                  components: { id: result.component.id, name: result.component.name },
+                }
+              : b
+          )
+        );
+        alert(`Added to "${selectedComp?.name}". Cost updated from $${result.previousCost?.toFixed(4)} to $${result.newAveragedCost?.toFixed(4)} per gram.`);
+        setCreateComponentBatch(null);
+        setComponentFormData({ name: "", costPerUnit: "", unit: "g" });
+        setSelectedComponentId("");
+      }
+    } else {
+      // Create new component
+      const result = await createComponentFromBatch(createComponentBatch.id, {
+        name: componentFormData.name,
+        costPerUnit: parseFloat(componentFormData.costPerUnit),
+        unit: componentFormData.unit,
+      });
+      setIsSubmitting(false);
+
+      if (result.error) {
+        alert(result.error);
+        return;
+      }
+
+      if (result.component) {
+        // Update the batch in our local state to show it's linked
+        setBatches(
+          batches.map((b) =>
+            b.id === createComponentBatch.id
+              ? {
+                  ...b,
+                  component_id: result.component.id,
+                  components: { id: result.component.id, name: result.component.name },
+                }
+              : b
+          )
+        );
+        setCreateComponentBatch(null);
+        setComponentFormData({ name: "", costPerUnit: "", unit: "g" });
+      }
     }
   };
 
@@ -351,65 +404,122 @@ export function BatchesClient({ initialBatches }: BatchesClientProps) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create Component from Batch</DialogTitle>
-            <DialogDescription>
-              Create a cost component from this roasted batch to use in product
-              COGS calculations
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="componentName">Component Name</Label>
-              <Input
-                id="componentName"
-                value={componentFormData.name}
-                onChange={(e) =>
-                  setComponentFormData({
-                    ...componentFormData,
-                    name: e.target.value,
-                  })
-                }
-                placeholder="e.g., Roasted Ethiopia Yirgacheffe"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="costPerUnit">Cost per Unit</Label>
-                <Input
-                  id="costPerUnit"
-                  type="number"
-                  step="0.0001"
-                  value={componentFormData.costPerUnit}
-                  onChange={(e) =>
-                    setComponentFormData({
-                      ...componentFormData,
-                      costPerUnit: e.target.value,
-                    })
-                  }
-                  placeholder="0.00"
-                />
+<DialogTitle>Add Roasted Coffee to Component</DialogTitle>
+  <DialogDescription>
+  Create a new component or add to an existing one for COGS calculations
+  </DialogDescription>
+  </DialogHeader>
+  <div className="space-y-4 py-4">
+  {/* Mode Selection */}
+  {existingComponents.length > 0 && (
+    <div className="space-y-3">
+      <Label>What would you like to do?</Label>
+      <RadioGroup
+        value={componentMode}
+        onValueChange={(value) => setComponentMode(value as "new" | "existing")}
+        className="flex gap-4"
+      >
+        <div className="flex items-center space-x-2">
+          <RadioGroupItem value="new" id="mode-new" />
+          <Label htmlFor="mode-new" className="cursor-pointer font-normal">Create new component</Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <RadioGroupItem value="existing" id="mode-existing" />
+          <Label htmlFor="mode-existing" className="cursor-pointer font-normal">Add to existing</Label>
+        </div>
+      </RadioGroup>
+    </div>
+  )}
+
+  {/* Existing Component Selection */}
+  {componentMode === "existing" && existingComponents.length > 0 && (
+    <div className="space-y-2">
+      <Label>Select Component</Label>
+      <Select
+        value={selectedComponentId}
+        onValueChange={setSelectedComponentId}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Choose a component..." />
+        </SelectTrigger>
+        <SelectContent>
+          {existingComponents.map((comp) => (
+            <SelectItem key={comp.id} value={comp.id}>
+              <div className="flex items-center justify-between gap-4">
+                <span>{comp.name}</span>
+                <span className="text-muted-foreground text-xs">
+                  ${comp.cost_per_unit.toFixed(4)}/{comp.unit}
+                </span>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="unit">Unit</Label>
-                <Select
-                  value={componentFormData.unit}
-                  onValueChange={(value) =>
-                    setComponentFormData({ ...componentFormData, unit: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {UNITS.map((unit) => (
-                      <SelectItem key={unit} value={unit}>
-                        {unit}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {selectedComponentId && (
+        <p className="text-xs text-muted-foreground">
+          Current price will be averaged with this batch&apos;s cost per gram
+        </p>
+      )}
+    </div>
+  )}
+
+  {/* New Component Fields */}
+  {componentMode === "new" && (
+    <>
+      <div className="space-y-2">
+        <Label htmlFor="componentName">Component Name</Label>
+        <Input
+          id="componentName"
+          value={componentFormData.name}
+          onChange={(e) =>
+            setComponentFormData({
+              ...componentFormData,
+              name: e.target.value,
+            })
+          }
+          placeholder="e.g., Roasted Ethiopia Yirgacheffe"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="costPerUnit">Cost per Unit</Label>
+          <Input
+            id="costPerUnit"
+            type="number"
+            step="0.0001"
+            value={componentFormData.costPerUnit}
+            onChange={(e) =>
+              setComponentFormData({
+                ...componentFormData,
+                costPerUnit: e.target.value,
+              })
+            }
+            placeholder="0.00"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="unit">Unit</Label>
+          <Select
+            value={componentFormData.unit}
+            onValueChange={(value) =>
+              setComponentFormData({ ...componentFormData, unit: value })
+            }
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {UNITS.map((unit) => (
+                <SelectItem key={unit} value={unit}>
+                  {unit}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </>
+  )}
             {createComponentBatch && (
               <div className="rounded-lg border bg-muted/50 p-3 text-sm">
                 <p className="font-medium mb-1">Batch Details:</p>
@@ -422,24 +532,28 @@ export function BatchesClient({ initialBatches }: BatchesClientProps) {
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setCreateComponentBatch(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateComponent}
-              disabled={
-                isSubmitting ||
-                !componentFormData.name ||
-                !componentFormData.costPerUnit
-              }
-            >
-              {isSubmitting ? "Creating..." : "Create Component"}
-            </Button>
-          </DialogFooter>
+<DialogFooter>
+  <Button
+    variant="outline"
+    onClick={() => setCreateComponentBatch(null)}
+  >
+    Cancel
+  </Button>
+  <Button
+    onClick={handleCreateComponent}
+    disabled={
+      isSubmitting ||
+      (componentMode === "new" && (!componentFormData.name || !componentFormData.costPerUnit)) ||
+      (componentMode === "existing" && !selectedComponentId)
+    }
+  >
+    {isSubmitting
+      ? componentMode === "existing" ? "Adding..." : "Creating..."
+      : componentMode === "existing"
+        ? "Add to Component"
+        : "Create Component"}
+  </Button>
+  </DialogFooter>
         </DialogContent>
       </Dialog>
 

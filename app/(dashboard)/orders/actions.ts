@@ -491,3 +491,110 @@ export async function removeOrderCustomCost(customCostId: string) {
   revalidatePath("/orders");
   return { success: true };
 }
+
+export async function createRoastRequestForOrder(data: {
+  orderId: string;
+  greenCoffeeId: string;
+  coffeeName: string;
+  requestedRoastedG: number;
+  priority?: "low" | "normal" | "high" | "urgent";
+  dueDate?: string;
+  notes?: string;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Verify the order belongs to the user
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, order_name")
+    .eq("id", data.orderId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!order) {
+    return { error: "Order not found" };
+  }
+
+  // Check for existing unfulfilled request for the same coffee
+  const { data: existingRequest } = await supabase
+    .from("roast_requests")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("green_coffee_id", data.greenCoffeeId)
+    .in("status", ["pending", "in_progress"])
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .single();
+
+  if (existingRequest) {
+    // Add to existing request
+    const newRequestedAmount = existingRequest.requested_roasted_g + data.requestedRoastedG;
+    
+    // Use the higher priority if the new request has higher priority
+    const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
+    const newPriority = data.priority && priorityOrder[data.priority] < priorityOrder[existingRequest.priority as keyof typeof priorityOrder]
+      ? data.priority
+      : existingRequest.priority;
+    
+    // Use the earlier due date
+    let newDueDate = existingRequest.due_date;
+    if (data.dueDate) {
+      if (!existingRequest.due_date || new Date(data.dueDate) < new Date(existingRequest.due_date)) {
+        newDueDate = data.dueDate;
+      }
+    }
+
+    const { data: updatedRequest, error: updateError } = await supabase
+      .from("roast_requests")
+      .update({
+        requested_roasted_g: newRequestedAmount,
+        priority: newPriority,
+        due_date: newDueDate,
+      })
+      .eq("id", existingRequest.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      return { error: updateError.message };
+    }
+
+    revalidatePath("/orders");
+    revalidatePath("/roasting");
+    return { request: updatedRequest, merged: true };
+  }
+
+  // Create new request if no existing unfulfilled request for this coffee
+  const { data: request, error } = await supabase
+    .from("roast_requests")
+    .insert({
+      user_id: user.id,
+      green_coffee_id: data.greenCoffeeId,
+      coffee_name: data.coffeeName,
+      requested_roasted_g: data.requestedRoastedG,
+      fulfilled_roasted_g: 0,
+      priority: data.priority || "normal",
+      status: "pending",
+      due_date: data.dueDate || null,
+      order_id: data.orderId,
+      notes: data.notes || `Roast request for order ${order.order_name}`,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/orders");
+  revalidatePath("/roasting");
+  return { request };
+}

@@ -46,7 +46,7 @@ import {
 import { Plus, MoreHorizontal, Trash2, Eye, Flame } from "lucide-react";
 import { createSession, deleteSession } from "./actions";
 
-interface Session {
+export interface Session {
   id: string;
   session_date: string;
   vendor_name: string;
@@ -66,9 +66,10 @@ interface Session {
 
 interface SessionsClientProps {
   initialSessions: Session[];
+  hideHeader?: boolean;
 }
 
-export function SessionsClient({ initialSessions }: SessionsClientProps) {
+export function SessionsClient({ initialSessions, hideHeader = false }: SessionsClientProps) {
   const router = useRouter();
   const [sessions, setSessions] = useState(initialSessions);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -155,12 +156,15 @@ export function SessionsClient({ initialSessions }: SessionsClientProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Roasting Sessions</h2>
-          <p className="text-sm text-muted-foreground">
-            View and manage your roasting sessions
-          </p>
-        </div>
+        {!hideHeader && (
+          <div>
+            <h2 className="text-lg font-semibold">Roasting Sessions</h2>
+            <p className="text-sm text-muted-foreground">
+              View and manage your roasting sessions
+            </p>
+          </div>
+        )}
+        {hideHeader && <div />}
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button>

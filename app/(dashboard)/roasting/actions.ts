@@ -124,6 +124,7 @@ export async function deleteSession(id: string) {
 // Batch Actions
 export async function createBatch(data: {
   sessionId: string;
+  coffeeInventoryId?: string;
   coffeeName: string;
   lotCode?: string;
   priceBasis: "per_lb" | "per_kg";
@@ -156,11 +157,54 @@ export async function createBatch(data: {
     : data.priceValue / 1000;
   const greenCostPerG = pricePerG;
 
+  // If using inventory, deduct the green weight (stored in grams)
+  if (data.coffeeInventoryId) {
+    // Get current inventory (quantity stored in grams)
+    const { data: coffee, error: fetchError } = await supabase
+      .from("green_coffee_inventory")
+      .select("current_green_quantity_g")
+      .eq("id", data.coffeeInventoryId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (fetchError || !coffee) {
+      return { error: "Coffee inventory not found" };
+    }
+
+    if (coffee.current_green_quantity_g < data.greenWeightG) {
+      const availableLbs = (coffee.current_green_quantity_g / 453.592).toFixed(2);
+      const neededLbs = (data.greenWeightG / 453.592).toFixed(2);
+      return { error: `Insufficient inventory. Available: ${availableLbs} lbs, Needed: ${neededLbs} lbs` };
+    }
+
+    // Deduct from inventory (in grams)
+    const { error: updateError } = await supabase
+      .from("green_coffee_inventory")
+      .update({ current_green_quantity_g: coffee.current_green_quantity_g - data.greenWeightG })
+      .eq("id", data.coffeeInventoryId);
+
+    if (updateError) {
+      return { error: updateError.message };
+    }
+
+    // Record the inventory change (in grams)
+    await supabase.from("coffee_inventory_changes").insert({
+      coffee_id: data.coffeeInventoryId,
+      user_id: user.id,
+      changed_by_user_id: user.id,
+      change_type: "roast_deduct",
+      green_quantity_change_g: -data.greenWeightG,
+      reference_type: "roasting_batch",
+      notes: `Roasted batch: ${data.coffeeName}`,
+    });
+  }
+
   const { data: batch, error } = await supabase
     .from("roasting_batches")
     .insert({
       user_id: user.id,
       session_id: data.sessionId,
+      coffee_inventory_id: data.coffeeInventoryId || null,
       coffee_name: data.coffeeName,
       lot_code: data.lotCode || null,
       price_basis: data.priceBasis,
@@ -186,6 +230,7 @@ export async function createBatch(data: {
   revalidatePath("/roasting");
   revalidatePath(`/roasting/sessions/${data.sessionId}`);
   revalidatePath("/roasting/batches");
+  revalidatePath("/inventory");
   return { batch };
 }
 
@@ -377,6 +422,231 @@ export async function saveRoastingSettings(data: {
   return { success: true };
 }
 
+// Roast Request Actions
+export async function createRoastRequest(data: {
+  greenCoffeeId: string;
+  coffeeName: string;
+  requestedRoastedG: number;
+  priority?: "low" | "normal" | "high" | "urgent";
+  dueDate?: string;
+  orderId?: string;
+  notes?: string;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Check for existing unfulfilled request for the same coffee
+  const { data: existingRequest } = await supabase
+    .from("roast_requests")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("green_coffee_id", data.greenCoffeeId)
+    .in("status", ["pending", "in_progress"])
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .single();
+
+  if (existingRequest) {
+    // Add to existing request
+    const newRequestedAmount = existingRequest.requested_roasted_g + data.requestedRoastedG;
+    
+    // Use the higher priority if the new request has higher priority
+    const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
+    const newPriority = data.priority && priorityOrder[data.priority] < priorityOrder[existingRequest.priority as keyof typeof priorityOrder]
+      ? data.priority
+      : existingRequest.priority;
+    
+    // Use the earlier due date
+    let newDueDate = existingRequest.due_date;
+    if (data.dueDate) {
+      if (!existingRequest.due_date || new Date(data.dueDate) < new Date(existingRequest.due_date)) {
+        newDueDate = data.dueDate;
+      }
+    }
+
+    const { data: updatedRequest, error: updateError } = await supabase
+      .from("roast_requests")
+      .update({
+        requested_roasted_g: newRequestedAmount,
+        priority: newPriority,
+        due_date: newDueDate,
+      })
+      .eq("id", existingRequest.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      return { error: updateError.message };
+    }
+
+    revalidatePath("/roasting");
+    revalidatePath("/orders");
+    return { request: updatedRequest, merged: true };
+  }
+
+  // Create new request if no existing unfulfilled request for this coffee
+  const { data: request, error } = await supabase
+    .from("roast_requests")
+    .insert({
+      user_id: user.id,
+      green_coffee_id: data.greenCoffeeId,
+      coffee_name: data.coffeeName,
+      requested_roasted_g: data.requestedRoastedG,
+      fulfilled_roasted_g: 0,
+      priority: data.priority || "normal",
+      status: "pending",
+      due_date: data.dueDate || null,
+      order_id: data.orderId || null,
+      notes: data.notes || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/roasting");
+  revalidatePath("/orders");
+  return { request };
+}
+
+export async function updateRoastRequest(
+  id: string,
+  data: {
+    requestedRoastedG?: number;
+    priority?: "low" | "normal" | "high" | "urgent";
+    status?: "pending" | "in_progress" | "fulfilled" | "cancelled";
+    dueDate?: string;
+    notes?: string;
+  }
+) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  const updateData: Record<string, unknown> = {};
+  if (data.requestedRoastedG !== undefined) updateData.requested_roasted_g = data.requestedRoastedG;
+  if (data.priority !== undefined) updateData.priority = data.priority;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.dueDate !== undefined) updateData.due_date = data.dueDate;
+  if (data.notes !== undefined) updateData.notes = data.notes;
+
+  const { error } = await supabase
+    .from("roast_requests")
+    .update(updateData)
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/roasting");
+  return { success: true };
+}
+
+export async function deleteRoastRequest(id: string) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  const { error } = await supabase
+    .from("roast_requests")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/roasting");
+  return { success: true };
+}
+
+export async function fulfillRoastRequest(data: {
+  requestId: string;
+  batchId: string;
+  quantityG: number;
+}) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Get the current request
+  const { data: request, error: fetchError } = await supabase
+    .from("roast_requests")
+    .select("*")
+    .eq("id", data.requestId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (fetchError || !request) {
+    return { error: "Request not found" };
+  }
+
+  // Create fulfillment record
+  const { error: fulfillError } = await supabase
+    .from("roast_request_fulfillments")
+    .insert({
+      roast_request_id: data.requestId,
+      roasting_batch_id: data.batchId,
+      quantity_g: data.quantityG,
+      source_type: "batch",
+    });
+
+  if (fulfillError) {
+    return { error: fulfillError.message };
+  }
+
+  // Update the request's fulfilled quantity and status
+  const newFulfilledQuantity = (request.fulfilled_roasted_g || 0) + data.quantityG;
+  const newStatus = newFulfilledQuantity >= request.requested_roasted_g ? "fulfilled" : "in_progress";
+
+  const { error: updateError } = await supabase
+    .from("roast_requests")
+    .update({
+      fulfilled_roasted_g: newFulfilledQuantity,
+      status: newStatus,
+      ...(newStatus === "fulfilled" ? { fulfilled_at: new Date().toISOString() } : {}),
+    })
+    .eq("id", data.requestId);
+
+  if (updateError) {
+    return { error: updateError.message };
+  }
+
+  revalidatePath("/roasting");
+  revalidatePath("/orders");
+  return { success: true };
+}
+
 // Create component from batch
 export async function createComponentFromBatch(
   batchId: string,
@@ -434,4 +704,115 @@ export async function createComponentFromBatch(
   revalidatePath("/roasting/batches");
   revalidatePath("/components");
   return { component };
+}
+
+// Add roasted coffee to an existing component with averaged pricing
+export async function addToExistingComponent(
+  batchId: string,
+  componentId: string,
+  data: {
+    newQuantityG: number; // The sellable grams from this batch
+    newCostPerUnit: number; // The cost per unit for this batch
+  }
+) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  // Get the batch details
+  const { data: batch } = await supabase
+    .from("roasting_batches")
+    .select("*, roasting_sessions(session_date)")
+    .eq("id", batchId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!batch) {
+    return { error: "Batch not found" };
+  }
+
+  // Get the existing component
+  const { data: existingComponent } = await supabase
+    .from("components")
+    .select("*")
+    .eq("id", componentId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!existingComponent) {
+    return { error: "Component not found" };
+  }
+
+  // Count how many batches are already linked to this component to estimate existing quantity
+  const { count: linkedBatchCount } = await supabase
+    .from("roasting_batches")
+    .select("id", { count: "exact", head: true })
+    .eq("component_id", componentId);
+
+  // Get total sellable weight from existing linked batches
+  const { data: linkedBatches } = await supabase
+    .from("roasting_batches")
+    .select("sellable_g, green_cost_per_g, green_weight_g")
+    .eq("component_id", componentId);
+
+  // Calculate existing total cost and quantity
+  let existingTotalCost = 0;
+  let existingTotalQuantityG = 0;
+
+  if (linkedBatches && linkedBatches.length > 0) {
+    for (const lb of linkedBatches) {
+      const batchGreenCost = lb.green_cost_per_g * lb.green_weight_g;
+      existingTotalCost += batchGreenCost;
+      existingTotalQuantityG += lb.sellable_g;
+    }
+  } else {
+    // No linked batches, use component's current cost as baseline
+    // Assume some existing quantity based on the component being used
+    existingTotalCost = 0;
+    existingTotalQuantityG = 0;
+  }
+
+  // Add this batch's contribution
+  const newBatchTotalCost = batch.green_cost_per_g * batch.green_weight_g;
+  const totalQuantityG = existingTotalQuantityG + data.newQuantityG;
+  const totalCost = existingTotalCost + newBatchTotalCost;
+
+  // Calculate new averaged cost per gram
+  const newCostPerG = totalQuantityG > 0 ? totalCost / totalQuantityG : data.newCostPerUnit;
+
+  // Update the component with averaged cost
+  const { data: updatedComponent, error: updateError } = await supabase
+    .from("components")
+    .update({
+      cost_per_unit: newCostPerG,
+      notes: `${existingComponent.notes || ""}\nAdded batch "${batch.coffee_name}" (${batch.sellable_g}g) on ${batch.roasting_sessions?.session_date || batch.batch_date || "unknown date"}. Lot: ${batch.lot_code || "N/A"}`.trim(),
+    })
+    .eq("id", componentId)
+    .select()
+    .single();
+
+  if (updateError) {
+    return { error: updateError.message };
+  }
+
+  // Link the batch to the component
+  await supabase
+    .from("roasting_batches")
+    .update({ component_id: componentId })
+    .eq("id", batchId);
+
+  revalidatePath("/roasting/batches");
+  revalidatePath("/components");
+  return { 
+    component: updatedComponent,
+    previousCost: existingComponent.cost_per_unit,
+    newAveragedCost: newCostPerG,
+    totalQuantityG,
+  };
 }
