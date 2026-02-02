@@ -56,7 +56,7 @@ export function RoastingPageClient({
 
       {/* Tabs - Full width on mobile for better touch targets */}
       <Tabs defaultValue="sessions" className="space-y-4 sm:space-y-6">
-        <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:flex">
+        <TabsList className="w-full grid grid-cols-2 sm:w-fit sm:inline-flex">
           <TabsTrigger value="sessions" className="gap-2 flex-1 sm:flex-none">
             <Flame className="h-4 w-4" />
             <span>Sessions</span>
