@@ -67,15 +67,12 @@ export default async function OrderDetailPage({
       ),
       order_roasted_coffee (
         id,
-        roasting_batch_id,
-        quantity_g,
-        created_at,
-        roasting_batches (
+        green_coffee_id,
+        amount_g,
+        assigned_at,
+        green_coffee_inventory (
           id,
-          coffee_name,
-          coffee_inventory_id,
-          sellable_g,
-          roasted_stock_remaining_g
+          name
         )
       )
     `)
