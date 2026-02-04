@@ -43,12 +43,7 @@ export default async function OrderDetailPage({
               name,
               component_type,
               cost_per_unit,
-              green_coffee_id,
-              green_coffee_inventory (
-                id,
-                name,
-                roasted_stock_g
-              )
+              green_coffee_id
             )
           )
         )
