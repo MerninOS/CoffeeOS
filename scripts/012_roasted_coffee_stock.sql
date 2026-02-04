@@ -23,11 +23,13 @@ SET roasted_stock_g = COALESCE((
 ), 0);
 
 -- Create table to track roasted coffee assigned to orders
-CREATE TABLE IF NOT EXISTS public.order_roasted_coffee (
+DROP TABLE IF EXISTS public.order_roasted_coffee CASCADE;
+CREATE TABLE public.order_roasted_coffee (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
-  roasting_batch_id UUID NOT NULL REFERENCES public.roasting_batches(id) ON DELETE CASCADE,
-  quantity_g DECIMAL(10, 2) NOT NULL,
+  green_coffee_id UUID NOT NULL REFERENCES public.green_coffee_inventory(id) ON DELETE CASCADE,
+  amount_g DECIMAL(10, 2) NOT NULL,
+  assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -86,8 +88,11 @@ FOR DELETE USING (
 );
 
 -- Indexes for better query performance
-CREATE INDEX IF NOT EXISTS idx_order_roasted_coffee_order_id ON public.order_roasted_coffee(order_id);
-CREATE INDEX IF NOT EXISTS idx_order_roasted_coffee_batch_id ON public.order_roasted_coffee(roasting_batch_id);
+DROP INDEX IF EXISTS idx_order_roasted_coffee_order_id;
+DROP INDEX IF EXISTS idx_order_roasted_coffee_batch_id;
+DROP INDEX IF EXISTS idx_order_roasted_coffee_green_coffee_id;
+CREATE INDEX idx_order_roasted_coffee_order_id ON public.order_roasted_coffee(order_id);
+CREATE INDEX idx_order_roasted_coffee_green_coffee_id ON public.order_roasted_coffee(green_coffee_id);
 CREATE INDEX IF NOT EXISTS idx_roasting_batches_stock_remaining ON public.roasting_batches(roasted_stock_remaining_g);
 
 -- Add update trigger for order_roasted_coffee
