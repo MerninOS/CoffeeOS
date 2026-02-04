@@ -85,14 +85,8 @@ type OrderLineItem = {
       components: {
         id: string;
         name: string;
-        component_type: string;
+        type: string;
         cost_per_unit: number;
-        green_coffee_id: string | null;
-        green_coffee_inventory?: {
-          id: string;
-          name: string;
-          roasted_stock_g: number;
-        } | null;
       } | null;
     }>;
   } | null;
@@ -105,9 +99,8 @@ type OrderComponent = {
   components: {
     id: string;
     name: string;
-    component_type: string;
+    type: string;
     cost_per_unit: number;
-    green_coffee_id: string | null;
   } | null;
 };
 
@@ -155,7 +148,7 @@ type CoffeeStock = {
 type Component = {
   id: string;
   name: string;
-  component_type: string;
+  type: string;
   cost_per_unit: number;
 };
 
@@ -191,49 +184,16 @@ export function OrderDetailClient({
   const [selectedComponentId, setSelectedComponentId] = useState("");
   const [componentQuantity, setComponentQuantity] = useState("1");
 
-  // Calculate required roasted coffee from product components
-  const requiredCoffee: Record<string, {
-    greenCoffeeId: string;
-    coffeeName: string;
-    requiredG: number;
-    assignedG: number;
-  }> = {};
+  // Track assigned roasted coffee
+  const assignedCoffeeList = order.order_roasted_coffee.map(assignment => ({
+    id: assignment.id,
+    greenCoffeeId: assignment.green_coffee_id,
+    coffeeName: assignment.green_coffee_inventory?.name || "Unknown Coffee",
+    amountG: assignment.amount_g,
+    assignedAt: assignment.assigned_at,
+  }));
 
-  for (const lineItem of order.order_line_items) {
-    const product = lineItem.products;
-    if (!product) continue;
-
-    for (const pc of product.product_components || []) {
-      const component = pc.components;
-      if (!component || component.component_type !== "roasted_coffee" || !component.green_coffee_id) {
-        continue;
-      }
-
-      const coffeeId = component.green_coffee_id;
-      const requiredAmount = pc.quantity * lineItem.quantity;
-
-      if (!requiredCoffee[coffeeId]) {
-        requiredCoffee[coffeeId] = {
-          greenCoffeeId: coffeeId,
-          coffeeName: component.green_coffee_inventory?.name || component.name,
-          requiredG: 0,
-          assignedG: 0,
-        };
-      }
-
-      requiredCoffee[coffeeId].requiredG += requiredAmount;
-    }
-  }
-
-  // Add assigned amounts
-  for (const assignment of order.order_roasted_coffee) {
-    if (requiredCoffee[assignment.green_coffee_id]) {
-      requiredCoffee[assignment.green_coffee_id].assignedG += assignment.amount_g;
-    }
-  }
-
-  const requiredCoffeeList = Object.values(requiredCoffee);
-  const hasUnassignedCoffee = requiredCoffeeList.some(c => c.assignedG < c.requiredG);
+  const totalAssignedCoffeeG = assignedCoffeeList.reduce((sum, c) => sum + c.amountG, 0);
 
   // Calculate COGS
   const calculateCOGS = () => {
@@ -372,6 +332,9 @@ export function OrderDetailClient({
     }
   };
 
+  const LBS_TO_GRAMS = 453.592;
+  const gramsToLbs = (g: number) => (g / LBS_TO_GRAMS).toFixed(2);
+
   return (
     <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
       {/* Header */}
@@ -476,48 +439,115 @@ export function OrderDetailClient({
         </Card>
       </div>
 
-      {/* Required Roasted Coffee Alert */}
-      {requiredCoffeeList.length > 0 && (
-        <Card className={hasUnassignedCoffee ? "border-amber-500/50 bg-amber-500/5" : "border-green-500/50 bg-green-500/5"}>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              {hasUnassignedCoffee ? (
-                <AlertCircle className="h-5 w-5 text-amber-600" />
-              ) : (
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
+      {/* Assigned Roasted Coffee */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Coffee className="h-5 w-5 text-amber-600" />
+              <CardTitle className="text-lg">Assigned Roasted Coffee</CardTitle>
+            </div>
+            <Dialog open={isAddCoffeeOpen} onOpenChange={setIsAddCoffeeOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="bg-transparent">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Assign Coffee
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Assign Roasted Coffee</DialogTitle>
+                  <DialogDescription>
+                    Assign roasted coffee from your stock to this order. This will deduct the amount from your inventory.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Coffee</Label>
+                    <Select value={selectedCoffeeId} onValueChange={setSelectedCoffeeId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select coffee..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {coffeeStock.map((coffee) => (
+                          <SelectItem key={coffee.id} value={coffee.id}>
+                            {coffee.name} ({gramsToLbs(coffee.roasted_stock_g)} lbs available)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Amount (grams)</Label>
+                    <Input
+                      type="number"
+                      value={coffeeAmount}
+                      onChange={(e) => setCoffeeAmount(e.target.value)}
+                      placeholder="Enter amount in grams"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsAddCoffeeOpen(false)}
+                    className="bg-transparent"
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={handleAssignCoffee} disabled={isPending}>
+                    Assign Coffee
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+          <CardDescription>
+            Coffee from your roasted stock assigned to this order
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {assignedCoffeeList.length === 0 ? (
+            <div className="py-6 text-center text-muted-foreground">
+              <Coffee className="mx-auto mb-2 h-8 w-8 opacity-50" />
+              <p className="text-sm">No roasted coffee assigned to this order yet.</p>
+              {coffeeStock.length > 0 && (
+                <p className="mt-1 text-xs">Click &quot;Assign Coffee&quot; to add from your stock.</p>
               )}
-              Roasted Coffee Required
-            </CardTitle>
-            <CardDescription>
-              {hasUnassignedCoffee
-                ? "This order requires roasted coffee to be assigned before shipping"
-                : "All required roasted coffee has been assigned"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </div>
+          ) : (
             <div className="space-y-2">
-              {requiredCoffeeList.map((coffee) => (
+              {assignedCoffeeList.map((assignment) => (
                 <div
-                  key={coffee.greenCoffeeId}
+                  key={assignment.id}
                   className="flex items-center justify-between rounded-md border p-3"
                 >
                   <div>
-                    <span className="font-medium">{coffee.coffeeName}</span>
+                    <span className="font-medium">{assignment.coffeeName}</span>
                     <div className="text-sm text-muted-foreground">
-                      {coffee.assignedG}g / {coffee.requiredG}g assigned
+                      {assignment.amountG.toLocaleString()}g ({gramsToLbs(assignment.amountG)} lbs)
                     </div>
                   </div>
-                  {coffee.assignedG < coffee.requiredG && (
-                    <Badge variant="secondary" className="bg-amber-500/10 text-amber-600">
-                      {coffee.requiredG - coffee.assignedG}g needed
-                    </Badge>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => setDeleteAssignmentId(assignment.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               ))}
+              <div className="mt-3 flex justify-between rounded-md bg-muted/50 p-3">
+                <span className="font-medium">Total Assigned</span>
+                <span className="font-semibold text-amber-600">
+                  {totalAssignedCoffeeG.toLocaleString()}g ({gramsToLbs(totalAssignedCoffeeG)} lbs)
+                </span>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
       {/* Line Items */}
       <Card>

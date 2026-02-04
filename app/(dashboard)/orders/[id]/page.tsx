@@ -41,9 +41,8 @@ export default async function OrderDetailPage({
             components (
               id,
               name,
-              component_type,
-              cost_per_unit,
-              green_coffee_id
+              type,
+              cost_per_unit
             )
           )
         )
@@ -55,9 +54,8 @@ export default async function OrderDetailPage({
         components (
           id,
           name,
-          component_type,
-          cost_per_unit,
-          green_coffee_id
+          type,
+          cost_per_unit
         )
       ),
       order_custom_costs (
@@ -100,7 +98,7 @@ export default async function OrderDetailPage({
   // Get all components for adding manual components
   const { data: components } = await supabase
     .from("components")
-    .select("id, name, component_type, cost_per_unit")
+    .select("id, name, type, cost_per_unit")
     .eq("user_id", user.id)
     .order("name");
 
