@@ -42,6 +42,12 @@ ADD COLUMN IF NOT EXISTS ready_to_ship_at TIMESTAMPTZ;
 -- Enable Row Level Security on order_roasted_coffee
 ALTER TABLE public.order_roasted_coffee ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist (for idempotency)
+DROP POLICY IF EXISTS "order_roasted_coffee_select_own" ON public.order_roasted_coffee;
+DROP POLICY IF EXISTS "order_roasted_coffee_insert_own" ON public.order_roasted_coffee;
+DROP POLICY IF EXISTS "order_roasted_coffee_update_own" ON public.order_roasted_coffee;
+DROP POLICY IF EXISTS "order_roasted_coffee_delete_own" ON public.order_roasted_coffee;
+
 -- RLS Policies for order_roasted_coffee (through order ownership)
 CREATE POLICY "order_roasted_coffee_select_own" ON public.order_roasted_coffee 
 FOR SELECT USING (
@@ -85,6 +91,7 @@ CREATE INDEX IF NOT EXISTS idx_order_roasted_coffee_batch_id ON public.order_roa
 CREATE INDEX IF NOT EXISTS idx_roasting_batches_stock_remaining ON public.roasting_batches(roasted_stock_remaining_g);
 
 -- Add update trigger for order_roasted_coffee
+DROP TRIGGER IF EXISTS order_roasted_coffee_updated_at ON public.order_roasted_coffee;
 CREATE TRIGGER order_roasted_coffee_updated_at 
 BEFORE UPDATE ON public.order_roasted_coffee 
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
