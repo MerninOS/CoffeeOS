@@ -189,7 +189,7 @@ export async function assignRoastedCoffeeToOrder(
     .select("id, amount_g")
     .eq("order_id", orderId)
     .eq("green_coffee_id", greenCoffeeId)
-    .single();
+    .maybeSingle();
 
   if (existingAssignment) {
     // Update existing assignment
