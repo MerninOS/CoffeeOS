@@ -1,6 +1,10 @@
 -- Roasted Coffee Stock Schema
 -- Tracks roasted coffee inventory and order assignments
 
+-- Add roasted stock tracking column to green_coffee_inventory
+ALTER TABLE public.green_coffee_inventory 
+ADD COLUMN IF NOT EXISTS roasted_stock_g DECIMAL(10, 2) DEFAULT 0;
+
 -- Add roasted stock tracking columns to roasting_batches
 ALTER TABLE public.roasting_batches 
 ADD COLUMN IF NOT EXISTS roasted_stock_remaining_g DECIMAL(10, 2);
@@ -9,6 +13,14 @@ ADD COLUMN IF NOT EXISTS roasted_stock_remaining_g DECIMAL(10, 2);
 UPDATE public.roasting_batches 
 SET roasted_stock_remaining_g = sellable_g 
 WHERE roasted_stock_remaining_g IS NULL;
+
+-- Calculate existing roasted stock from batches for each coffee inventory item
+UPDATE public.green_coffee_inventory gci
+SET roasted_stock_g = COALESCE((
+  SELECT SUM(rb.sellable_g)
+  FROM public.roasting_batches rb
+  WHERE rb.coffee_inventory_id = gci.id
+), 0);
 
 -- Create table to track roasted coffee assigned to orders
 CREATE TABLE IF NOT EXISTS public.order_roasted_coffee (
