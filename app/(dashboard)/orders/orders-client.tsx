@@ -20,6 +20,8 @@ import {
   Minus,
   Trash2,
   X,
+  Truck,
+  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -104,6 +106,7 @@ interface Order {
   total_tax: number;
   total_price: number;
   currency: string;
+  ready_to_ship: boolean;
   order_line_items: OrderLineItem[];
   order_components: OrderComponent[];
   order_custom_costs: OrderCustomCost[];
@@ -515,10 +518,12 @@ export function OrdersClient({
                   <TableHead>Order</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="text-center">Ready</TableHead>
                   <TableHead className="text-right">Revenue</TableHead>
                   <TableHead className="text-right">COGS</TableHead>
                   <TableHead className="text-right">Profit</TableHead>
                   <TableHead className="text-right">Margin</TableHead>
+                  <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -561,6 +566,15 @@ export function OrdersClient({
                           </Badge>
                         </div>
                       </TableCell>
+                      <TableCell className="text-center">
+                        {order.ready_to_ship ? (
+                          <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
+                            <Truck className="h-3 w-3" />
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         ${(order.subtotal_price || 0).toFixed(2)}
                       </TableCell>
@@ -591,10 +605,20 @@ export function OrdersClient({
                           );
                         })()}
                       </TableCell>
+                      <TableCell>
+                        <Link
+                          href={`/orders/${order.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                      </TableCell>
                     </TableRow>
                     {expandedOrders.has(order.id) && (
                       <TableRow className="bg-muted/30">
-                        <TableCell colSpan={8} className="p-0">
+                        <TableCell colSpan={10} className="p-0">
                           <div className="p-4">
                             <h4 className="mb-2 text-sm font-semibold">
                               Line Items
