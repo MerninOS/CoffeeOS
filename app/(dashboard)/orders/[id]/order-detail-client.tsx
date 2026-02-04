@@ -594,6 +594,42 @@ export function OrderDetailClient({
                   </TableCell>
                 </TableRow>
               ))}
+              {/* Subtotal Row */}
+              <TableRow className="border-t">
+                <TableCell colSpan={3} className="text-right text-muted-foreground">
+                  Subtotal
+                </TableCell>
+                <TableCell className="text-right">
+                  ${(order.subtotal_price || 0).toFixed(2)}
+                </TableCell>
+              </TableRow>
+              {/* Shipping Row */}
+              <TableRow>
+                <TableCell colSpan={3} className="text-right text-muted-foreground">
+                  Shipping
+                </TableCell>
+                <TableCell className="text-right">
+                  ${((order.total_price || 0) - (order.subtotal_price || 0) - (order.total_tax || 0)).toFixed(2)}
+                </TableCell>
+              </TableRow>
+              {/* Tax Row */}
+              <TableRow>
+                <TableCell colSpan={3} className="text-right text-muted-foreground">
+                  Tax
+                </TableCell>
+                <TableCell className="text-right">
+                  ${(order.total_tax || 0).toFixed(2)}
+                </TableCell>
+              </TableRow>
+              {/* Total Row */}
+              <TableRow className="border-t bg-muted/30">
+                <TableCell colSpan={3} className="text-right font-semibold">
+                  Total
+                </TableCell>
+                <TableCell className="text-right font-semibold">
+                  ${(order.total_price || 0).toFixed(2)}
+                </TableCell>
+              </TableRow>
             </TableBody>
           </Table>
         </CardContent>

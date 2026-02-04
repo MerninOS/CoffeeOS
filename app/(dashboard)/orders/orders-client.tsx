@@ -324,7 +324,7 @@ export function OrdersClient({
   };
 
   // Calculate summary stats using actual COGS from product components
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.subtotal_price || 0), 0);
+  const totalRevenue = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
   const totalCogs = orders.reduce((sum, o) => sum + getOrderCogs(o), 0);
   const totalProfit = totalRevenue - totalCogs;
   const avgMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
@@ -576,17 +576,17 @@ export function OrdersClient({
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        ${(order.subtotal_price || 0).toFixed(2)}
+                        ${(order.total_price || 0).toFixed(2)}
                       </TableCell>
                       <TableCell className="text-right">
                         ${getOrderCogs(order).toFixed(2)}
                       </TableCell>
-                      <TableCell className={`text-right font-medium ${(order.subtotal_price || 0) - getOrderCogs(order) >= 0 ? "text-green-600" : "text-red-600"}`}>
-                        ${((order.subtotal_price || 0) - getOrderCogs(order)).toFixed(2)}
+                      <TableCell className={`text-right font-medium ${(order.total_price || 0) - getOrderCogs(order) >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        ${((order.total_price || 0) - getOrderCogs(order)).toFixed(2)}
                       </TableCell>
                       <TableCell className="text-right">
                         {(() => {
-                          const revenue = order.subtotal_price || 0;
+                          const revenue = order.total_price || 0;
                           const cogs = getOrderCogs(order);
                           const margin = revenue > 0 ? ((revenue - cogs) / revenue) * 100 : 0;
                           return (
@@ -673,6 +673,46 @@ export function OrdersClient({
                                     </TableCell>
                                   </TableRow>
                                 ))}
+                                {/* Subtotal Row */}
+                                <TableRow className="border-t">
+                                  <TableCell colSpan={3} className="text-right text-muted-foreground">
+                                    Subtotal
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    ${(order.subtotal_price || 0).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell />
+                                </TableRow>
+                                {/* Shipping Row */}
+                                <TableRow>
+                                  <TableCell colSpan={3} className="text-right text-muted-foreground">
+                                    Shipping
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    ${((order.total_price || 0) - (order.subtotal_price || 0) - (order.total_tax || 0)).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell />
+                                </TableRow>
+                                {/* Tax Row */}
+                                <TableRow>
+                                  <TableCell colSpan={3} className="text-right text-muted-foreground">
+                                    Tax
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    ${(order.total_tax || 0).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell />
+                                </TableRow>
+                                {/* Total Row */}
+                                <TableRow className="border-t bg-muted/30">
+                                  <TableCell colSpan={3} className="text-right font-semibold">
+                                    Total
+                                  </TableCell>
+                                  <TableCell className="text-right font-semibold">
+                                    ${(order.total_price || 0).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell />
+                                </TableRow>
                               </TableBody>
                             </Table>
                             {order.order_line_items.some(
