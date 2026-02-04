@@ -227,6 +227,24 @@ export async function createBatch(data: {
     return { error: error.message };
   }
 
+  // Add sellable amount to roasted stock if using inventory
+  if (data.coffeeInventoryId) {
+    const { data: currentCoffee } = await supabase
+      .from("green_coffee_inventory")
+      .select("roasted_stock_g")
+      .eq("id", data.coffeeInventoryId)
+      .single();
+
+    if (currentCoffee) {
+      await supabase
+        .from("green_coffee_inventory")
+        .update({ 
+          roasted_stock_g: (currentCoffee.roasted_stock_g || 0) + sellableG 
+        })
+        .eq("id", data.coffeeInventoryId);
+    }
+  }
+
   revalidatePath("/roasting");
   revalidatePath(`/roasting/sessions/${data.sessionId}`);
   revalidatePath("/roasting/batches");

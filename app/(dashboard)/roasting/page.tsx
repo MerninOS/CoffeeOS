@@ -37,10 +37,23 @@ export default async function RoastingSessionsPage() {
   // Fetch coffee inventory for creating requests
   const { data: coffeeInventory } = await supabase
     .from("green_coffee_inventory")
-    .select("id, name, origin, current_green_quantity_g")
+    .select("id, name, origin, current_green_quantity_g, roasted_stock_g")
     .eq("user_id", user?.id)
-    .gt("current_green_quantity_g", 0)
     .order("name");
+
+  // Fetch roasted coffee stock (coffee with roasted stock > 0)
+  const roastedCoffeeStock = (coffeeInventory || [])
+    .filter((c) => (c.roasted_stock_g || 0) > 0)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      origin: c.origin,
+      roasted_stock_g: c.roasted_stock_g || 0,
+    }));
+
+  // Get only coffees with green stock for creating requests
+  const coffeeWithGreenStock = (coffeeInventory || [])
+    .filter((c) => c.current_green_quantity_g > 0);
 
   // Transform data to include batch stats
   const sessionsWithStats = (sessions || []).map((session) => {
@@ -77,7 +90,8 @@ export default async function RoastingSessionsPage() {
     <RoastingPageClient
       initialSessions={sessionsWithStats}
       roastRequests={roastRequests || []}
-      coffeeInventory={coffeeInventory || []}
+      coffeeInventory={coffeeWithGreenStock}
+      roastedCoffeeStock={roastedCoffeeStock}
     />
   );
 }
