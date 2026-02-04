@@ -53,7 +53,7 @@ interface CoffeeInventory {
   price_per_lb: number;
   initial_quantity_g: number;
   current_green_quantity_g: number;
-  current_roasted_quantity_g: number;
+  roasted_stock_g: number;
   purchase_date: string | null;
   notes: string | null;
   is_active: boolean;
@@ -107,7 +107,7 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
 
   // Calculate totals (convert grams to lbs for display)
   const totalGreenLbs = inventory.reduce((sum, c) => sum + gramsToLbs(c.current_green_quantity_g), 0);
-  const totalRoastedLbs = inventory.reduce((sum, c) => sum + gramsToLbs(c.current_roasted_quantity_g || 0), 0);
+  const totalRoastedLbs = inventory.reduce((sum, c) => sum + gramsToLbs(c.roasted_stock_g || 0), 0);
   const totalValue = inventory.reduce((sum, c) => sum + gramsToLbs(c.current_green_quantity_g) * c.price_per_lb, 0);
 
   const resetForm = () => {
@@ -398,7 +398,7 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
                   <>
                     {filteredInventory.map((coffee) => {
                       const greenLbs = gramsToLbs(coffee.current_green_quantity_g);
-                      const roastedLbs = gramsToLbs(coffee.current_roasted_quantity_g || 0);
+                      const roastedLbs = gramsToLbs(coffee.roasted_stock_g || 0);
                       const totalCoffeeValue = greenLbs * coffee.price_per_lb;
                       return (
                         <TableRow key={coffee.id}>
@@ -478,7 +478,7 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
               <>
                 {filteredInventory.map((coffee) => {
                   const greenLbs = gramsToLbs(coffee.current_green_quantity_g);
-                  const roastedLbs = gramsToLbs(coffee.current_roasted_quantity_g || 0);
+                  const roastedLbs = gramsToLbs(coffee.roasted_stock_g || 0);
                   const totalCoffeeValue = greenLbs * coffee.price_per_lb;
                   return (
                     <div key={coffee.id} className="p-4 space-y-3">
