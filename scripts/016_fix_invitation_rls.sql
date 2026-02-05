@@ -15,21 +15,22 @@ CREATE POLICY "team_invitations_update_invitee" ON public.team_invitations
     email = (SELECT auth.jwt() ->> 'email')
   );
 
--- Also allow admins (via get_my_owner_id) to manage invitations for their team
+-- Also allow admins to manage invitations for their team
+-- Uses get_user_owner_id(auth.uid()) from migration 015
 DROP POLICY IF EXISTS "team_invitations_select_admin" ON public.team_invitations;
 CREATE POLICY "team_invitations_select_admin" ON public.team_invitations 
   FOR SELECT USING (
-    owner_id = public.get_my_owner_id()
+    owner_id = auth.uid() OR owner_id = public.get_user_owner_id(auth.uid())
   );
 
 DROP POLICY IF EXISTS "team_invitations_insert_admin" ON public.team_invitations;
 CREATE POLICY "team_invitations_insert_admin" ON public.team_invitations 
   FOR INSERT WITH CHECK (
-    owner_id = auth.uid() OR owner_id = public.get_my_owner_id()
+    owner_id = auth.uid() OR owner_id = public.get_user_owner_id(auth.uid())
   );
 
 DROP POLICY IF EXISTS "team_invitations_delete_admin" ON public.team_invitations;
 CREATE POLICY "team_invitations_delete_admin" ON public.team_invitations 
   FOR DELETE USING (
-    owner_id = auth.uid() OR owner_id = public.get_my_owner_id()
+    owner_id = auth.uid() OR owner_id = public.get_user_owner_id(auth.uid())
   );
