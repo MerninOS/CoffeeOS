@@ -372,12 +372,11 @@ export function OrdersClient({
               <AlertCircle className="h-8 w-8 text-amber-600" />
             </div>
             <h3 className="mb-2 text-lg font-semibold">
-              Admin API Not Configured
+              Shopify Not Connected
             </h3>
             <p className="mb-4 max-w-md text-center text-muted-foreground">
-              To sync orders from Shopify, you need to add an Admin API access
-              token in Settings. This requires a custom app with read_orders
-              scope.
+              To sync orders from Shopify, you need to connect your Shopify
+              store in Settings. Click the button below to get started.
             </p>
             <Button asChild>
               <Link href="/settings">
