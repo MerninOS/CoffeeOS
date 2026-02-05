@@ -18,12 +18,9 @@ export interface ShopifyProduct {
       node: {
         id: string;
         title: string;
-        price: {
-          amount: string;
-          currencyCode: string;
-        };
+        price: string;
         sku: string;
-        availableForSale: boolean;
+        inventoryQuantity: number;
       };
     }>;
   };
@@ -66,12 +63,9 @@ const PRODUCTS_QUERY = `
               node {
                 id
                 title
-                price {
-                  amount
-                  currencyCode
-                }
+                price
                 sku
-                availableForSale
+                inventoryQuantity
               }
             }
           }
