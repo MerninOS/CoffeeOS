@@ -10,14 +10,19 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   const { id } = await params;
   const supabase = await createClient();
 
-  // Fetch product with wholesale fields
+  // Fetch product with all fields (including wholesale fields)
   const { data: product, error } = await supabase
     .from("products")
-    .select("*, wholesale_price, wholesale_minimum_qty, wholesale_enabled")
+    .select("*")
     .eq("id", id)
     .single();
 
-  if (error || !product) {
+  if (error) {
+    console.error("[v0] Product fetch error:", error);
+    notFound();
+  }
+  
+  if (!product) {
     notFound();
   }
 
