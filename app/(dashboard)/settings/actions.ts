@@ -236,7 +236,7 @@ export async function getValidAdminToken(): Promise<{
     .single();
 
   if (!settings?.admin_access_token) {
-    return { error: "Admin API not configured. Please add your Admin API Access Token in Settings." };
+    return { error: "Shopify not connected. Please connect your Shopify store in Settings." };
   }
 
   return { 

@@ -27,13 +27,16 @@ export default async function SettingsPage() {
   if (isOwner) {
     const { data } = await supabase
       .from("shopify_settings")
-      .select("store_domain, access_token, client_id, client_secret")
+      .select("store_domain, shop_name, access_token, admin_access_token, connected_via_oauth, oauth_scope")
       .eq("user_id", user.id)
       .single();
     shopifySettings = data ? {
       store_domain: data.store_domain,
+      shop_name: data.shop_name,
+      connected_via_oauth: data.connected_via_oauth,
+      oauth_scope: data.oauth_scope,
       has_storefront_token: !!data.access_token,
-      has_admin_credentials: !!data.client_id && !!data.client_secret,
+      has_admin_credentials: !!data.admin_access_token,
     } : null;
   }
 

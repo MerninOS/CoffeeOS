@@ -23,7 +23,7 @@ export async function syncShopifyProducts() {
     .single();
 
   if (settingsError || !settings) {
-    return { error: "Shopify is not configured. Please add your store settings first." };
+    return { error: "Shopify not connected. Please connect your store in Settings." };
   }
 
   try {
