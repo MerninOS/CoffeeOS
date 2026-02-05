@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 import { revalidatePath } from "next/cache";
 
 export async function updateProductComponents(
@@ -11,13 +12,10 @@ export async function updateProductComponents(
   }>
 ) {
   const supabase = await createClient();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
   // Verify product ownership
@@ -25,7 +23,7 @@ export async function updateProductComponents(
     .from("products")
     .select("id")
     .eq("id", productId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (!product) {
@@ -86,20 +84,17 @@ export async function updateProductComponents(
 
 export async function updateProductPrice(productId: string, price: number) {
   const supabase = await createClient();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
   const { error } = await supabase
     .from("products")
     .update({ price })
     .eq("id", productId)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (error) {
     return { error: error.message };
@@ -122,13 +117,10 @@ export async function updateWholesalePricing(
   }
 ) {
   const supabase = await createClient();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
   // Verify product ownership
@@ -136,7 +128,7 @@ export async function updateWholesalePricing(
     .from("products")
     .select("id")
     .eq("id", productId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (!product) {

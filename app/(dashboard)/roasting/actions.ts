@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 import { revalidatePath } from "next/cache";
 
 // Session Actions
@@ -15,19 +16,16 @@ export async function createSession(data: {
   notes?: string;
 }) {
   const supabase = await createClient();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
   const { data: session, error } = await supabase
     .from("roasting_sessions")
     .insert({
-      user_id: user.id,
+      user_id: ownerId,
       session_date: data.sessionDate,
       vendor_name: data.vendorName,
       rate_per_hour: data.ratePerHour,
@@ -62,13 +60,10 @@ export async function updateSession(
   }
 ) {
   const supabase = await createClient();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
   const updateData: Record<string, unknown> = {};
@@ -85,7 +80,7 @@ export async function updateSession(
     .from("roasting_sessions")
     .update(updateData)
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (error) {
     return { error: error.message };
@@ -99,19 +94,17 @@ export async function updateSession(
 export async function deleteSession(id: string) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   const { error } = await supabase
     .from("roasting_sessions")
     .delete()
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (error) {
     return { error: error.message };
@@ -139,13 +132,11 @@ export async function createBatch(data: {
 }) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Calculate derived values
   const sellableG = data.roastedWeightG - (data.rejectsG || 0);
@@ -164,7 +155,7 @@ export async function createBatch(data: {
       .from("green_coffee_inventory")
       .select("current_green_quantity_g")
       .eq("id", data.coffeeInventoryId)
-      .eq("user_id", user.id)
+      .eq("user_id", ownerId)
       .single();
 
     if (fetchError || !coffee) {
@@ -190,8 +181,8 @@ export async function createBatch(data: {
     // Record the inventory change (in grams)
     await supabase.from("coffee_inventory_changes").insert({
       coffee_id: data.coffeeInventoryId,
-      user_id: user.id,
-      changed_by_user_id: user.id,
+      user_id: ownerId,
+      changed_by_user_id: ownerId,
       change_type: "roast_deduct",
       green_quantity_change_g: -data.greenWeightG,
       reference_type: "roasting_batch",
@@ -202,7 +193,7 @@ export async function createBatch(data: {
   const { data: batch, error } = await supabase
     .from("roasting_batches")
     .insert({
-      user_id: user.id,
+      user_id: ownerId,
       session_id: data.sessionId,
       coffee_inventory_id: data.coffeeInventoryId || null,
       coffee_name: data.coffeeName,
@@ -269,13 +260,11 @@ export async function updateBatch(
 ) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   const updateData: Record<string, unknown> = {};
   if (data.coffeeName !== undefined) updateData.coffee_name = data.coffeeName;
@@ -317,7 +306,7 @@ export async function updateBatch(
     .from("roasting_batches")
     .update(updateData)
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (error) {
     return { error: error.message };
@@ -331,13 +320,11 @@ export async function updateBatch(
 export async function deleteBatch(id: string) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Get the batch to find its session
   const { data: batch } = await supabase
@@ -350,7 +337,7 @@ export async function deleteBatch(id: string) {
     .from("roasting_batches")
     .delete()
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (error) {
     return { error: error.message };
@@ -368,18 +355,16 @@ export async function deleteBatch(id: string) {
 export async function getRoastingSettings() {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   const { data: settings } = await supabase
     .from("roasting_settings")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .maybeSingle();
 
   return { settings };
@@ -394,22 +379,20 @@ export async function saveRoastingSettings(data: {
 }) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   const { data: existing } = await supabase
     .from("roasting_settings")
     .select("id")
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .maybeSingle();
 
   const settingsData = {
-    user_id: user.id,
+    user_id: ownerId,
     default_billing_granularity_minutes: data.defaultBillingGranularityMinutes || 15,
     default_setup_minutes: data.defaultSetupMinutes || 0,
     default_cleanup_minutes: data.defaultCleanupMinutes || 0,
@@ -452,19 +435,17 @@ export async function createRoastRequest(data: {
 }) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Check for existing unfulfilled request for the same coffee
   const { data: existingRequest } = await supabase
     .from("roast_requests")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .eq("green_coffee_id", data.greenCoffeeId)
     .in("status", ["pending", "in_progress"])
     .order("created_at", { ascending: true })
@@ -513,7 +494,7 @@ export async function createRoastRequest(data: {
   const { data: request, error } = await supabase
     .from("roast_requests")
     .insert({
-      user_id: user.id,
+      user_id: ownerId,
       green_coffee_id: data.greenCoffeeId,
       coffee_name: data.coffeeName,
       requested_roasted_g: data.requestedRoastedG,
@@ -548,13 +529,11 @@ export async function updateRoastRequest(
 ) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   const updateData: Record<string, unknown> = {};
   if (data.requestedRoastedG !== undefined) updateData.requested_roasted_g = data.requestedRoastedG;
@@ -567,7 +546,7 @@ export async function updateRoastRequest(
     .from("roast_requests")
     .update(updateData)
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (error) {
     return { error: error.message };
@@ -580,19 +559,17 @@ export async function updateRoastRequest(
 export async function deleteRoastRequest(id: string) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   const { error } = await supabase
     .from("roast_requests")
     .delete()
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (error) {
     return { error: error.message };
@@ -609,20 +586,18 @@ export async function fulfillRoastRequest(data: {
 }) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Get the current request
   const { data: request, error: fetchError } = await supabase
     .from("roast_requests")
     .select("*")
     .eq("id", data.requestId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (fetchError || !request) {
@@ -676,13 +651,11 @@ export async function createComponentFromBatch(
 ) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Get the batch details
   const { data: batch } = await supabase
@@ -699,7 +672,7 @@ export async function createComponentFromBatch(
   const { data: component, error } = await supabase
     .from("components")
     .insert({
-      user_id: user.id,
+      user_id: ownerId,
       name: data.name,
       type: "ingredient",
       cost_per_unit: data.costPerUnit,
@@ -735,20 +708,18 @@ export async function addToExistingComponent(
 ) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Get the batch details
   const { data: batch } = await supabase
     .from("roasting_batches")
     .select("*, roasting_sessions(session_date)")
     .eq("id", batchId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (!batch) {
@@ -760,7 +731,7 @@ export async function addToExistingComponent(
     .from("components")
     .select("*")
     .eq("id", componentId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (!existingComponent) {

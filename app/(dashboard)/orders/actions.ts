@@ -2,19 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 import { fetchShopifyOrders, parseShopifyGid } from "@/lib/shopify";
 import { getValidAdminToken } from "@/app/(dashboard)/settings/actions";
 
 export async function syncShopifyOrders() {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Get a valid Admin API token using OAuth client credentials
   const tokenResult = await getValidAdminToken();
@@ -53,7 +52,7 @@ export async function syncShopifyOrders() {
     const { data: products } = await supabase
       .from("products")
       .select("id, shopify_id")
-      .eq("user_id", user.id);
+      .eq("user_id", ownerId);
 
     const productMap = new Map(
       (products || []).map((p) => [p.shopify_id, p.id])
@@ -132,7 +131,7 @@ export async function syncShopifyOrders() {
         .from("orders")
         .select("id")
         .eq("shopify_order_id", shopifyOrderId)
-        .eq("user_id", user.id)
+        .eq("user_id", ownerId)
         .single();
 
       let orderId: string;
@@ -165,7 +164,7 @@ export async function syncShopifyOrders() {
         const { data: newOrder, error: insertError } = await supabase
           .from("orders")
           .insert({
-            user_id: user.id,
+            user_id: ownerId,
             shopify_order_id: shopifyOrderId,
             shopify_order_number: order.name,
             order_name: order.name,
@@ -219,13 +218,11 @@ export async function syncShopifyOrders() {
 export async function deleteOrder(orderId: string) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Delete line items first (cascade should handle this, but being explicit)
   await supabase.from("order_line_items").delete().eq("order_id", orderId);
@@ -235,7 +232,7 @@ export async function deleteOrder(orderId: string) {
     .from("orders")
     .delete()
     .eq("id", orderId)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (error) {
     return { error: error.message };
@@ -248,20 +245,18 @@ export async function deleteOrder(orderId: string) {
 export async function addOrderComponent(orderId: string, componentId: string, quantity: number) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Verify the order belongs to the user
   const { data: order } = await supabase
     .from("orders")
     .select("id")
     .eq("id", orderId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (!order) {
@@ -306,13 +301,11 @@ export async function addOrderComponent(orderId: string, componentId: string, qu
 export async function updateOrderComponentQuantity(orderComponentId: string, quantity: number) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Verify ownership through the order
   const { data: orderComponent } = await supabase
@@ -321,7 +314,7 @@ export async function updateOrderComponentQuantity(orderComponentId: string, qua
     .eq("id", orderComponentId)
     .single();
 
-  if (!orderComponent || (orderComponent.orders as { user_id: string }).user_id !== user.id) {
+  if (!orderComponent || (orderComponent.orders as { user_id: string }).user_id !== ownerId) {
     return { error: "Order component not found" };
   }
 
@@ -353,13 +346,11 @@ export async function updateOrderComponentQuantity(orderComponentId: string, qua
 export async function removeOrderComponent(orderComponentId: string) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Verify ownership through the order
   const { data: orderComponent } = await supabase
@@ -368,7 +359,7 @@ export async function removeOrderComponent(orderComponentId: string) {
     .eq("id", orderComponentId)
     .single();
 
-  if (!orderComponent || (orderComponent.orders as { user_id: string }).user_id !== user.id) {
+  if (!orderComponent || (orderComponent.orders as { user_id: string }).user_id !== ownerId) {
     return { error: "Order component not found" };
   }
 
@@ -388,20 +379,18 @@ export async function removeOrderComponent(orderComponentId: string) {
 export async function addOrderCustomCost(orderId: string, description: string, amount: number) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Verify the order belongs to the user
   const { data: order } = await supabase
     .from("orders")
     .select("id")
     .eq("id", orderId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (!order) {
@@ -425,13 +414,11 @@ export async function addOrderCustomCost(orderId: string, description: string, a
 export async function updateOrderCustomCost(customCostId: string, description: string, amount: number) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Verify ownership through the order
   const { data: customCost } = await supabase
@@ -440,7 +427,7 @@ export async function updateOrderCustomCost(customCostId: string, description: s
     .eq("id", customCostId)
     .single();
 
-  if (!customCost || (customCost.orders as { user_id: string }).user_id !== user.id) {
+  if (!customCost || (customCost.orders as { user_id: string }).user_id !== ownerId) {
     return { error: "Custom cost not found" };
   }
 
@@ -460,13 +447,11 @@ export async function updateOrderCustomCost(customCostId: string, description: s
 export async function removeOrderCustomCost(customCostId: string) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Verify ownership through the order
   const { data: customCost } = await supabase
@@ -475,7 +460,7 @@ export async function removeOrderCustomCost(customCostId: string) {
     .eq("id", customCostId)
     .single();
 
-  if (!customCost || (customCost.orders as { user_id: string }).user_id !== user.id) {
+  if (!customCost || (customCost.orders as { user_id: string }).user_id !== ownerId) {
     return { error: "Custom cost not found" };
   }
 
@@ -503,20 +488,18 @@ export async function createRoastRequestForOrder(data: {
 }) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Verify the order belongs to the user
   const { data: order } = await supabase
     .from("orders")
     .select("id, order_name")
     .eq("id", data.orderId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (!order) {
@@ -527,7 +510,7 @@ export async function createRoastRequestForOrder(data: {
   const { data: existingRequest } = await supabase
     .from("roast_requests")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .eq("green_coffee_id", data.greenCoffeeId)
     .in("status", ["pending", "in_progress"])
     .order("created_at", { ascending: true })
@@ -576,7 +559,7 @@ export async function createRoastRequestForOrder(data: {
   const { data: request, error } = await supabase
     .from("roast_requests")
     .insert({
-      user_id: user.id,
+      user_id: ownerId,
       green_coffee_id: data.greenCoffeeId,
       coffee_name: data.coffeeName,
       requested_roasted_g: data.requestedRoastedG,

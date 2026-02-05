@@ -1,14 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 import { OrdersClient } from "./orders-client";
 
 export default async function OrdersPage() {
   const supabase = await createClient();
+  const { ownerId } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!ownerId) {
     return null;
   }
 
@@ -45,21 +43,21 @@ export default async function OrdersPage() {
         amount
       )
     `)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .order("created_at_shopify", { ascending: false });
 
   // Fetch all available components for adding to orders
   const { data: allComponents } = await supabase
     .from("components")
     .select("id, name, cost_per_unit, unit, type")
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .order("name");
 
   // Fetch coffee inventory for roast requests
   const { data: coffeeInventory } = await supabase
     .from("green_coffee_inventory")
     .select("id, name, origin, current_green_quantity_g")
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .gt("current_green_quantity_g", 0)
     .order("name");
 
@@ -76,7 +74,7 @@ export default async function OrdersPage() {
         )
       )
     `)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   // Build a map of product_id -> total COGS
   const productCogsMap: Record<string, number> = {};
@@ -97,7 +95,7 @@ export default async function OrdersPage() {
   const { data: settings } = await supabase
     .from("shopify_settings")
     .select("store_domain, admin_access_token")
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .maybeSingle();
 
   const isAdminConfigured = !!settings?.admin_access_token;

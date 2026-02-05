@@ -26,11 +26,13 @@ export default async function DashboardLayout({
     .eq("id", user.id)
     .single();
 
+  const role = profile?.role || user.user_metadata?.role || "owner";
+
   const userData = {
     email: user.email || "",
     firstName: profile?.first_name || user.user_metadata?.first_name,
     lastName: profile?.last_name || user.user_metadata?.last_name,
-    role: (profile?.role || user.user_metadata?.role || "employee") as "owner" | "employee",
+    role: role as "owner" | "admin" | "roaster" | "employee",
   };
 
   return (

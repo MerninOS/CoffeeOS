@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 import { notFound } from "next/navigation";
 import { SessionDetailClient } from "./session-detail-client";
 
@@ -9,12 +10,9 @@ interface PageProps {
 export default async function SessionDetailPage({ params }: PageProps) {
   const { id } = await params;
   const supabase = await createClient();
+  const { ownerId } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!ownerId) {
     notFound();
   }
 
@@ -39,7 +37,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
   const { data: coffeeInventory } = await supabase
     .from("green_coffee_inventory")
     .select("id, name, origin, lot_code, supplier, price_per_lb, current_green_quantity_g")
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .gt("current_green_quantity_g", 0)
     .order("name");
 
@@ -53,7 +51,7 @@ export default async function SessionDetailPage({ params }: PageProps) {
         origin
       )
     `)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .in("status", ["pending", "in_progress"])
     .order("priority", { ascending: true })
     .order("due_date", { ascending: true });

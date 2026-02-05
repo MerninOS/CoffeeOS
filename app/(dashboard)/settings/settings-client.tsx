@@ -45,6 +45,7 @@ interface SettingsClientProps {
     firstName: string;
     lastName: string;
   };
+  userRole: string;
   isOwner: boolean;
   shopifySettings: {
     store_domain: string;
@@ -58,9 +59,11 @@ interface SettingsClientProps {
 
 export function SettingsClient({
   user,
+  userRole,
   isOwner,
   shopifySettings,
 }: SettingsClientProps) {
+  const canManageShopify = isOwner || userRole === "admin";
   const [profileData, setProfileData] = useState({
     firstName: user.firstName,
     lastName: user.lastName,
@@ -171,13 +174,6 @@ export function SettingsClient({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your account and integrations
-        </p>
-      </div>
-
       {message && (
         <div
           className={`flex items-center gap-2 rounded-md p-3 text-sm ${
@@ -253,7 +249,7 @@ export function SettingsClient({
         </Card>
 
         {/* Shopify Connection */}
-        {isOwner && (
+        {canManageShopify && (
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">

@@ -1,14 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 import { ProductsClient } from "./products-client";
 
 export default async function ProductsPage() {
   const supabase = await createClient();
+  const { ownerId } = await getEffectiveOwnerId();
 
   // Fetch products and calculate COGS from product_components
   const [productsResult, productComponentsResult, settingsResult] = await Promise.all([
     supabase
       .from("products")
       .select("id, shopify_id, title, description, sku, price, image_url, created_at")
+      .eq("user_id", ownerId!)
       .order("created_at", { ascending: false }),
     supabase
       .from("product_components")
@@ -16,6 +19,7 @@ export default async function ProductsPage() {
     supabase
       .from("shopify_settings")
       .select("store_domain")
+      .eq("user_id", ownerId!)
       .maybeSingle(),
   ]);
 
