@@ -118,6 +118,25 @@ export async function GET(request: NextRequest) {
     const accessToken = tokenData.access_token;
     const scope = tokenData.scope;
 
+    // Fetch shop info to get the shop name
+    let shopName = shop.replace(".myshopify.com", "");
+    try {
+      const shopInfoResponse = await fetch(
+        `https://${shop}/admin/api/2024-10/shop.json`,
+        {
+          headers: {
+            "X-Shopify-Access-Token": accessToken,
+          },
+        }
+      );
+      if (shopInfoResponse.ok) {
+        const shopInfo = await shopInfoResponse.json();
+        shopName = shopInfo.shop?.name || shopName;
+      }
+    } catch (e) {
+      console.error("Failed to fetch shop info:", e);
+    }
+
     // Store the access token in the database
     const { error: saveError } = await supabase
       .from("shopify_settings")
@@ -125,7 +144,9 @@ export async function GET(request: NextRequest) {
         {
           user_id: storedState.user_id,
           store_domain: shop,
+          shop_name: shopName,
           admin_access_token: accessToken,
+          connected_via_oauth: true,
           oauth_scope: scope,
           oauth_connected_at: new Date().toISOString(),
         },
