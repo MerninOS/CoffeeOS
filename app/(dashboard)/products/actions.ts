@@ -57,7 +57,7 @@ export async function syncShopifyProducts() {
             title: product.title,
             description: product.description || null,
             sku: firstVariant?.sku || null,
-            price: firstVariant ? parseFloat(firstVariant.price.amount) : null,
+            price: firstVariant ? parseFloat(firstVariant.price) : null,
             image_url: firstImage?.url || null,
             shopify_handle: product.handle,
             variant_id: firstVariant?.id || null,
