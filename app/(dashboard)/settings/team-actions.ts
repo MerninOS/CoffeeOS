@@ -368,27 +368,41 @@ export async function getMyPendingInvitations() {
     return { error: "Unauthorized" };
   }
 
+  // Fetch pending invitations for this user's email
   const { data: invitations, error } = await supabase
     .from("team_invitations")
-    .select("*, profiles!team_invitations_invited_by_fkey(first_name, last_name)")
+    .select("*")
     .eq("email", user.email?.toLowerCase())
     .eq("status", "pending")
     .gt("expires_at", new Date().toISOString());
 
   if (error) {
-    // If the join fails, try without it
-    const { data: simpleInvitations, error: simpleError } = await supabase
-      .from("team_invitations")
-      .select("*")
-      .eq("email", user.email?.toLowerCase())
-      .eq("status", "pending")
-      .gt("expires_at", new Date().toISOString());
-    
-    if (simpleError) {
-      return { error: simpleError.message };
-    }
-    return { invitations: simpleInvitations || [] };
+    return { error: error.message };
   }
 
-  return { invitations: invitations || [] };
+  // Look up inviter names separately from profiles
+  const inviterIds = [...new Set((invitations || []).map((i) => i.invited_by))];
+  let inviterMap: Record<string, { first_name: string; last_name: string }> = {};
+
+  if (inviterIds.length > 0) {
+    const { data: inviters } = await supabase
+      .from("profiles")
+      .select("id, first_name, last_name")
+      .in("id", inviterIds);
+
+    if (inviters) {
+      for (const inviter of inviters) {
+        inviterMap[inviter.id] = { first_name: inviter.first_name, last_name: inviter.last_name };
+      }
+    }
+  }
+
+  const invitationsWithNames = (invitations || []).map((inv) => ({
+    ...inv,
+    inviter_name: inviterMap[inv.invited_by]
+      ? `${inviterMap[inv.invited_by].first_name || ""} ${inviterMap[inv.invited_by].last_name || ""}`.trim() || "Team Owner"
+      : "Team Owner",
+  }));
+
+  return { invitations: invitationsWithNames };
 }
