@@ -34,6 +34,26 @@ FOR DELETE USING (auth.uid() = user_id);
 -- Add OAuth-related columns to shopify_settings if they don't exist
 DO $$ 
 BEGIN
+  -- Add shop_name column if it doesn't exist
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+    AND table_name = 'shopify_settings' 
+    AND column_name = 'shop_name'
+  ) THEN
+    ALTER TABLE public.shopify_settings ADD COLUMN shop_name TEXT;
+  END IF;
+
+  -- Add connected_via_oauth column if it doesn't exist
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+    AND table_name = 'shopify_settings' 
+    AND column_name = 'connected_via_oauth'
+  ) THEN
+    ALTER TABLE public.shopify_settings ADD COLUMN connected_via_oauth BOOLEAN DEFAULT false;
+  END IF;
+
   -- Add oauth_scope column if it doesn't exist
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns 
