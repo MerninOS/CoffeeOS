@@ -94,15 +94,14 @@ export async function fetchShopifyProducts(
   first = 50,
   after?: string
 ): Promise<ShopifyConnection<ShopifyProduct>> {
-  // Use stable API version
-  const endpoint = `https://${storeDomain}/api/2024-10/graphql.json`;
+  // Use Admin API endpoint (OAuth tokens are admin tokens)
+  const endpoint = `https://${storeDomain}/admin/api/2024-10/graphql.json`;
 
-  // Try private token first (from Headless channel), then public token
-  let response = await fetch(endpoint, {
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Shopify-Storefront-Private-Token": accessToken,
+      "X-Shopify-Access-Token": accessToken,
     },
     body: JSON.stringify({
       query: PRODUCTS_QUERY,
@@ -110,28 +109,12 @@ export async function fetchShopifyProducts(
     }),
   });
 
-  // Check if private token worked by examining response
-  let data = await response.json();
-  
-  // If private token fails (unauthorized error in body), try public token header
-  if (data.errors?.some((e: { extensions?: { code?: string } }) => e.extensions?.code === "UNAUTHORIZED")) {
-    response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Shopify-Storefront-Access-Token": accessToken,
-      },
-      body: JSON.stringify({
-        query: PRODUCTS_QUERY,
-        variables: { first, after },
-      }),
-    });
-    data = await response.json();
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Shopify Admin API error: ${response.status} - ${text}`);
   }
 
-  if (!response.ok) {
-    throw new Error(`Shopify API error: ${response.status} ${response.statusText}`);
-  }
+  const data = await response.json();
 
   if (data.errors) {
     throw new Error(`Shopify GraphQL error: ${data.errors[0]?.message || "Unknown error"}`);

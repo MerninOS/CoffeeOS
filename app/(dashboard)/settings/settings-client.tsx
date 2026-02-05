@@ -2,7 +2,8 @@
 
 import React from "react";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { updateProfile } from "./actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -72,6 +73,35 @@ export function SettingsClient({
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  const searchParams = useSearchParams();
+
+  // Handle OAuth callback messages
+  useEffect(() => {
+    const shopifyStatus = searchParams.get("shopify");
+    const errorParam = searchParams.get("error");
+
+    if (shopifyStatus === "connected") {
+      setMessage({ type: "success", text: "Shopify store connected successfully! You can now sync products and orders." });
+      // Clean up URL
+      window.history.replaceState({}, "", "/settings");
+    } else if (errorParam) {
+      const errorMessages: Record<string, string> = {
+        missing_params: "Missing required parameters from Shopify",
+        config_error: "Shopify app not configured correctly",
+        invalid_signature: "Invalid signature from Shopify",
+        invalid_state: "Invalid state - please try connecting again",
+        state_expired: "Connection timed out - please try again",
+        shop_mismatch: "Shop mismatch - please try connecting again",
+        token_exchange_failed: "Failed to exchange token with Shopify",
+        save_failed: "Failed to save connection",
+        callback_error: "An error occurred during connection",
+      };
+      setMessage({ type: "error", text: errorMessages[errorParam] || "An error occurred connecting to Shopify" });
+      // Clean up URL
+      window.history.replaceState({}, "", "/settings");
+    }
+  }, [searchParams]);
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -274,8 +304,8 @@ export function SettingsClient({
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-                    <p className="text-sm text-amber-700">
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950">
+                    <p className="text-sm text-amber-700 dark:text-amber-300">
                       <strong>Connected via Shopify App.</strong> Your store is connected through the official Shopify OAuth flow. 
                       You can manage this app&apos;s access from your{" "}
                       <a
@@ -287,6 +317,22 @@ export function SettingsClient({
                         Shopify Admin
                       </a>
                       .
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      <strong>Note about Order Sync:</strong> To sync orders, your Shopify app must be approved for protected customer data access. 
+                      If you see an error when syncing orders, you need to request access in your{" "}
+                      <a
+                        href="https://partners.shopify.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium underline"
+                      >
+                        Shopify Partner Dashboard
+                      </a>
+                      {" "}under App Setup &gt; Protected customer data access.
                     </p>
                   </div>
                 </div>

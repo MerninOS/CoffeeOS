@@ -26,6 +26,10 @@ export async function syncShopifyProducts() {
     return { error: "Shopify not connected. Please connect your store in Settings." };
   }
 
+  if (!settings.admin_access_token) {
+    return { error: "Shopify Admin API not configured. Please reconnect your store in Settings." };
+  }
+
   try {
     let hasMore = true;
     let cursor: string | undefined;
@@ -34,7 +38,7 @@ export async function syncShopifyProducts() {
     while (hasMore) {
       const productsData = await fetchShopifyProducts(
         settings.store_domain,
-        settings.access_token,
+        settings.admin_access_token,
         50,
         cursor
       );
