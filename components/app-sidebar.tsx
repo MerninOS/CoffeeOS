@@ -1,5 +1,7 @@
 "use client";
 
+import React from "react"
+
 import Image from "next/image"
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -39,45 +41,59 @@ import {
   Warehouse,
 } from "lucide-react";
 
+type UserRole = "owner" | "admin" | "roaster" | "employee";
+
 interface AppSidebarProps {
   user: {
     email: string;
     firstName?: string;
     lastName?: string;
-    role: "owner" | "employee";
+    role: UserRole;
   };
 }
 
-const navigation = [
+// Roles that can see each nav item. If not specified, all roles can see it.
+const navigation: Array<{
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  allowedRoles?: UserRole[];
+}> = [
   {
     name: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
+    allowedRoles: ["owner", "admin"],
   },
   {
     name: "Products",
     href: "/products",
     icon: Package,
+    allowedRoles: ["owner", "admin"],
   },
   {
     name: "Inventory",
     href: "/inventory",
     icon: Warehouse,
+    // All roles can access inventory
   },
   {
     name: "Orders",
     href: "/orders",
     icon: ShoppingCart,
+    allowedRoles: ["owner", "admin"],
   },
   {
     name: "Roasting",
     href: "/roasting",
     icon: Flame,
+    // All roles can access roasting
   },
   {
     name: "Components",
     href: "/components",
     icon: Layers,
+    allowedRoles: ["owner", "admin"],
   },
 ];
 
@@ -117,7 +133,9 @@ export function AppSidebar({ user }: AppSidebarProps) {
           <SidebarGroupLabel className="text-sidebar-foreground">Menu</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navigation.map((item) => (
+              {navigation
+                .filter((item) => !item.allowedRoles || item.allowedRoles.includes(user.role))
+                .map((item) => (
                 <SidebarMenuItem key={item.name}>
                   <SidebarMenuButton
                     asChild
@@ -133,7 +151,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        {user.role === "owner" && (
+        {(user.role === "owner" || user.role === "admin") && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-sidebar-foreground">Admin</SidebarGroupLabel>
             <SidebarGroupContent>

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 import {
   Card,
   CardContent,
@@ -14,19 +15,20 @@ export default async function DashboardPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const { ownerId } = await getEffectiveOwnerId();
 
   // Fetch stats
   const [productsResult, componentsResult, productComponentsResult, inventoryResult, ordersResult, batchesResult] = await Promise.all([
-    supabase.from("products").select("id, price", { count: "exact" }).eq("user_id", user?.id),
-    supabase.from("components").select("id", { count: "exact" }).eq("user_id", user?.id),
+    supabase.from("products").select("id, price", { count: "exact" }).eq("user_id", ownerId),
+    supabase.from("components").select("id", { count: "exact" }).eq("user_id", ownerId),
     supabase.from("product_components").select(`
       product_id,
       quantity,
       components (cost_per_unit)
     `),
-    supabase.from("green_coffee_inventory").select("id, name, current_green_quantity_g, price_per_lb").eq("user_id", user?.id),
-    supabase.from("orders").select("id, total_price, financial_status, created_at", { count: "exact" }).eq("user_id", user?.id),
-    supabase.from("roasting_batches").select("id, sellable_g, created_at").eq("user_id", user?.id),
+    supabase.from("green_coffee_inventory").select("id, name, current_green_quantity_g, price_per_lb").eq("user_id", ownerId),
+    supabase.from("orders").select("id, total_price, financial_status, created_at", { count: "exact" }).eq("user_id", ownerId),
+    supabase.from("roasting_batches").select("id, sellable_g, created_at").eq("user_id", ownerId),
   ]);
 
   const totalProducts = productsResult.count || 0;

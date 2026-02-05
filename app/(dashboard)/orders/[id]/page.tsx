@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 import { redirect, notFound } from "next/navigation";
 import { OrderDetailClient } from "./order-detail-client";
 
@@ -9,12 +10,10 @@ export default async function OrderDetailPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
+  const { ownerId } = await getEffectiveOwnerId();
+  const user = { id: ownerId }; // Declare the user variable
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!ownerId) {
     redirect("/auth/login");
   }
 
@@ -75,7 +74,7 @@ export default async function OrderDetailPage({
       )
     `)
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (error || !order) {
@@ -91,7 +90,7 @@ export default async function OrderDetailPage({
       origin,
       roasted_stock_g
     `)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .gt("roasted_stock_g", 0)
     .order("name");
 
@@ -99,7 +98,7 @@ export default async function OrderDetailPage({
   const { data: components } = await supabase
     .from("components")
     .select("id, name, type, cost_per_unit")
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .order("name");
 
   return (

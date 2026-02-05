@@ -217,22 +217,22 @@ export async function saveAdminApiSettings(data: {
 export async function getValidAdminToken(): Promise<{
   accessToken?: string;
   storeDomain?: string;
+  ownerId?: string;
   error?: string;
 }> {
+  const { getEffectiveOwnerId } = await import("@/lib/team");
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
   const { data: settings } = await supabase
     .from("shopify_settings")
     .select("store_domain, admin_access_token")
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (!settings?.admin_access_token) {
@@ -242,6 +242,7 @@ export async function getValidAdminToken(): Promise<{
   return { 
     accessToken: settings.admin_access_token,
     storeDomain: settings.store_domain,
+    ownerId,
   };
 }
 

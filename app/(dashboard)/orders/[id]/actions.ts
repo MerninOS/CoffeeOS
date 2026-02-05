@@ -2,17 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 
 export async function getOrderDetails(orderId: string) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Get order with line items
   const { data: order, error: orderError } = await supabase
@@ -73,7 +72,7 @@ export async function getOrderDetails(orderId: string) {
       )
     `)
     .eq("id", orderId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (orderError || !order) {
@@ -86,13 +85,11 @@ export async function getOrderDetails(orderId: string) {
 export async function getRoastedCoffeeStock() {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Get green coffee inventory with stock amounts
   const { data: coffeeStock, error } = await supabase
@@ -103,7 +100,7 @@ export async function getRoastedCoffeeStock() {
       origin,
       roasted_stock_g
     `)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .gt("roasted_stock_g", 0)
     .order("name");
 
@@ -117,19 +114,17 @@ export async function getRoastedCoffeeStock() {
 export async function updateOrderReadyToShip(orderId: string, readyToShip: boolean) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   const { error } = await supabase
     .from("orders")
     .update({ ready_to_ship: readyToShip })
     .eq("id", orderId)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (error) {
     return { error: error.message };
@@ -147,20 +142,18 @@ export async function assignRoastedCoffeeToOrder(
 ) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Verify order belongs to user
   const { data: order } = await supabase
     .from("orders")
     .select("id")
     .eq("id", orderId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (!order) {
@@ -172,7 +165,7 @@ export async function assignRoastedCoffeeToOrder(
     .from("green_coffee_inventory")
     .select("id, name, roasted_stock_g")
     .eq("id", greenCoffeeId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (!coffeeInventory) {
@@ -239,13 +232,11 @@ export async function assignRoastedCoffeeToOrder(
 export async function removeRoastedCoffeeFromOrder(assignmentId: string) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Get the assignment details
   const { data: assignment } = await supabase
@@ -260,7 +251,7 @@ export async function removeRoastedCoffeeFromOrder(assignmentId: string) {
     .eq("id", assignmentId)
     .single();
 
-  if (!assignment || (assignment.orders as { user_id: string }).user_id !== user.id) {
+  if (!assignment || (assignment.orders as { user_id: string }).user_id !== ownerId) {
     return { error: "Assignment not found" };
   }
 
@@ -299,13 +290,11 @@ export async function removeRoastedCoffeeFromOrder(assignmentId: string) {
 export async function getRequiredCoffeeForOrder(orderId: string) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const { ownerId: _oid } = await getEffectiveOwnerId();
+  if (!_oid) {
     return { error: "Unauthorized" };
   }
+  const ownerId = _oid;
 
   // Get order with line items and their product components
   const { data: order } = await supabase
@@ -334,7 +323,7 @@ export async function getRequiredCoffeeForOrder(orderId: string) {
       )
     `)
     .eq("id", orderId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (!order) {

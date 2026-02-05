@@ -1,12 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 import { BatchesClient } from "./batches-client";
 
 export default async function BatchesPage() {
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { ownerId } = await getEffectiveOwnerId();
 
   // Fetch all batches with session info
   const { data: batches } = await supabase
@@ -23,13 +21,14 @@ export default async function BatchesPage() {
         name
       )
     `)
+    .eq("user_id", ownerId!)
     .order("batch_date", { ascending: false });
 
   // Fetch existing ingredient components for adding to
   const { data: existingComponents } = await supabase
     .from("components")
     .select("id, name, cost_per_unit, unit, type")
-    .eq("user_id", user?.id)
+    .eq("user_id", ownerId!)
     .eq("type", "ingredient")
     .eq("unit", "g")
     .order("name");

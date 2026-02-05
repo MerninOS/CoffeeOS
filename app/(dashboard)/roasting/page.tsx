@@ -1,12 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 import { RoastingPageClient } from "./roasting-page-client";
 
 export default async function RoastingSessionsPage() {
   const supabase = await createClient();
+  const { ownerId } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  if (!ownerId) {
+    return null;
+  }
 
   // Fetch sessions with batch counts
   const { data: sessions } = await supabase
@@ -19,6 +21,7 @@ export default async function RoastingSessionsPage() {
         roasted_weight_g
       )
     `)
+    .eq("user_id", ownerId)
     .order("session_date", { ascending: false });
 
   // Fetch roast requests with coffee info
@@ -31,14 +34,14 @@ export default async function RoastingSessionsPage() {
         origin
       )
     `)
-    .eq("user_id", user?.id)
+    .eq("user_id", ownerId)
     .order("created_at", { ascending: false });
 
   // Fetch coffee inventory for creating requests
   const { data: coffeeInventory } = await supabase
     .from("green_coffee_inventory")
     .select("id, name, origin, current_green_quantity_g, roasted_stock_g")
-    .eq("user_id", user?.id)
+    .eq("user_id", ownerId)
     .order("name");
 
   // Fetch roasted coffee stock (coffee with roasted stock > 0)

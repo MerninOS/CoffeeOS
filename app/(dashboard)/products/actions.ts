@@ -1,25 +1,25 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 import { fetchShopifyProducts, parseShopifyGid } from "@/lib/shopify";
 import { revalidatePath } from "next/cache";
+import { User } from "@supabase/supabase-js";
 
 export async function syncShopifyProducts() {
   const supabase = await createClient();
 
-  // Get current user
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
-  // Get Shopify settings
+  // Get Shopify settings scoped to the owner
   const { data: settings, error: settingsError } = await supabase
     .from("shopify_settings")
     .select("*")
+    .eq("user_id", ownerId)
     .single();
 
   if (settingsError || !settings) {
@@ -50,10 +50,16 @@ export async function syncShopifyProducts() {
         const firstImage = product.images.edges[0]?.node;
 
         // Upsert product - use correct column names from schema
+        const { data: user } = await supabase.auth.getUser();
+        if (!user) {
+          console.error("User is unauthorized");
+          continue;
+        }
+
         const { error: upsertError } = await supabase.from("products").upsert(
           {
             shopify_id: shopifyId,
-            user_id: user.id,
+            user_id: ownerId,
             title: product.title,
             description: product.description || null,
             sku: firstVariant?.sku || null,
@@ -99,18 +105,16 @@ export async function createProduct(data: {
 }) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
   const { data: product, error } = await supabase
     .from("products")
     .insert({
-      user_id: user.id,
+      user_id: ownerId,
       title: data.title,
       description: data.description || null,
       sku: data.sku || null,
@@ -131,19 +135,17 @@ export async function createProduct(data: {
 export async function deleteProduct(productId: string) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
   const { error } = await supabase
     .from("products")
     .delete()
     .eq("id", productId)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (error) {
     return { error: error.message };

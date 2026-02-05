@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 import { revalidatePath } from "next/cache";
 
 export async function createComponent(data: {
@@ -11,19 +12,16 @@ export async function createComponent(data: {
   notes?: string;
 }) {
   const supabase = await createClient();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
   const { data: component, error } = await supabase
     .from("components")
     .insert({
-      user_id: user.id,
+      user_id: ownerId,
       name: data.name,
       type: data.type,
       cost_per_unit: data.costPerUnit,
@@ -52,13 +50,10 @@ export async function updateComponent(
   }
 ) {
   const supabase = await createClient();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
   const { error } = await supabase
@@ -71,7 +66,7 @@ export async function updateComponent(
       notes: data.notes || null,
     })
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (error) {
     return { error: error.message };
@@ -125,13 +120,10 @@ export async function updateComponent(
 
 export async function deleteComponent(id: string) {
   const supabase = await createClient();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
   // Check if component is used in any products
@@ -150,7 +142,7 @@ export async function deleteComponent(id: string) {
     .from("components")
     .delete()
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (error) {
     return { error: error.message };

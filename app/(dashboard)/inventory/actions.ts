@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 import { revalidatePath } from "next/cache";
 
 // Conversion: 1 lb = 453.592 grams
@@ -17,22 +18,18 @@ export async function createCoffeeInventory(data: {
   notes?: string;
 }) {
   const supabase = await createClient();
+  const { ownerId, userId, error: ownerError } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId || !userId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
-  // Convert lbs to grams for storage
   const quantityGrams = data.quantity_lbs * LBS_TO_GRAMS;
 
   const { data: inventory, error } = await supabase
     .from("green_coffee_inventory")
     .insert({
-      user_id: user.id,
+      user_id: ownerId,
       name: data.name,
       origin: data.origin,
       lot_code: data.lot_code || null,
@@ -50,11 +47,10 @@ export async function createCoffeeInventory(data: {
     return { error: error.message };
   }
 
-  // Record the initial addition
   await supabase.from("coffee_inventory_changes").insert({
     coffee_id: inventory.id,
-    user_id: user.id,
-    changed_by_user_id: user.id,
+    user_id: ownerId,
+    changed_by_user_id: userId,
     change_type: "initial",
     green_quantity_change_g: quantityGrams,
     notes: "Initial inventory",
@@ -77,20 +73,17 @@ export async function updateCoffeeInventory(
   }
 ) {
   const supabase = await createClient();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
   const { error } = await supabase
     .from("green_coffee_inventory")
     .update(data)
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (error) {
     return { error: error.message };
@@ -109,16 +102,12 @@ export async function adjustInventoryQuantity(
   referenceType?: "roasting_batch" | "order" | "manual"
 ) {
   const supabase = await createClient();
+  const { ownerId, userId, error: ownerError } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId || !userId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
-  // Get current inventory
   const { data: coffee, error: fetchError } = await supabase
     .from("green_coffee_inventory")
     .select("current_green_quantity_g, user_id")
@@ -129,18 +118,17 @@ export async function adjustInventoryQuantity(
     return { error: "Coffee not found" };
   }
 
-  if (coffee.user_id !== user.id) {
+  if (coffee.user_id !== ownerId) {
     return { error: "Unauthorized" };
   }
 
   const quantityChangeGrams = quantityChangeLbs * LBS_TO_GRAMS;
   const newQuantityGrams = coffee.current_green_quantity_g + quantityChangeGrams;
-  
+
   if (newQuantityGrams < 0) {
     return { error: "Insufficient inventory" };
   }
 
-  // Update quantity
   const { error: updateError } = await supabase
     .from("green_coffee_inventory")
     .update({ current_green_quantity_g: newQuantityGrams })
@@ -150,13 +138,12 @@ export async function adjustInventoryQuantity(
     return { error: updateError.message };
   }
 
-  // Record the change
   const { error: changeError } = await supabase
     .from("coffee_inventory_changes")
     .insert({
       coffee_id: coffeeId,
-      user_id: user.id,
-      changed_by_user_id: user.id,
+      user_id: ownerId,
+      changed_by_user_id: userId,
       change_type: changeType,
       green_quantity_change_g: quantityChangeGrams,
       reference_id: referenceId || null,
@@ -175,20 +162,17 @@ export async function adjustInventoryQuantity(
 
 export async function deleteCoffeeInventory(id: string) {
   const supabase = await createClient();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Unauthorized" };
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
   }
 
   const { error } = await supabase
     .from("green_coffee_inventory")
     .delete()
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (error) {
     return { error: error.message };
