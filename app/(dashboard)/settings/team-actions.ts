@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import crypto from "crypto";
 
 export async function getTeamMembers() {
   const supabase = await createClient();
@@ -39,7 +40,7 @@ export async function getTeamMembers() {
   // Fetch all team members (profiles linked to this owner + the owner)
   const { data: members, error } = await supabase
     .from("profiles")
-    .select("id, first_name, last_name, role, created_at")
+    .select("id, email, first_name, last_name, role, created_at")
     .or(`id.eq.${ownerId},owner_id.eq.${ownerId}`)
     .order("created_at", { ascending: true });
 
@@ -47,21 +48,7 @@ export async function getTeamMembers() {
     return { error: error.message };
   }
 
-  // Also get emails from auth - we'll match by id
-  // Since we can't access auth.users directly from client, we'll store email in the response
-  // by using the user's own email for the current user
-  const membersWithEmail = await Promise.all(
-    (members || []).map(async (member) => {
-      // For the current user, we know the email
-      if (member.id === user.id) {
-        return { ...member, email: user.email || "" };
-      }
-      // For other members, try to get from profiles or return empty
-      return { ...member, email: "" };
-    })
-  );
-
-  return { members: membersWithEmail };
+  return { members: members || [] };
 }
 
 export async function getPendingInvitations() {
@@ -87,11 +74,13 @@ export async function getPendingInvitations() {
 
   const ownerId = profile.role === "owner" ? user.id : profile.owner_id;
 
+  // Pending = accepted_at is null and not expired
   const { data: invitations, error } = await supabase
     .from("team_invitations")
     .select("*")
-    .eq("invited_by", ownerId)
-    .eq("status", "pending")
+    .eq("owner_id", ownerId)
+    .is("accepted_at", null)
+    .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -128,27 +117,34 @@ export async function inviteTeamMember(email: string, role: "admin" | "roaster")
     return { error: "No team context found" };
   }
 
-  // Check if email is already a team member
+  // Check if there's already a pending invitation for this email
   const { data: existingInvite } = await supabase
     .from("team_invitations")
-    .select("id, status")
+    .select("id")
     .eq("email", email.toLowerCase())
-    .eq("invited_by", ownerId)
-    .eq("status", "pending")
+    .eq("owner_id", ownerId)
+    .is("accepted_at", null)
+    .gt("expires_at", new Date().toISOString())
     .maybeSingle();
 
   if (existingInvite) {
     return { error: "An invitation is already pending for this email" };
   }
 
-  // Create the invitation
-  const { error } = await supabase.from("team_invitations").insert({
-    email: email.toLowerCase(),
-    role,
-    invited_by: ownerId,
-    status: "pending",
-    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
-  });
+  // Generate a unique token
+  const token = crypto.randomBytes(32).toString("hex");
+
+  // Create the invitation using the actual table schema
+  const { error } = await supabase.from("team_invitations").upsert(
+    {
+      owner_id: ownerId,
+      email: email.toLowerCase(),
+      role,
+      token,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    { onConflict: "owner_id,email" }
+  );
 
   if (error) {
     return { error: error.message };
@@ -156,7 +152,10 @@ export async function inviteTeamMember(email: string, role: "admin" | "roaster")
 
   revalidatePath("/settings");
 
-  return { success: true, message: `Invitation created for ${email}. They will need to sign up and accept the invitation.` };
+  return {
+    success: true,
+    message: `Invitation created for ${email}. They will need to sign up and accept the invitation from their Settings page.`,
+  };
 }
 
 export async function cancelInvitation(invitationId: string) {
@@ -170,11 +169,11 @@ export async function cancelInvitation(invitationId: string) {
     return { error: "Unauthorized" };
   }
 
+  // Delete the invitation (owner_id check handled by RLS)
   const { error } = await supabase
     .from("team_invitations")
-    .update({ status: "cancelled" })
-    .eq("id", invitationId)
-    .eq("invited_by", user.id);
+    .delete()
+    .eq("id", invitationId);
 
   if (error) {
     return { error: error.message };
@@ -302,13 +301,13 @@ export async function acceptInvitation(invitationId: string) {
     return { error: "Unauthorized" };
   }
 
-  // Get the invitation
+  // Get the invitation - pending means accepted_at is null
   const { data: invitation } = await supabase
     .from("team_invitations")
     .select("*")
     .eq("id", invitationId)
     .eq("email", user.email?.toLowerCase())
-    .eq("status", "pending")
+    .is("accepted_at", null)
     .single();
 
   if (!invitation) {
@@ -317,10 +316,6 @@ export async function acceptInvitation(invitationId: string) {
 
   // Check if expired
   if (new Date(invitation.expires_at) < new Date()) {
-    await supabase
-      .from("team_invitations")
-      .update({ status: "expired" })
-      .eq("id", invitationId);
     return { error: "This invitation has expired" };
   }
 
@@ -329,7 +324,7 @@ export async function acceptInvitation(invitationId: string) {
     .from("profiles")
     .update({
       role: invitation.role,
-      owner_id: invitation.invited_by,
+      owner_id: invitation.owner_id,
     })
     .eq("id", user.id);
 
@@ -341,8 +336,6 @@ export async function acceptInvitation(invitationId: string) {
   const { error: inviteError } = await supabase
     .from("team_invitations")
     .update({
-      status: "accepted",
-      accepted_by: user.id,
       accepted_at: new Date().toISOString(),
     })
     .eq("id", invitationId);
@@ -368,39 +361,42 @@ export async function getMyPendingInvitations() {
     return { error: "Unauthorized" };
   }
 
-  // Fetch pending invitations for this user's email
+  // Pending = accepted_at is null and not expired
   const { data: invitations, error } = await supabase
     .from("team_invitations")
     .select("*")
     .eq("email", user.email?.toLowerCase())
-    .eq("status", "pending")
+    .is("accepted_at", null)
     .gt("expires_at", new Date().toISOString());
 
   if (error) {
     return { error: error.message };
   }
 
-  // Look up inviter names separately from profiles
-  const inviterIds = [...new Set((invitations || []).map((i) => i.invited_by))];
-  let inviterMap: Record<string, { first_name: string; last_name: string }> = {};
+  // Look up inviter (owner) names separately from profiles
+  const ownerIds = [...new Set((invitations || []).map((i) => i.owner_id))];
+  const inviterMap: Record<string, { first_name: string; last_name: string }> = {};
 
-  if (inviterIds.length > 0) {
+  if (ownerIds.length > 0) {
     const { data: inviters } = await supabase
       .from("profiles")
       .select("id, first_name, last_name")
-      .in("id", inviterIds);
+      .in("id", ownerIds);
 
     if (inviters) {
       for (const inviter of inviters) {
-        inviterMap[inviter.id] = { first_name: inviter.first_name, last_name: inviter.last_name };
+        inviterMap[inviter.id] = {
+          first_name: inviter.first_name,
+          last_name: inviter.last_name,
+        };
       }
     }
   }
 
   const invitationsWithNames = (invitations || []).map((inv) => ({
     ...inv,
-    inviter_name: inviterMap[inv.invited_by]
-      ? `${inviterMap[inv.invited_by].first_name || ""} ${inviterMap[inv.invited_by].last_name || ""}`.trim() || "Team Owner"
+    inviter_name: inviterMap[inv.owner_id]
+      ? `${inviterMap[inv.owner_id].first_name || ""} ${inviterMap[inv.owner_id].last_name || ""}`.trim() || "Team Owner"
       : "Team Owner",
   }));
 
