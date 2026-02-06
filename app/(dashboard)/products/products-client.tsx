@@ -52,8 +52,6 @@ import {
   ExternalLink,
   Loader2,
   Plus,
-  TrendingUp,
-  DollarSign,
   Percent,
 } from "lucide-react";
 
@@ -185,19 +183,20 @@ export function ProductsClient({
 
   return (
     <div className="space-y-6">
-     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Products</h1>
-          <p className="text-muted-foreground">
+     <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold tracking-tight md:text-3xl">Products</h1>
+          <p className="text-sm text-muted-foreground md:text-base">
             Manage your product catalog and COGS calculations
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Product
+              <Button variant="outline" size="sm" className="md:size-default">
+                <Plus className="mr-1.5 h-3.5 w-3.5 md:mr-2 md:h-4 md:w-4" />
+                <span className="hidden sm:inline">Add Product</span>
+                <span className="sm:hidden">Add</span>
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -261,13 +260,14 @@ export function ProductsClient({
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <Button onClick={handleSync} disabled={!isShopifyConfigured || isSyncing}>
+          <Button onClick={handleSync} disabled={!isShopifyConfigured || isSyncing} size="sm" className="md:size-default">
             {isSyncing ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin md:mr-2 md:h-4 md:w-4" />
             ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5 md:mr-2 md:h-4 md:w-4" />
             )}
-            Sync from Shopify
+            <span className="hidden sm:inline">Sync from Shopify</span>
+            <span className="sm:hidden">Sync</span>
           </Button>
         </div>
       </div>
@@ -286,51 +286,27 @@ export function ProductsClient({
       )}
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 md:gap-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Products</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 pb-1 pt-3 md:px-6 md:pb-2 md:pt-6">
+            <CardTitle className="text-xs font-medium md:text-sm">Total Products</CardTitle>
+            <Package className="hidden h-4 w-4 text-muted-foreground md:block" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalProducts}</div>
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="px-3 pb-3 md:px-6 md:pb-6">
+            <div className="text-lg font-bold md:text-2xl">{totalProducts}</div>
+            <p className="text-[10px] text-muted-foreground md:text-xs">
               {productsNeedingCogs} need COGS assigned
             </p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Catalog Value</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 pb-1 pt-3 md:px-6 md:pb-2 md:pt-6">
+            <CardTitle className="text-xs font-medium md:text-sm">Avg Margin</CardTitle>
+            <Percent className="hidden h-4 w-4 text-muted-foreground md:block" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              Total selling prices
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total COGS</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${totalCogs.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              Cost of goods sold
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Margin</CardTitle>
-            <Percent className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{avgMargin.toFixed(1)}%</div>
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="px-3 pb-3 md:px-6 md:pb-6">
+            <div className="text-lg font-bold md:text-2xl">{avgMargin.toFixed(1)}%</div>
+            <p className="text-[10px] text-muted-foreground md:text-xs">
               Across {productsWithCogs.length} products
             </p>
           </CardContent>
@@ -386,7 +362,92 @@ export function ProductsClient({
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile card layout */}
+            <div className="space-y-2 md:hidden">
+              {filteredProducts.map((product) => {
+                const margin = calculateMargin(product.price, product.total_cogs);
+                return (
+                  <div key={product.id} className="rounded-lg border p-3">
+                    <div className="flex items-start gap-3">
+                      {product.image_url ? (
+                        <Image
+                          src={product.image_url || "/placeholder.svg"}
+                          alt={product.title}
+                          width={40}
+                          height={40}
+                          className="shrink-0 rounded-md object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
+                          <Package className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/products/${product.id}`}
+                          className="text-sm font-medium hover:underline leading-tight"
+                        >
+                          {product.title}
+                        </Link>
+                        {product.sku && (
+                          <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{product.sku}</p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
+                          <Link href={`/products/${product.id}`}>
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            <span className="sr-only">View product</span>
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteId(product.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span className="sr-only">Delete product</span>
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-3 gap-1 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Price</span>
+                        <p className="font-medium">{product.price ? `$${product.price.toFixed(2)}` : "-"}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">COGS</span>
+                        <p className="font-medium">{product.total_cogs ? `$${product.total_cogs.toFixed(2)}` : "-"}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Margin</span>
+                        {margin !== null ? (
+                          <Badge
+                            variant="outline"
+                            className={`mt-0.5 text-[10px] px-1.5 ${
+                              margin >= 30
+                                ? "bg-green-500/10 text-green-600"
+                                : margin >= 15
+                                  ? "bg-amber-500/10 text-amber-600"
+                                  : "bg-red-500/10 text-red-600"
+                            }`}
+                          >
+                            {margin.toFixed(1)}%
+                          </Badge>
+                        ) : (
+                          <p className="font-medium">-</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop table layout */}
+            <div className="hidden md:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -488,6 +549,7 @@ export function ProductsClient({
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>

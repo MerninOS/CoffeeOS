@@ -216,16 +216,17 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Components</h1>
-          <p className="text-muted-foreground">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold tracking-tight md:text-3xl">Components</h1>
+          <p className="text-sm text-muted-foreground md:text-base">
             Manage your cost components for COGS calculations
           </p>
         </div>
-        <Button onClick={openCreateDialog}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Component
+        <Button onClick={openCreateDialog} size="sm" className="shrink-0 md:size-default">
+          <Plus className="mr-1.5 h-3.5 w-3.5 md:mr-2 md:h-4 md:w-4" />
+          <span className="hidden sm:inline">Add Component</span>
+          <span className="sm:hidden">Add</span>
         </Button>
       </div>
 
@@ -284,7 +285,50 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
                       ({items.length})
                     </span>
                   </h3>
-                  <div className="overflow-x-auto rounded-md border">
+
+                  {/* Mobile card layout */}
+                  <div className="space-y-2 md:hidden">
+                    {items.map((component) => (
+                      <div key={component.id} className="rounded-lg border p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium">{component.name}</p>
+                            {component.notes && (
+                              <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{component.notes}</p>
+                            )}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => openEditDialog(component)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              <span className="sr-only">Edit</span>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => setDeleteId(component.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="mt-2">
+                          <span className="text-sm font-medium">
+                            ${component.cost_per_unit.toFixed(4)}/{component.unit}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop table layout */}
+                  <div className="hidden md:block overflow-x-auto rounded-md border">
                     <Table>
                       <TableHeader>
                         <TableRow>
