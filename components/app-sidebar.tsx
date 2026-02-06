@@ -171,6 +171,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+        {(user.role === "owner" || user.role === "admin") && (
         <SidebarGroup>
             <SidebarGroupLabel className="text-sidebar-foreground">Apps</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -198,6 +199,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
