@@ -227,8 +227,8 @@ export function OrderDetailClient({
   };
 
   const cogs = calculateCOGS();
-  const profit = order.subtotal_price - cogs;
-  const margin = order.subtotal_price > 0 ? (profit / order.subtotal_price) * 100 : 0;
+  const profit = order.total_price - cogs;
+  const margin = order.total_price > 0 ? (profit / order.total_price) * 100 : 0;
 
   const handleToggleReadyToShip = () => {
     startTransition(async () => {
