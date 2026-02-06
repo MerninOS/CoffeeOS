@@ -156,15 +156,12 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        {!hideHeader && (
-          <div>
-            <h2 className="text-lg font-semibold">Roasting Sessions</h2>
-            <p className="text-sm text-muted-foreground">
-              View and manage your roasting sessions
-            </p>
-          </div>
-        )}
-        {hideHeader && <div />}
+        <div>
+          <h2 className="text-lg font-semibold">Roasting Sessions</h2>
+          <p className="text-sm text-muted-foreground">
+            View and manage your roasting sessions
+          </p>
+        </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button className="w-full sm:w-auto">
@@ -470,7 +467,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
                         {session.batch_count} {session.batch_count === 1 ? "batch" : "batches"}
                       </Badge>
                     </div>
-                    
+
                     <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
                       <div>
                         <span className="text-muted-foreground block text-xs">Roasted</span>
@@ -480,13 +477,12 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
                         <span className="text-muted-foreground block text-xs">Loss</span>
                         {weightLoss !== null ? (
                           <span
-                            className={`font-medium ${
-                              weightLoss > 18
+                            className={`font-medium ${weightLoss > 18
                                 ? "text-destructive"
                                 : weightLoss < 12
                                   ? "text-amber-600"
                                   : "text-green-600"
-                            }`}
+                              }`}
                           >
                             {weightLoss.toFixed(1)}%
                           </span>
