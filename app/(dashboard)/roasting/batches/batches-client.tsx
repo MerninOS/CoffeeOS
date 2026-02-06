@@ -239,7 +239,7 @@ export function BatchesClient({ initialBatches, existingComponents }: BatchesCli
       </div>
 
       {/* Search */}
-      <div className="relative max-w-sm">
+      <div className="relative w-full md:max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search by coffee name or lot code..."
@@ -265,7 +265,117 @@ export function BatchesClient({ initialBatches, existingComponents }: BatchesCli
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <>
+        {/* Mobile card layout */}
+        <div className="space-y-2 md:hidden">
+          {filteredBatches.map((batch) => (
+            <div key={batch.id} className="rounded-lg border p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{batch.coffee_name}</p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                    {batch.roasting_sessions ? (
+                      <Link
+                        href={`/roasting/sessions/${batch.roasting_sessions.id}`}
+                        className="hover:underline"
+                      >
+                        {format(new Date(batch.roasting_sessions.session_date), "MMM d, yyyy")}
+                      </Link>
+                    ) : (
+                      <span>{format(new Date(batch.batch_date), "MMM d, yyyy")}</span>
+                    )}
+                    {batch.lot_code && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">{batch.lot_code}</Badge>
+                    )}
+                  </div>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {batch.roasting_sessions && (
+                      <DropdownMenuItem asChild>
+                        <Link href={`/roasting/sessions/${batch.roasting_sessions.id}`}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          View Session
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+                    {!batch.component_id && (
+                      <DropdownMenuItem onClick={() => openCreateComponent(batch)}>
+                        <Package className="mr-2 h-4 w-4" />
+                        Create Component
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setDeleteId(batch.id)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <div className="mt-2 grid grid-cols-4 gap-1 text-xs">
+                <div>
+                  <span className="text-muted-foreground">Green</span>
+                  <p className="font-medium">{batch.green_weight_g.toFixed(0)}g</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Roasted</span>
+                  <p className="font-medium">{batch.roasted_weight_g.toFixed(0)}g</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Loss</span>
+                  <p className={`font-medium ${
+                    batch.loss_percent > 18
+                      ? "text-destructive"
+                      : batch.loss_percent < 12
+                        ? "text-amber-600"
+                        : "text-green-600"
+                  }`}>
+                    {batch.loss_percent.toFixed(1)}%
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Sellable</span>
+                  <p className="font-medium">{batch.sellable_g.toFixed(0)}g</p>
+                </div>
+              </div>
+
+              {batch.components ? (
+                <div className="mt-2">
+                  <Link
+                    href="/components"
+                    className="inline-flex items-center gap-1 text-xs hover:underline"
+                  >
+                    <Package className="h-3 w-3" />
+                    {batch.components.name}
+                  </Link>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 h-7 w-full text-xs"
+                  onClick={() => openCreateComponent(batch)}
+                >
+                  <Plus className="mr-1 h-3 w-3" />
+                  Create Component
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table layout */}
+        <Card className="hidden md:block">
           <CardContent className="p-0">
             <Table>
               <TableHeader>
@@ -395,6 +505,7 @@ export function BatchesClient({ initialBatches, existingComponents }: BatchesCli
             </Table>
           </CardContent>
         </Card>
+        </>
       )}
 
       {/* Create Component Dialog */}
