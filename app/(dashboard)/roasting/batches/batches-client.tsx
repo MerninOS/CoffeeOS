@@ -265,6 +265,7 @@ export function BatchesClient({ initialBatches, existingComponents }: BatchesCli
           </CardContent>
         </Card>
       ) : (
+        <>
         {/* Mobile card layout */}
         <div className="space-y-2 md:hidden">
           {filteredBatches.map((batch) => (
@@ -504,6 +505,7 @@ export function BatchesClient({ initialBatches, existingComponents }: BatchesCli
             </Table>
           </CardContent>
         </Card>
+        </>
       )}
 
       {/* Create Component Dialog */}
