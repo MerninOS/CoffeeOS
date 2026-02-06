@@ -64,59 +64,51 @@ export function RoastingPageClient({
   const gramsToLbs = (g: number) => (g / LBS_TO_GRAMS).toFixed(2);
 
   return (
-    <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
-      {/* Header - Condensed on mobile */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Roasting</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
-          Manage sessions and roast requests
-        </p>
-      </div>
-
-      {/* Roasted Coffee Stock */}
+    <div className="space-y-4 sm:space-y-6">
+      {/* Roasted Coffee Stock - at the top */}
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="px-3 pb-2 pt-3 md:px-6 md:pb-3 md:pt-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Coffee className="h-5 w-5 text-amber-600" />
-              <CardTitle className="text-lg">Roasted Coffee Stock</CardTitle>
+              <Coffee className="h-4 w-4 text-amber-600 md:h-5 md:w-5" />
+              <CardTitle className="text-base md:text-lg">Roasted Coffee Stock</CardTitle>
             </div>
-            <Badge variant="secondary" className="text-sm">
+            <Badge variant="secondary" className="text-xs md:text-sm">
               {gramsToLbs(totalRoastedStock)} lbs total
             </Badge>
           </div>
-          <CardDescription>
+          <CardDescription className="text-xs md:text-sm">
             Available roasted coffee ready for orders
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 pb-3 md:px-6 md:pb-6">
           {roastedCoffeeStock.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-6 text-center">
-              <Package className="mb-2 h-8 w-8 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
+            <div className="flex flex-col items-center justify-center py-4 text-center md:py-6">
+              <Package className="mb-2 h-6 w-6 text-muted-foreground md:h-8 md:w-8" />
+              <p className="text-xs text-muted-foreground md:text-sm">
                 No roasted coffee in stock. Complete roasting batches to build inventory.
               </p>
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 md:gap-3">
               {roastedCoffeeStock.map((coffee) => (
                 <div
                   key={coffee.id}
-                  className="flex items-center justify-between rounded-lg border p-3"
+                  className="flex items-center justify-between rounded-lg border p-2.5 md:p-3"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate">{coffee.name}</p>
+                    <p className="text-sm font-medium truncate md:text-base">{coffee.name}</p>
                     {coffee.origin && (
-                      <p className="text-xs text-muted-foreground truncate">
+                      <p className="text-[10px] text-muted-foreground truncate md:text-xs">
                         {coffee.origin}
                       </p>
                     )}
                   </div>
                   <div className="ml-3 text-right shrink-0">
-                    <p className="font-semibold text-amber-600">
+                    <p className="text-sm font-semibold text-amber-600 md:text-base">
                       {gramsToLbs(coffee.roasted_stock_g)} lbs
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-[10px] text-muted-foreground md:text-xs">
                       {coffee.roasted_stock_g.toLocaleString()}g
                     </p>
                   </div>

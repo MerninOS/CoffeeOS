@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 const tabs = [
   { name: "Sessions", href: "/roasting" },
   { name: "Batches", href: "/roasting/batches" },
-  { name: "Settings", href: "/roasting/settings" },
 ];
 
 export default function RoastingLayout({
@@ -28,13 +27,6 @@ export default function RoastingLayout({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Roasting</h1>
-        <p className="text-muted-foreground">
-          Track your roasting sessions and batches
-        </p>
-      </div>
-
       <div className="border-b">
         <nav className="-mb-px flex gap-4">
           {tabs.map((tab) => (

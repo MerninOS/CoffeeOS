@@ -234,7 +234,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
             Track and manage roasting requests from orders
           </p>
         </div>
-        <Button onClick={openCreateDialog}>
+        <Button onClick={openCreateDialog} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" />
           New Request
         </Button>

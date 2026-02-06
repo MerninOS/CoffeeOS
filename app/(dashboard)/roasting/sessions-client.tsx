@@ -155,7 +155,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {!hideHeader && (
           <div>
             <h2 className="text-lg font-semibold">Roasting Sessions</h2>
@@ -167,7 +167,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
         {hideHeader && <div />}
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               New Session
             </Button>
