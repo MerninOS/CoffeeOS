@@ -362,6 +362,7 @@ export function ProductsClient({
               </p>
             </div>
           ) : (
+            <>
             {/* Mobile card layout */}
             <div className="space-y-2 md:hidden">
               {filteredProducts.map((product) => {
@@ -548,6 +549,7 @@ export function ProductsClient({
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>
