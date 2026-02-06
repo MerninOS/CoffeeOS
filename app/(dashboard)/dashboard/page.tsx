@@ -132,7 +132,7 @@ export default async function DashboardPage() {
           Welcome back, {firstName}
         </h1>
         <p className="text-muted-foreground">
-          Here&apos;s an overview of your coffee product costs
+          Here&apos;s an overview of your coffee business
         </p>
       </div>
 
