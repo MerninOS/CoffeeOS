@@ -17,6 +17,14 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
   const { ownerId } = await getEffectiveOwnerId();
 
+    const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user?.id)
+    .single();
+
+  const role = profile?.role || user?.user_metadata?.role || "roaster";
+
   // Fetch stats
   const [productsResult, componentsResult, productComponentsResult, inventoryResult, ordersResult, batchesResult] = await Promise.all([
     supabase.from("products").select("id, price", { count: "exact" }).eq("user_id", ownerId),
@@ -79,7 +87,6 @@ export default async function DashboardPage() {
   // Calculate order revenue
   const orders = ordersResult.data || [];
   const totalOrderRevenue = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
-  const role = user?.user_metadata?.role || "roaster";
 
   let stats = [
     {
