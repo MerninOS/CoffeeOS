@@ -27,6 +27,12 @@ export default function RoastingLayout({
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="min-w-0">
+          <h1 className="text-xl font-bold md:text-2xl">Roasting</h1>
+          <p className="text-sm text-muted-foreground md:text-base">
+            Manage roasting sessions, batches, and roast requests.
+          </p>
+        </div>
       <div className="border-b">
         <nav className="-mb-px flex gap-4">
           {tabs.map((tab) => (
