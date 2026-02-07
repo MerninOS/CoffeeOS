@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -161,12 +161,14 @@ interface OrderDetailClientProps {
 export function OrderDetailClient({
   order: initialOrder,
   coffeeStock: initialCoffeeStock,
-  components,
+  components: initialComponents,
 }: OrderDetailClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [order, setOrder] = useState(initialOrder);
   const [coffeeStock, setCoffeeStock] = useState(initialCoffeeStock);
+  const [components, setComponents] = useState(initialComponents);
+  const [customCosts, setCustomCosts] = useState<OrderCustomCost[]>(initialOrder.order_custom_costs);
 
   // Dialog states
   const [isAddCostOpen, setIsAddCostOpen] = useState(false);
@@ -183,6 +185,23 @@ export function OrderDetailClient({
   const [coffeeAmount, setCoffeeAmount] = useState("");
   const [selectedComponentId, setSelectedComponentId] = useState("");
   const [componentQuantity, setComponentQuantity] = useState("1");
+
+
+  useEffect(() => {
+    setOrder(initialOrder);
+  }, [initialOrder]);
+
+  useEffect(() => {
+    setCoffeeStock(initialCoffeeStock);
+  }, [initialCoffeeStock]);
+
+  useEffect(() => {
+    setComponents(initialComponents);
+  }, [initialComponents]);
+
+  useEffect(() => {
+    setCustomCosts(initialOrder.order_custom_costs);
+  }, [initialOrder.order_custom_costs]);
 
   // Track assigned roasted coffee
   const assignedCoffeeList = order.order_roasted_coffee.map(assignment => ({
@@ -336,7 +355,7 @@ export function OrderDetailClient({
   const gramsToLbs = (g: number) => (g / LBS_TO_GRAMS).toFixed(2);
 
   return (
-    <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
+    <div className="space-y-4 sm:space-y-6 sm:p-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3 sm:gap-4">
@@ -382,7 +401,7 @@ export function OrderDetailClient({
       </div>
 
       {/* Status and Summary */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -442,18 +461,28 @@ export function OrderDetailClient({
       {/* Assigned Roasted Coffee */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Coffee className="h-5 w-5 text-amber-600" />
-              <CardTitle className="text-lg">Assigned Roasted Coffee</CardTitle>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-lg">Assigned Roasted Coffee</CardTitle>
+              </div>
+              <CardDescription>
+                Coffee from your roasted stock assigned to this order
+              </CardDescription>
             </div>
+
             <Dialog open={isAddCoffeeOpen} onOpenChange={setIsAddCoffeeOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" variant="outline" className="bg-transparent">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="bg-transparent w-full sm:w-auto"
+                >
                   <Plus className="mr-2 h-4 w-4" />
                   Assign Coffee
                 </Button>
               </DialogTrigger>
+
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Assign Roasted Coffee</DialogTitle>
@@ -461,6 +490,7 @@ export function OrderDetailClient({
                     Assign roasted coffee from your stock to this order. This will deduct the amount from your inventory.
                   </DialogDescription>
                 </DialogHeader>
+
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
                     <Label>Coffee</Label>
@@ -471,12 +501,13 @@ export function OrderDetailClient({
                       <SelectContent>
                         {coffeeStock.map((coffee) => (
                           <SelectItem key={coffee.id} value={coffee.id}>
-                            {coffee.name} ({gramsToLbs(coffee.roasted_stock_g)} lbs available)
+                            {coffee.name} ({coffee.roasted_stock_g} g available)
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
+
                   <div className="space-y-2">
                     <Label>Amount (grams)</Label>
                     <Input
@@ -487,24 +518,22 @@ export function OrderDetailClient({
                     />
                   </div>
                 </div>
-                <DialogFooter>
+
+                <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
                   <Button
                     variant="outline"
                     onClick={() => setIsAddCoffeeOpen(false)}
-                    className="bg-transparent"
+                    className="bg-transparent w-full sm:w-auto"
                   >
                     Cancel
                   </Button>
-                  <Button onClick={handleAssignCoffee} disabled={isPending}>
+                  <Button onClick={handleAssignCoffee} disabled={isPending} className="w-full sm:w-auto">
                     Assign Coffee
                   </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
           </div>
-          <CardDescription>
-            Coffee from your roasted stock assigned to this order
-          </CardDescription>
         </CardHeader>
         <CardContent>
           {assignedCoffeeList.length === 0 ? (
@@ -634,174 +663,76 @@ export function OrderDetailClient({
           </Table>
         </CardContent>
       </Card>
-
-      {/* Roasted Coffee Assignments */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Coffee className="h-5 w-5" />
-              Assigned Roasted Coffee
-            </CardTitle>
-            <CardDescription>
-              Coffee from your roasted stock assigned to this order
-            </CardDescription>
-          </div>
-          <Dialog open={isAddCoffeeOpen} onOpenChange={setIsAddCoffeeOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Assign Coffee
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Assign Roasted Coffee</DialogTitle>
-                <DialogDescription>
-                  Select coffee from your roasted stock to assign to this order
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Coffee</Label>
-                  <Select value={selectedCoffeeId} onValueChange={setSelectedCoffeeId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select coffee" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {coffeeStock.map((coffee) => (
-                        <SelectItem key={coffee.id} value={coffee.id}>
-                          {coffee.name} ({coffee.roasted_stock_g}g available)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Amount (grams)</Label>
-                  <Input
-                    type="number"
-                    value={coffeeAmount}
-                    onChange={(e) => setCoffeeAmount(e.target.value)}
-                    placeholder="Enter amount in grams"
-                    min="1"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddCoffeeOpen(false)} className="bg-transparent">
-                  Cancel
-                </Button>
-                <Button onClick={handleAssignCoffee} disabled={isPending}>
-                  Assign Coffee
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </CardHeader>
-        <CardContent>
-          {order.order_roasted_coffee.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No roasted coffee assigned yet
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Coffee</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead className="text-right">Assigned</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {order.order_roasted_coffee.map((assignment) => (
-                  <TableRow key={assignment.id}>
-                    <TableCell className="font-medium">
-                      {assignment.green_coffee_inventory?.name || "Unknown"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {assignment.amount_g}g
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {format(new Date(assignment.assigned_at), "MMM d")}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteAssignmentId(assignment.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Custom Costs */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5" />
-              Custom Costs
-            </CardTitle>
-            <CardDescription>
-              Additional costs for this order (shipping, packaging, etc.)
-            </CardDescription>
-          </div>
-          <Dialog open={isAddCostOpen} onOpenChange={setIsAddCostOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Cost
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Custom Cost</DialogTitle>
-                <DialogDescription>
-                  Add a custom cost to this order
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Input
-                    value={newCostDescription}
-                    onChange={(e) => setNewCostDescription(e.target.value)}
-                    placeholder="e.g., Shipping, Packaging"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Amount ($)</Label>
-                  <Input
-                    type="number"
-                    value={newCostAmount}
-                    onChange={(e) => setNewCostAmount(e.target.value)}
-                    placeholder="0.00"
-                    step="0.01"
-                    min="0"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddCostOpen(false)} className="bg-transparent">
-                  Cancel
-                </Button>
-                <Button onClick={handleAddCustomCost} disabled={isPending}>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-1">
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Custom Costs
+              </CardTitle>
+              <CardDescription>
+                Additional costs for this order (shipping, packaging, etc.)
+              </CardDescription>
+            </div>
+
+            <Dialog open={isAddCostOpen} onOpenChange={setIsAddCostOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="w-full sm:w-auto">
+                  <Plus className="mr-2 h-4 w-4" />
                   Add Cost
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Custom Cost</DialogTitle>
+                  <DialogDescription>
+                    Add a custom cost to this order
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Description</Label>
+                    <Input
+                      value={newCostDescription}
+                      onChange={(e) => setNewCostDescription(e.target.value)}
+                      placeholder="e.g., Shipping, Packaging"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Amount ($)</Label>
+                    <Input
+                      type="number"
+                      value={newCostAmount}
+                      onChange={(e) => setNewCostAmount(e.target.value)}
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                    />
+                  </div>
+                </div>
+
+                <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsAddCostOpen(false)}
+                    className="bg-transparent w-full sm:w-auto"
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={handleAddCustomCost} disabled={isPending} className="w-full sm:w-auto">
+                    Add Cost
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </CardHeader>
+
         <CardContent>
           {order.order_custom_costs.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
@@ -843,63 +774,74 @@ export function OrderDetailClient({
 
       {/* Manual Components */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Additional Components</CardTitle>
-            <CardDescription>
-              Manually added components for cost tracking
-            </CardDescription>
-          </div>
-          <Dialog open={isAddComponentOpen} onOpenChange={setIsAddComponentOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Component
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Component</DialogTitle>
-                <DialogDescription>
-                  Add a component to track in this order's costs
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Component</Label>
-                  <Select value={selectedComponentId} onValueChange={setSelectedComponentId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select component" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {components.map((comp) => (
-                        <SelectItem key={comp.id} value={comp.id}>
-                          {comp.name} (${comp.cost_per_unit.toFixed(2)}/unit)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Quantity</Label>
-                  <Input
-                    type="number"
-                    value={componentQuantity}
-                    onChange={(e) => setComponentQuantity(e.target.value)}
-                    min="1"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddComponentOpen(false)} className="bg-transparent">
-                  Cancel
-                </Button>
-                <Button onClick={handleAddComponent} disabled={isPending}>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-1">
+              <CardTitle>Additional Components</CardTitle>
+              <CardDescription>
+                Manually added components for cost tracking
+              </CardDescription>
+            </div>
+
+            <Dialog open={isAddComponentOpen} onOpenChange={setIsAddComponentOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="w-full sm:w-auto">
+                  <Plus className="mr-2 h-4 w-4" />
                   Add Component
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Component</DialogTitle>
+                  <DialogDescription>
+                    Add a component to track in this order&apos;s costs
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Component</Label>
+                    <Select value={selectedComponentId} onValueChange={setSelectedComponentId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select component" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {components.map((comp) => (
+                          <SelectItem key={comp.id} value={comp.id}>
+                            {comp.name} (${comp.cost_per_unit.toFixed(2)}/unit)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Quantity</Label>
+                    <Input
+                      type="number"
+                      value={componentQuantity}
+                      onChange={(e) => setComponentQuantity(e.target.value)}
+                      min="1"
+                    />
+                  </div>
+                </div>
+
+                <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsAddComponentOpen(false)}
+                    className="bg-transparent w-full sm:w-auto"
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={handleAddComponent} disabled={isPending} className="w-full sm:w-auto">
+                    Add Component
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </CardHeader>
         <CardContent>
           {order.order_components.length === 0 ? (

@@ -983,13 +983,13 @@ export function OrdersClient({
         </Card>
       ) : (
         <Card>
-          <CardHeader>
+          <CardHeader className="px-2 md: px-6">
             <CardTitle>Orders ({filteredOrders.length})</CardTitle>
             <CardDescription>
               Click an order to see line item details and COGS breakdown
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2 md: px-6">
             {/* Mobile Card Layout */}
             <div className="space-y-3 md:hidden">
               {filteredOrders.map((order) => {
@@ -1000,7 +1000,7 @@ export function OrdersClient({
                 return (
                   <React.Fragment key={`mobile-${order.id}`}>
                     <div
-                      className="cursor-pointer rounded-lg border p-3 active:bg-muted/50"
+                      className="cursor-pointer border-t p-3 active:bg-muted/50"
                       onClick={() => toggleOrderExpanded(order.id)}
                     >
                       <div className="flex items-start justify-between">
