@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const hmac = searchParams.get("hmac");
+  const host = searchParams.get("host");
 
   // Validate required parameters
   if (!shop || !code || !state) {
@@ -166,9 +167,13 @@ export async function GET(request: NextRequest) {
     await supabase.from("shopify_oauth_states").delete().eq("state", state);
 
     // Redirect to settings with success message
-    return NextResponse.redirect(
-      new URL("/settings?shopify=connected", request.url)
-    );
+    const installUrl = new URL("/api/shopify/install", request.url);
+    installUrl.searchParams.set("shop", shop);
+    installUrl.searchParams.set("shopify", "connected");
+    if (host) {
+      installUrl.searchParams.set("host", host);
+    }
+    return NextResponse.redirect(installUrl);
   } catch (error) {
     console.error("OAuth callback error:", error);
     return NextResponse.redirect(

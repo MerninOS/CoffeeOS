@@ -6,7 +6,10 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "eslint .",
-    "start": "next start"
+    "start": "next start",
+    "shopify:dev": "shopify app dev",
+    "shopify:deploy": "shopify app deploy",
+    "shopify:config:push": "shopify app config push"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

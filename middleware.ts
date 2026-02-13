@@ -2,7 +2,12 @@ import { updateSession } from '@/lib/supabase/proxy'
 import { type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  return await updateSession(request)
+  const response = await updateSession(request)
+  const cspValue = "frame-ancestors 'self' https://admin.shopify.com https://*.myshopify.com;"
+
+  response.headers.set('Content-Security-Policy', cspValue)
+
+  return response
 }
 
 export const config = {

@@ -2,7 +2,7 @@
 
 import React from "react"
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -27,7 +27,15 @@ export default function SignUpPage() {
   const [lastName, setLastName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [nextPath, setNextPath] = useState("/dashboard");
   const router = useRouter();
+
+  useEffect(() => {
+    const next = new URLSearchParams(window.location.search).get("next");
+    if (next) {
+      setNextPath(next);
+    }
+  }, []);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +77,7 @@ export default function SignUpPage() {
       return;
     }
 
-    router.push("/auth/sign-up-success");
+    router.push(`/auth/sign-up-success?next=${encodeURIComponent(nextPath)}`);
   };
 
   return (
@@ -166,7 +174,7 @@ export default function SignUpPage() {
             <p className="text-center text-sm text-muted-foreground">
               Already have an account?{" "}
               <Link
-                href="/auth/login"
+                href={nextPath !== "/dashboard" ? `/auth/login?next=${encodeURIComponent(nextPath)}` : "/auth/login"}
                 className="font-medium text-primary underline-offset-4 hover:underline"
               >
                 Sign in

@@ -3,7 +3,7 @@
 import React from "react"
 import Image from "next/image"
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -25,7 +25,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [nextPath, setNextPath] = useState("/dashboard");
   const router = useRouter();
+
+  useEffect(() => {
+    const next = new URLSearchParams(window.location.search).get("next");
+    if (next) {
+      setNextPath(next);
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +53,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/dashboard");
+    router.push(nextPath);
     router.refresh();
   };
 
@@ -107,7 +115,7 @@ export default function LoginPage() {
             <p className="text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{" "}
               <Link
-                href="/auth/sign-up"
+                href={nextPath !== "/dashboard" ? `/auth/sign-up?next=${encodeURIComponent(nextPath)}` : "/auth/sign-up"}
                 className="font-medium text-primary underline-offset-4 hover:underline"
               >
                 Sign up
