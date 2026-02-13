@@ -10,7 +10,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Coffee, Mail } from "lucide-react";
 
-export default function SignUpSuccessPage() {
+export default async function SignUpSuccessPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const params = await searchParams;
+  const next = params.next;
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md text-center">
@@ -34,7 +41,7 @@ export default function SignUpSuccessPage() {
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
           <Button asChild variant="outline" className="w-full bg-transparent">
-            <Link href="/auth/login">Back to login</Link>
+            <Link href={next ? `/auth/login?next=${encodeURIComponent(next)}` : "/auth/login"}>Back to login</Link>
           </Button>
         </CardFooter>
       </Card>

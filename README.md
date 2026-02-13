@@ -1,30 +1,67 @@
-# CoffeeOS
+# CoffeeOS Shopify App
 
-*Automatically synced with your [v0.app](https://v0.app) deployments*
+CoffeeOS is now wired to run as an installable Shopify app with OAuth, embedded app entry routing, and uninstall cleanup webhook handling.
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/astromall/v0-chat-with-vercel-ai)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.app-black?style=for-the-badge)](https://v0.app/chat/dJTnNuAhg5i)
+## What Was Added
 
-## Overview
+- Shopify app entrypoint: `/app` (for Shopify Admin launches).
+- Install/auth bootstrap endpoint: `/api/shopify/install`.
+- OAuth flow endpoints:
+  - `/api/shopify/auth`
+  - `/api/shopify/callback`
+- Uninstall webhook endpoint:
+  - `/api/shopify/webhooks/app-uninstalled`
+- Shopify CLI config files:
+  - `shopify.app.toml`
+  - `shopify.web.toml`
 
-This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
+## Required Environment Variables
 
-## Deployment
+Set these in local `.env.local` and in your production host:
 
-Your project is live at:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` (required for uninstall webhook cleanup)
+- `SHOPIFY_CLIENT_ID`
+- `SHOPIFY_CLIENT_SECRET`
 
-**[https://vercel.com/astromall/v0-chat-with-vercel-ai](https://vercel.com/astromall/v0-chat-with-vercel-ai)**
+## Shopify Partner Dashboard Setup
 
-## Build your app
+In your Shopify Partner Dashboard, for your app:
 
-Continue building your app on:
+1. Set **App URL** to:
+   - `https://your-app-domain.com/app`
+2. Set **Allowed redirection URL(s)** to include:
+   - `https://your-app-domain.com/api/shopify/callback`
+3. In **Configuration > Admin API integration**, enable scopes:
+   - `read_products`
+   - `read_orders`
+4. In **Webhooks**, add topic:
+   - `app/uninstalled`
+   - Endpoint: `https://your-app-domain.com/api/shopify/webhooks/app-uninstalled`
 
-**[https://v0.app/chat/dJTnNuAhg5i](https://v0.app/chat/dJTnNuAhg5i)**
+If you manage config with Shopify CLI, update placeholders in `shopify.app.toml` and push:
 
-## How It Works
+```bash
+npm run shopify:config:push
+```
 
-1. Create and modify your project using [v0.app](https://v0.app)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+## Local Development
+
+```bash
+npm install
+npm run dev
+```
+
+For Shopify CLI tunnel + app lifecycle:
+
+```bash
+npm run shopify:dev
+```
+
+## Production Notes
+
+- Keep your app domain HTTPS.
+- Do not commit real production secrets.
+- If your app requests protected customer/order data categories, submit the protected customer data request in Partner Dashboard before distributing publicly.
+
