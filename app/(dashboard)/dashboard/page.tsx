@@ -7,7 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Package, Layers, DollarSign, TrendingUp, Warehouse, Flame, ShoppingCart, AlertTriangle } from "lucide-react";
+import { Package, Layers, Warehouse, Flame, ShoppingCart, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
 export default async function DashboardPage() {
@@ -185,54 +185,7 @@ export default async function DashboardPage() {
       )}
 
       {role === "owner" || role === "admin" ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card className="border-0 border-primary-foreground shadow">
-            <CardHeader>
-              <CardTitle>Getting Started</CardTitle>
-              <CardDescription>
-                Follow these steps to set up your COGS tracking
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
-                    1
-                  </div>
-                  <div>
-                    <p className="font-medium">Connect your Shopify store</p>
-                    <p className="text-sm text-muted-foreground">
-                      Go to Settings to add your Shopify store domain and access
-                      token
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
-                    2
-                  </div>
-                  <div>
-                    <p className="font-medium">Define your cost components</p>
-                    <p className="text-sm text-muted-foreground">
-                      Add components like packaging, labels, and raw materials
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
-                    3
-                  </div>
-                  <div>
-                    <p className="font-medium">Import and configure products</p>
-                    <p className="text-sm text-muted-foreground">
-                      Sync products from Shopify and assign cost components
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
+        <div className="grid gap-4">
           <Card className="border-primary-foreground shadow">
             <CardHeader>
               <CardTitle>Quick Actions</CardTitle>
