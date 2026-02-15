@@ -6,6 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "eslint .",
+    "seed:demo": "node scripts/seed-demo-account.mjs",
     "start": "next start",
     "shopify:dev": "shopify app dev",
     "shopify:deploy": "shopify app deploy",
