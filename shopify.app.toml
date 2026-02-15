@@ -10,7 +10,7 @@ dev_store_url = "your-dev-store.myshopify.com"
 include_config_on_deploy = true
 
 [access_scopes]
-scopes = "read_products,read_orders,read_own_subscription,write_own_subscription"
+scopes = "read_products,read_orders,read_own_subscription"
 
 [auth]
 redirect_urls = [

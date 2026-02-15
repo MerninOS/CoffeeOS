@@ -107,8 +107,8 @@ export function SettingsClient({
         token_exchange_failed: "Failed to exchange token with Shopify",
         save_failed: "Failed to save connection",
         callback_error: "An error occurred during connection",
-        billing_not_active: "Billing is required to use the app. Please activate your Shopify subscription.",
-        billing_create_failed: "Failed to create Shopify billing subscription. Please try again.",
+        billing_not_active: "Billing is required to use the app. Manage your app plan in Shopify Admin, then refresh status here.",
+        billing_create_failed: "Billing API charge creation is disabled for managed pricing apps.",
         billing_check_failed: "Could not verify Shopify billing status. Please try again.",
         shopify_not_connected: "Connect your Shopify store before activating billing.",
       };
@@ -396,12 +396,21 @@ export function SettingsClient({
               {isShopifyConnected ? (
                 <div className="flex flex-wrap gap-2">
                   {!isBillingActive ? (
-                    <Button asChild>
+                    <Button asChild variant="outline">
                       <a href={`/api/shopify/billing/ensure?shop=${encodeURIComponent(shopifySettings?.store_domain || "")}`}>
-                        Activate Billing
+                        Refresh Billing Status
                       </a>
                     </Button>
                   ) : null}
+                  <Button asChild variant="outline">
+                    <a
+                      href={`https://${shopifySettings?.store_domain}/admin/settings/apps`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Manage Billing in Shopify
+                    </a>
+                  </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="outline" className="bg-transparent text-destructive hover:bg-destructive/10 hover:text-destructive">

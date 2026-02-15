@@ -314,52 +314,6 @@ const ACTIVE_SUBSCRIPTIONS_QUERY = `
   }
 `;
 
-const CREATE_SUBSCRIPTION_MUTATION = `
-  mutation createSubscription(
-    $name: String!
-    $returnUrl: URL!
-    $lineItems: [AppSubscriptionLineItemInput!]!
-    $test: Boolean
-    $trialDays: Int
-  ) {
-    appSubscriptionCreate(
-      name: $name
-      returnUrl: $returnUrl
-      lineItems: $lineItems
-      test: $test
-      trialDays: $trialDays
-    ) {
-      confirmationUrl
-      appSubscription {
-        id
-        name
-        status
-        test
-        currentPeriodEnd
-      }
-      userErrors {
-        field
-        message
-      }
-    }
-  }
-`;
-
-export interface BillingPlanConfig {
-  name: string;
-  amount: number;
-  currencyCode: string;
-  interval: "EVERY_30_DAYS" | "ANNUAL";
-  test: boolean;
-  trialDays?: number;
-}
-
-export interface EnsureBillingResult {
-  active: boolean;
-  subscription?: ShopifyAppSubscription | null;
-  confirmationUrl?: string | null;
-}
-
 async function shopifyAdminGraphql<T>(
   storeDomain: string,
   adminAccessToken: string,
@@ -403,53 +357,4 @@ export async function getShopifyActiveSubscription(
 
   const active = subscriptions.find((subscription) => subscription.status === "ACTIVE");
   return active || subscriptions[0] || null;
-}
-
-export async function ensureShopifyBilling(
-  storeDomain: string,
-  adminAccessToken: string,
-  returnUrl: string,
-  plan: BillingPlanConfig
-): Promise<EnsureBillingResult> {
-  const existing = await getShopifyActiveSubscription(storeDomain, adminAccessToken);
-  if (existing?.status === "ACTIVE") {
-    return { active: true, subscription: existing };
-  }
-
-  const data = await shopifyAdminGraphql<{
-    appSubscriptionCreate: {
-      confirmationUrl: string | null;
-      appSubscription: ShopifyAppSubscription | null;
-      userErrors: Array<{ field: string[] | null; message: string }>;
-    };
-  }>(storeDomain, adminAccessToken, CREATE_SUBSCRIPTION_MUTATION, {
-    name: plan.name,
-    returnUrl,
-    lineItems: [
-      {
-        plan: {
-          appRecurringPricingDetails: {
-            interval: plan.interval,
-            price: {
-              amount: plan.amount,
-              currencyCode: plan.currencyCode,
-            },
-          },
-        },
-      },
-    ],
-    test: plan.test,
-    trialDays: plan.trialDays,
-  });
-
-  const result = data.appSubscriptionCreate;
-  if (result.userErrors?.length) {
-    throw new Error(result.userErrors.map((error) => error.message).join("; "));
-  }
-
-  return {
-    active: result.appSubscription?.status === "ACTIVE",
-    subscription: result.appSubscription,
-    confirmationUrl: result.confirmationUrl,
-  };
 }
