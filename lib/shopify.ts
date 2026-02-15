@@ -289,3 +289,167 @@ export async function fetchShopifyOrders(
 
   return { orders, pageInfo };
 }
+
+type ShopifyBillingStatus = "ACTIVE" | "FROZEN" | "PENDING" | "DECLINED" | "EXPIRED" | "CANCELLED";
+
+export interface ShopifyAppSubscription {
+  id: string;
+  name: string;
+  status: ShopifyBillingStatus;
+  test: boolean;
+  currentPeriodEnd: string | null;
+}
+
+const ACTIVE_SUBSCRIPTIONS_QUERY = `
+  query getActiveSubscriptions {
+    currentAppInstallation {
+      activeSubscriptions {
+        id
+        name
+        status
+        test
+        currentPeriodEnd
+      }
+    }
+  }
+`;
+
+const CREATE_SUBSCRIPTION_MUTATION = `
+  mutation createSubscription(
+    $name: String!
+    $returnUrl: URL!
+    $lineItems: [AppSubscriptionLineItemInput!]!
+    $test: Boolean
+    $trialDays: Int
+  ) {
+    appSubscriptionCreate(
+      name: $name
+      returnUrl: $returnUrl
+      lineItems: $lineItems
+      test: $test
+      trialDays: $trialDays
+    ) {
+      confirmationUrl
+      appSubscription {
+        id
+        name
+        status
+        test
+        currentPeriodEnd
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+export interface BillingPlanConfig {
+  name: string;
+  amount: number;
+  currencyCode: string;
+  interval: "EVERY_30_DAYS" | "ANNUAL";
+  test: boolean;
+  trialDays?: number;
+}
+
+export interface EnsureBillingResult {
+  active: boolean;
+  subscription?: ShopifyAppSubscription | null;
+  confirmationUrl?: string | null;
+}
+
+async function shopifyAdminGraphql<T>(
+  storeDomain: string,
+  adminAccessToken: string,
+  query: string,
+  variables?: Record<string, unknown>
+): Promise<T> {
+  const endpoint = `https://${storeDomain}/admin/api/2024-10/graphql.json`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": adminAccessToken,
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Shopify Admin API error: ${response.status} - ${text}`);
+  }
+
+  const payload = await response.json();
+  if (payload.errors?.length) {
+    throw new Error(`Shopify GraphQL error: ${payload.errors[0]?.message || "Unknown error"}`);
+  }
+
+  return payload.data as T;
+}
+
+export async function getShopifyActiveSubscription(
+  storeDomain: string,
+  adminAccessToken: string
+): Promise<ShopifyAppSubscription | null> {
+  const data = await shopifyAdminGraphql<{
+    currentAppInstallation: { activeSubscriptions: ShopifyAppSubscription[] | null } | null;
+  }>(storeDomain, adminAccessToken, ACTIVE_SUBSCRIPTIONS_QUERY);
+
+  const subscriptions = data.currentAppInstallation?.activeSubscriptions || [];
+  if (!subscriptions.length) return null;
+
+  const active = subscriptions.find((subscription) => subscription.status === "ACTIVE");
+  return active || subscriptions[0] || null;
+}
+
+export async function ensureShopifyBilling(
+  storeDomain: string,
+  adminAccessToken: string,
+  returnUrl: string,
+  plan: BillingPlanConfig
+): Promise<EnsureBillingResult> {
+  const existing = await getShopifyActiveSubscription(storeDomain, adminAccessToken);
+  if (existing?.status === "ACTIVE") {
+    return { active: true, subscription: existing };
+  }
+
+  const data = await shopifyAdminGraphql<{
+    appSubscriptionCreate: {
+      confirmationUrl: string | null;
+      appSubscription: ShopifyAppSubscription | null;
+      userErrors: Array<{ field: string[] | null; message: string }>;
+    };
+  }>(storeDomain, adminAccessToken, CREATE_SUBSCRIPTION_MUTATION, {
+    name: plan.name,
+    returnUrl,
+    lineItems: [
+      {
+        plan: {
+          appRecurringPricingDetails: {
+            interval: plan.interval,
+            price: {
+              amount: plan.amount,
+              currencyCode: plan.currencyCode,
+            },
+          },
+        },
+      },
+    ],
+    test: plan.test,
+    trialDays: plan.trialDays,
+  });
+
+  const result = data.appSubscriptionCreate;
+  if (result.userErrors?.length) {
+    throw new Error(result.userErrors.map((error) => error.message).join("; "));
+  }
+
+  return {
+    active: result.appSubscription?.status === "ACTIVE",
+    subscription: result.appSubscription,
+    confirmationUrl: result.confirmationUrl,
+  };
+}

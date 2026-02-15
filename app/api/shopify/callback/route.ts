@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createHmac } from "crypto";
+import { ensureShopifyBilling } from "@/lib/shopify";
+import { getBillingPlanConfig, isBillingBypassEnabled, subscriptionToBillingFields } from "@/lib/shopify-billing";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -138,7 +140,7 @@ export async function GET(request: NextRequest) {
       console.error("Failed to fetch shop info:", e);
     }
 
-    // Store the access token in the database
+    // Store the access token in the database before billing check.
     const { error: saveError } = await supabase
       .from("shopify_settings")
       .upsert(
@@ -166,14 +168,54 @@ export async function GET(request: NextRequest) {
     // Clean up the used state
     await supabase.from("shopify_oauth_states").delete().eq("state", state);
 
-    // Redirect to settings with success message
-    const installUrl = new URL("/api/shopify/install", request.url);
-    installUrl.searchParams.set("shop", shop);
-    installUrl.searchParams.set("shopify", "connected");
-    if (host) {
-      installUrl.searchParams.set("host", host);
+    if (isBillingBypassEnabled()) {
+      const installUrl = new URL("/api/shopify/install", request.url);
+      installUrl.searchParams.set("shop", shop);
+      installUrl.searchParams.set("shopify", "connected");
+      installUrl.searchParams.set("billing", "active");
+      if (host) {
+        installUrl.searchParams.set("host", host);
+      }
+      return NextResponse.redirect(installUrl);
     }
-    return NextResponse.redirect(installUrl);
+
+    const returnUrl = new URL("/api/shopify/billing/return", request.url);
+    returnUrl.searchParams.set("shop", shop);
+    if (host) {
+      returnUrl.searchParams.set("host", host);
+    }
+
+    const billingResult = await ensureShopifyBilling(
+      shop,
+      accessToken,
+      returnUrl.toString(),
+      getBillingPlanConfig()
+    );
+
+    // Persist latest billing snapshot from Shopify.
+    await supabase
+      .from("shopify_settings")
+      .update(subscriptionToBillingFields(billingResult.subscription || null))
+      .eq("user_id", storedState.user_id);
+
+    if (billingResult.active) {
+      const installUrl = new URL("/api/shopify/install", request.url);
+      installUrl.searchParams.set("shop", shop);
+      installUrl.searchParams.set("shopify", "connected");
+      installUrl.searchParams.set("billing", "active");
+      if (host) {
+        installUrl.searchParams.set("host", host);
+      }
+      return NextResponse.redirect(installUrl);
+    }
+
+    if (billingResult.confirmationUrl) {
+      return NextResponse.redirect(billingResult.confirmationUrl);
+    }
+
+    return NextResponse.redirect(
+      new URL("/settings?error=billing_not_active", request.url)
+    );
   } catch (error) {
     console.error("OAuth callback error:", error);
     return NextResponse.redirect(

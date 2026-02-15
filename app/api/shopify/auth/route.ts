@@ -3,9 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { randomBytes } from "crypto";
 
 // Shopify OAuth scopes needed for the app
-// read_products: To sync product catalog
-// read_orders: To sync orders for profit calculation
-const SCOPES = "read_products,read_orders";
+// read_products/read_orders: app functionality
+// read_own_subscription/write_own_subscription: Shopify-managed recurring billing
+const SCOPES = "read_products,read_orders,read_own_subscription,write_own_subscription";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
