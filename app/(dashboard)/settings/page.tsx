@@ -35,7 +35,7 @@ export default async function SettingsPage() {
   if ((isOwner || isAdmin) && ownerId) {
     const { data } = await supabase
       .from("shopify_settings")
-      .select("store_domain, shop_name, access_token, admin_access_token, connected_via_oauth, oauth_scope")
+      .select("store_domain, shop_name, access_token, admin_access_token, connected_via_oauth, oauth_scope, billing_status, billing_plan_name, billing_current_period_end, billing_test")
       .eq("user_id", ownerId)
       .single();
     shopifySettings = data ? {
@@ -45,6 +45,10 @@ export default async function SettingsPage() {
       oauth_scope: data.oauth_scope,
       has_storefront_token: !!data.access_token,
       has_admin_credentials: !!data.admin_access_token,
+      billing_status: data.billing_status,
+      billing_plan_name: data.billing_plan_name,
+      billing_current_period_end: data.billing_current_period_end,
+      billing_test: data.billing_test,
     } : null;
   }
 

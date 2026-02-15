@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { hasBillingAccess, hasShopifyConnectionAccess } from "@/lib/shopify-billing";
 
 const SHOP_DOMAIN_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$/;
 
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
   if (ownerId) {
     const { data: settings } = await supabase
       .from("shopify_settings")
-      .select("store_domain, connected_via_oauth, admin_access_token")
+      .select("store_domain, connected_via_oauth, admin_access_token, billing_status")
       .eq("user_id", ownerId)
       .single();
 
@@ -68,18 +69,32 @@ export async function GET(request: NextRequest) {
       settings?.store_domain === shop &&
       settings?.connected_via_oauth &&
       !!settings?.admin_access_token;
+    const hasActiveBilling = hasBillingAccess(settings?.billing_status);
+    const hasConnectionAccess = hasShopifyConnectionAccess(hasExistingConnection);
 
-    if (hasExistingConnection) {
+    if (hasConnectionAccess && hasActiveBilling) {
       const destination = shopifyStatus === "connected" ? "/settings" : "/dashboard";
       const dashboardUrl = new URL(destination, request.url);
       if (shopifyStatus) {
         dashboardUrl.searchParams.set("shopify", shopifyStatus);
+      }
+      if (request.nextUrl.searchParams.get("billing") === "active") {
+        dashboardUrl.searchParams.set("billing", "active");
       }
       dashboardUrl.searchParams.set("shop", shop);
       if (host) {
         dashboardUrl.searchParams.set("host", host);
       }
       return NextResponse.redirect(dashboardUrl);
+    }
+
+    if (hasConnectionAccess && !hasActiveBilling) {
+      const billingUrl = new URL("/api/shopify/billing/ensure", request.url);
+      billingUrl.searchParams.set("shop", shop);
+      if (host) {
+        billingUrl.searchParams.set("host", host);
+      }
+      return NextResponse.redirect(billingUrl);
     }
   }
 

@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { hasBillingAccess, hasShopifyConnectionAccess } from '@/lib/shopify-billing'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -43,7 +44,11 @@ export async function updateSession(request: NextRequest) {
 
   // Protected routes that require authentication
   const protectedPaths = ['/dashboard', '/products', '/components', '/settings']
+  const billingProtectedPaths = ['/dashboard', '/products', '/components', '/orders', '/inventory', '/roasting']
   const isProtectedRoute = protectedPaths.some(path => 
+    request.nextUrl.pathname.startsWith(path)
+  )
+  const isBillingProtectedRoute = billingProtectedPaths.some(path =>
     request.nextUrl.pathname.startsWith(path)
   )
 
@@ -64,6 +69,38 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
+  }
+
+  // Enforce Shopify connection + active billing for core app pages.
+  // Keep /settings accessible so owners can connect Shopify and approve billing.
+  if (user && isBillingProtectedRoute) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, owner_id")
+      .eq("id", user.id)
+      .single()
+
+    const ownerId = profile?.role === "owner" ? user.id : profile?.owner_id || user.id
+
+    const { data: settings } = await supabase
+      .from("shopify_settings")
+      .select("connected_via_oauth, admin_access_token, billing_status")
+      .eq("user_id", ownerId)
+      .single()
+
+    const isConnected = !!(settings?.connected_via_oauth && settings?.admin_access_token)
+    const hasBilling = hasBillingAccess(settings?.billing_status)
+    const hasConnectionAccess = hasShopifyConnectionAccess(isConnected)
+
+    if (!hasConnectionAccess || !hasBilling) {
+      const url = request.nextUrl.clone()
+      url.pathname = "/settings"
+      url.searchParams.set("error", !hasConnectionAccess ? "shopify_not_connected" : "billing_not_active")
+      if (hasConnectionAccess && !hasBilling && settings?.admin_access_token) {
+        url.searchParams.set("action", "activate_billing")
+      }
+      return NextResponse.redirect(url)
+    }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.

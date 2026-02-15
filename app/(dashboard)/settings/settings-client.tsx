@@ -54,6 +54,10 @@ interface SettingsClientProps {
     oauth_scope?: string;
     has_storefront_token?: boolean;
     has_admin_credentials?: boolean;
+    billing_status?: string | null;
+    billing_plan_name?: string | null;
+    billing_current_period_end?: string | null;
+    billing_test?: boolean | null;
   } | null;
 }
 
@@ -83,10 +87,14 @@ export function SettingsClient({
   useEffect(() => {
     const shopifyStatus = searchParams.get("shopify");
     const errorParam = searchParams.get("error");
+    const billingStatus = searchParams.get("billing");
 
     if (shopifyStatus === "connected") {
       setMessage({ type: "success", text: "Shopify store connected successfully! You can now sync products and orders." });
       // Clean up URL
+      window.history.replaceState({}, "", "/settings");
+    } else if (billingStatus === "active") {
+      setMessage({ type: "success", text: "Billing is active. You now have full app access." });
       window.history.replaceState({}, "", "/settings");
     } else if (errorParam) {
       const errorMessages: Record<string, string> = {
@@ -99,6 +107,10 @@ export function SettingsClient({
         token_exchange_failed: "Failed to exchange token with Shopify",
         save_failed: "Failed to save connection",
         callback_error: "An error occurred during connection",
+        billing_not_active: "Billing is required to use the app. Please activate your Shopify subscription.",
+        billing_create_failed: "Failed to create Shopify billing subscription. Please try again.",
+        billing_check_failed: "Could not verify Shopify billing status. Please try again.",
+        shopify_not_connected: "Connect your Shopify store before activating billing.",
       };
       setMessage({ type: "error", text: errorMessages[errorParam] || "An error occurred connecting to Shopify" });
       // Clean up URL
@@ -171,6 +183,10 @@ export function SettingsClient({
   };
 
   const isShopifyConnected = shopifySettings?.connected_via_oauth && shopifySettings?.has_admin_credentials;
+  const isBillingActive = shopifySettings?.billing_status === "ACTIVE";
+  const billingReturnDate = shopifySettings?.billing_current_period_end
+    ? new Date(shopifySettings.billing_current_period_end).toLocaleDateString()
+    : null;
 
   return (
     <div className="space-y-6">
@@ -258,10 +274,15 @@ export function SettingsClient({
                   <CardTitle>Shopify Store</CardTitle>
                 </div>
                 {isShopifyConnected && (
-                  <Badge variant="outline" className="bg-green-500/10 text-green-600">
-                    <CheckCircle2 className="mr-1 h-3 w-3" />
-                    Connected
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-green-500/10 text-green-600">
+                      <CheckCircle2 className="mr-1 h-3 w-3" />
+                      Connected
+                    </Badge>
+                    <Badge variant="outline" className={isBillingActive ? "bg-green-500/10 text-green-600" : "bg-amber-500/10 text-amber-700"}>
+                      {isBillingActive ? "Billing Active" : "Billing Required"}
+                    </Badge>
+                  </div>
                 )}
               </div>
               <CardDescription>
@@ -316,6 +337,17 @@ export function SettingsClient({
                     </p>
                   </div>
 
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+                    <p className="text-sm">
+                      <strong>Billing:</strong>{" "}
+                      {isBillingActive
+                        ? `Active${shopifySettings?.billing_plan_name ? ` (${shopifySettings.billing_plan_name})` : ""}`
+                        : "Not active"}
+                      {isBillingActive && billingReturnDate ? ` · Renews ${billingReturnDate}` : ""}
+                      {shopifySettings?.billing_test ? " · Test mode" : ""}
+                    </p>
+                  </div>
+
                   <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
                     <p className="text-sm text-blue-700 dark:text-blue-300">
                       <strong>Note about Order Sync:</strong> To sync orders, your Shopify app must be approved for protected customer data access. 
@@ -362,38 +394,47 @@ export function SettingsClient({
             </CardContent>
             <CardFooter className="flex justify-between">
               {isShopifyConnected ? (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="outline" className="bg-transparent text-destructive hover:bg-destructive/10 hover:text-destructive">
-                      <Unplug className="mr-2 h-4 w-4" />
-                      Disconnect Store
+                <div className="flex flex-wrap gap-2">
+                  {!isBillingActive ? (
+                    <Button asChild>
+                      <a href={`/api/shopify/billing/ensure?shop=${encodeURIComponent(shopifySettings?.store_domain || "")}`}>
+                        Activate Billing
+                      </a>
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Disconnect Shopify Store?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will remove the connection to your Shopify store. You won&apos;t be able to sync products or orders until you reconnect.
-                        Your existing data will be preserved.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel className="bg-transparent">Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={handleDisconnectShopify}
-                        disabled={isDisconnecting}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        {isDisconnecting ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Unplug className="mr-2 h-4 w-4" />
-                        )}
-                        Disconnect
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                  ) : null}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" className="bg-transparent text-destructive hover:bg-destructive/10 hover:text-destructive">
+                        <Unplug className="mr-2 h-4 w-4" />
+                        Disconnect Store
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Disconnect Shopify Store?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will remove the connection to your Shopify store. You won&apos;t be able to sync products or orders until you reconnect.
+                          Your existing data will be preserved.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="bg-transparent">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleDisconnectShopify}
+                          disabled={isDisconnecting}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          {isDisconnecting ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Unplug className="mr-2 h-4 w-4" />
+                          )}
+                          Disconnect
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               ) : (
                 <Button onClick={handleConnectShopify} disabled={isConnecting || !storeDomain.trim()}>
                   {isConnecting ? (
