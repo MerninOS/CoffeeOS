@@ -1,7 +1,7 @@
 client_id = "REPLACE_WITH_SHOPIFY_CLIENT_ID"
 name = "CoffeeOS"
 handle = "coffeeos"
-application_url = "https://your-app-domain.com/app"
+application_url = "https://v0-chat-with-vercel-ai-two-self.vercel.app/app"
 embedded = true
 
 [build]
@@ -14,7 +14,7 @@ scopes = "read_products,read_orders"
 
 [auth]
 redirect_urls = [
-  "https://your-app-domain.com/api/shopify/callback",
+  "https://v0-chat-with-vercel-ai-two-self.vercel.app/api/shopify/callback",
 ]
 
 [webhooks]
