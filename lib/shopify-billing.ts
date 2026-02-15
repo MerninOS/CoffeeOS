@@ -54,12 +54,22 @@ export function isBillingBypassEnabled(): boolean {
   return ["1", "true", "yes", "on"].includes(raw.toLowerCase());
 }
 
-export function hasBillingAccess(status: string | null | undefined): boolean {
-  return isBillingActive(status) || isBillingBypassEnabled();
+export function isDemoUserEmail(email: string | null | undefined): boolean {
+  return (email || "").toLowerCase() === "demo@coffeeos.io";
 }
 
-export function hasShopifyConnectionAccess(isConnected: boolean): boolean {
-  return isConnected || isBillingBypassEnabled();
+export function hasBillingAccess(
+  status: string | null | undefined,
+  userEmail?: string | null
+): boolean {
+  return isBillingActive(status) || isBillingBypassEnabled() || isDemoUserEmail(userEmail);
+}
+
+export function hasShopifyConnectionAccess(
+  isConnected: boolean,
+  userEmail?: string | null
+): boolean {
+  return isConnected || isBillingBypassEnabled() || isDemoUserEmail(userEmail);
 }
 
 export function subscriptionToBillingFields(subscription: ShopifyAppSubscription | null) {

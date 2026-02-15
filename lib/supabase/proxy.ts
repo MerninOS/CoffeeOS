@@ -89,8 +89,8 @@ export async function updateSession(request: NextRequest) {
       .single()
 
     const isConnected = !!(settings?.connected_via_oauth && settings?.admin_access_token)
-    const hasBilling = hasBillingAccess(settings?.billing_status)
-    const hasConnectionAccess = hasShopifyConnectionAccess(isConnected)
+    const hasBilling = hasBillingAccess(settings?.billing_status, user.email)
+    const hasConnectionAccess = hasShopifyConnectionAccess(isConnected, user.email)
 
     if (!hasConnectionAccess || !hasBilling) {
       const url = request.nextUrl.clone()

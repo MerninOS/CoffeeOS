@@ -69,8 +69,8 @@ export async function GET(request: NextRequest) {
       settings?.store_domain === shop &&
       settings?.connected_via_oauth &&
       !!settings?.admin_access_token;
-    const hasActiveBilling = hasBillingAccess(settings?.billing_status);
-    const hasConnectionAccess = hasShopifyConnectionAccess(hasExistingConnection);
+    const hasActiveBilling = hasBillingAccess(settings?.billing_status, user.email);
+    const hasConnectionAccess = hasShopifyConnectionAccess(hasExistingConnection, user.email);
 
     if (hasConnectionAccess && hasActiveBilling) {
       const destination = shopifyStatus === "connected" ? "/settings" : "/dashboard";
