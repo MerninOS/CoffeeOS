@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createHmac } from "crypto";
-import { ensureShopifyBilling } from "@/lib/shopify";
-import { getBillingPlanConfig, isBillingBypassEnabled, subscriptionToBillingFields } from "@/lib/shopify-billing";
+import { getShopifyActiveSubscription } from "@/lib/shopify";
+import { isBillingBypassEnabled, isBillingActive, subscriptionToBillingFields } from "@/lib/shopify-billing";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -179,26 +179,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(installUrl);
     }
 
-    const returnUrl = new URL("/api/shopify/billing/return", request.url);
-    returnUrl.searchParams.set("shop", shop);
-    if (host) {
-      returnUrl.searchParams.set("host", host);
-    }
-
-    const billingResult = await ensureShopifyBilling(
-      shop,
-      accessToken,
-      returnUrl.toString(),
-      getBillingPlanConfig()
-    );
+    const billingSubscription = await getShopifyActiveSubscription(shop, accessToken);
 
     // Persist latest billing snapshot from Shopify.
     await supabase
       .from("shopify_settings")
-      .update(subscriptionToBillingFields(billingResult.subscription || null))
+      .update(subscriptionToBillingFields(billingSubscription))
       .eq("user_id", storedState.user_id);
 
-    if (billingResult.active) {
+    if (billingSubscription && isBillingActive(billingSubscription.status)) {
       const installUrl = new URL("/api/shopify/install", request.url);
       installUrl.searchParams.set("shop", shop);
       installUrl.searchParams.set("shopify", "connected");
@@ -209,13 +198,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(installUrl);
     }
 
-    if (billingResult.confirmationUrl) {
-      return NextResponse.redirect(billingResult.confirmationUrl);
+    const settingsUrl = new URL("/settings", request.url);
+    settingsUrl.searchParams.set("error", "billing_not_active");
+    settingsUrl.searchParams.set("action", "manage_billing");
+    settingsUrl.searchParams.set("shop", shop);
+    if (host) {
+      settingsUrl.searchParams.set("host", host);
     }
-
-    return NextResponse.redirect(
-      new URL("/settings?error=billing_not_active", request.url)
-    );
+    return NextResponse.redirect(settingsUrl);
   } catch (error) {
     console.error("OAuth callback error:", error);
     return NextResponse.redirect(

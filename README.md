@@ -24,11 +24,6 @@ Set these in local `.env.local` and in your production host:
 - `SUPABASE_SERVICE_ROLE_KEY` (required for uninstall webhook cleanup)
 - `SHOPIFY_CLIENT_ID`
 - `SHOPIFY_CLIENT_SECRET`
-- `SHOPIFY_BILLING_PLAN_NAME` (example: `CoffeeOS Pro`)
-- `SHOPIFY_BILLING_AMOUNT` (example: `49`)
-- `SHOPIFY_BILLING_CURRENCY` (example: `USD`)
-- `SHOPIFY_BILLING_INTERVAL` (`EVERY_30_DAYS` or `ANNUAL`)
-- `SHOPIFY_BILLING_TRIAL_DAYS` (optional integer, example: `14`)
 - `SHOPIFY_BILLING_TEST` (`true` in dev, `false` in production)
 
 ## Shopify Partner Dashboard Setup
@@ -57,8 +52,8 @@ npm run shopify:config:push
 - Apply DB migration `scripts/018_add_shopify_billing.sql`.
 - Ensure Shopify app scopes include:
   - `read_own_subscription`
-  - `write_own_subscription`
-- After users connect Shopify, the app now creates/checks a Shopify App Subscription and only allows app access when billing status is `ACTIVE`.
+- Use Shopify Managed Pricing for plan/charge management (no Billing API charge creation in app code).
+- After users connect Shopify, the app checks subscription status and only allows app access when billing status is `ACTIVE`.
 
 ## Local Development
 

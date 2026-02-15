@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { ensureShopifyBilling } from "@/lib/shopify";
-import { getBillingPlanConfig, isBillingBypassEnabled, subscriptionToBillingFields } from "@/lib/shopify-billing";
+import { getShopifyActiveSubscription } from "@/lib/shopify";
+import { isBillingBypassEnabled, isBillingActive, subscriptionToBillingFields } from "@/lib/shopify-billing";
 
 export async function GET(request: NextRequest) {
   if (isBillingBypassEnabled()) {
@@ -45,35 +45,30 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const returnUrl = new URL("/api/shopify/billing/return", request.url);
-    returnUrl.searchParams.set("shop", storeDomain);
-    if (host) {
-      returnUrl.searchParams.set("host", host);
-    }
-
-    const billing = await ensureShopifyBilling(
+    const subscription = await getShopifyActiveSubscription(
       storeDomain,
-      settings.admin_access_token,
-      returnUrl.toString(),
-      getBillingPlanConfig()
+      settings.admin_access_token
     );
 
     await supabase
       .from("shopify_settings")
-      .update(subscriptionToBillingFields(billing.subscription || null))
+      .update(subscriptionToBillingFields(subscription))
       .eq("user_id", ownerId);
 
-    if (billing.active) {
+    if (subscription && isBillingActive(subscription.status)) {
       return NextResponse.redirect(new URL("/dashboard?billing=active", request.url));
     }
 
-    if (billing.confirmationUrl) {
-      return NextResponse.redirect(billing.confirmationUrl);
+    const settingsUrl = new URL("/settings", request.url);
+    settingsUrl.searchParams.set("error", "billing_not_active");
+    settingsUrl.searchParams.set("action", "manage_billing");
+    settingsUrl.searchParams.set("shop", storeDomain);
+    if (host) {
+      settingsUrl.searchParams.set("host", host);
     }
-
-    return NextResponse.redirect(new URL("/settings?error=billing_not_active", request.url));
+    return NextResponse.redirect(settingsUrl);
   } catch (error) {
-    console.error("Failed to ensure Shopify billing:", error);
-    return NextResponse.redirect(new URL("/settings?error=billing_create_failed", request.url));
+    console.error("Failed to check Shopify billing:", error);
+    return NextResponse.redirect(new URL("/settings?error=billing_check_failed", request.url));
   }
 }
