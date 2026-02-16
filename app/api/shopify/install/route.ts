@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
   const requestedShop = normalizeShop(request.nextUrl.searchParams.get("shop"));
   const host = request.nextUrl.searchParams.get("host");
   const shopifyStatus = request.nextUrl.searchParams.get("shopify");
+  const billingStatus = request.nextUrl.searchParams.get("billing");
 
   const supabase = await createClient();
   const {
@@ -35,9 +36,16 @@ export async function GET(request: NextRequest) {
     if (!requestedShop) {
       return NextResponse.redirect(new URL("/auth/login", request.url));
     }
+
+    const returnToInstallPath =
+      shopifyStatus === "connected" || billingStatus === "active";
     const authPath = `/api/shopify/auth?shop=${encodeURIComponent(requestedShop)}${host ? `&host=${encodeURIComponent(host)}` : ""}`;
+    const nextPath = returnToInstallPath
+      ? `${request.nextUrl.pathname}${request.nextUrl.search}`
+      : authPath;
+
     const loginUrl = new URL("/auth/login", request.url);
-    loginUrl.searchParams.set("next", authPath);
+    loginUrl.searchParams.set("next", nextPath);
     loginUrl.searchParams.set("shop", requestedShop);
     if (host) {
       loginUrl.searchParams.set("host", host);

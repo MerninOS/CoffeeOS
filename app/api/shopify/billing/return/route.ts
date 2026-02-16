@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getShopifyActiveSubscription } from "@/lib/shopify";
 import { getManagedPricingPlansUrl, isBillingActive, isBillingBypassEnabled, subscriptionToBillingFields } from "@/lib/shopify-billing";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { revalidatePath } from "next/cache";
 
 export async function GET(request: NextRequest) {
   const shop = request.nextUrl.searchParams.get("shop");
@@ -19,53 +20,43 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.redirect(installUrl);
   }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    const loginUrl = new URL("/auth/login", request.url);
-    loginUrl.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
-    return NextResponse.redirect(loginUrl);
+  const normalizedShop = (shop || "").trim().toLowerCase();
+  if (!normalizedShop) {
+    return NextResponse.redirect(new URL("/settings?error=missing_shop", request.url));
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, owner_id")
-    .eq("id", user.id)
-    .single();
-
-  const ownerId = profile?.role === "owner" ? user.id : profile?.owner_id;
-  if (!ownerId) {
-    return NextResponse.redirect(new URL("/settings?error=unauthorized", request.url));
-  }
-
-  const { data: settings } = await supabase
+  const supabaseAdmin = createAdminClient();
+  const { data: settings } = await supabaseAdmin
     .from("shopify_settings")
-    .select("store_domain, admin_access_token")
-    .eq("user_id", ownerId)
+    .select("user_id, store_domain, admin_access_token")
+    .eq("store_domain", normalizedShop)
     .single();
 
-  const storeDomain = shop || settings?.store_domain;
-  if (!storeDomain || !settings?.admin_access_token) {
-    return NextResponse.redirect(new URL("/settings?error=shopify_not_connected", request.url));
+  if (!settings?.admin_access_token) {
+    const loginUrl = new URL("/auth/login", request.url);
+    const nextInstallUrl = new URL("/api/shopify/install", request.url);
+    nextInstallUrl.searchParams.set("shop", normalizedShop);
+    nextInstallUrl.searchParams.set("shopify", "connected");
+    loginUrl.searchParams.set("next", `${nextInstallUrl.pathname}${nextInstallUrl.search}`);
+    return NextResponse.redirect(loginUrl);
   }
 
   try {
     const subscription = await getShopifyActiveSubscription(
-      storeDomain,
+      normalizedShop,
       settings.admin_access_token
     );
 
-    await supabase
+    await supabaseAdmin
       .from("shopify_settings")
       .update(subscriptionToBillingFields(subscription))
-      .eq("user_id", ownerId);
+      .eq("user_id", settings.user_id);
+
+    revalidatePath("/settings", "layout");
+    revalidatePath("/dashboard", "layout");
 
     if (!subscription || !isBillingActive(subscription.status)) {
-      const pricingPlansUrl = getManagedPricingPlansUrl(storeDomain);
+      const pricingPlansUrl = getManagedPricingPlansUrl(normalizedShop);
       if (pricingPlansUrl) {
         return NextResponse.redirect(pricingPlansUrl);
       }
@@ -73,7 +64,7 @@ export async function GET(request: NextRequest) {
     }
 
     const installUrl = new URL("/api/shopify/install", request.url);
-    installUrl.searchParams.set("shop", storeDomain);
+    installUrl.searchParams.set("shop", normalizedShop);
     installUrl.searchParams.set("shopify", "connected");
     installUrl.searchParams.set("billing", "active");
     if (host) {
