@@ -14,9 +14,18 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get("state");
   const hmac = searchParams.get("hmac");
   const host = searchParams.get("host");
+  console.log("[shopify-flow][callback] request", {
+    shop,
+    hasCode: !!code,
+    hasState: !!state,
+    hasHmac: !!hmac,
+    hasHost: !!host,
+    queryKeys: Array.from(searchParams.keys()),
+  });
 
   // Validate required parameters
   if (!shop || !code || !state) {
+    console.log("[shopify-flow][callback] missing required params", { shop, hasCode: !!code, hasState: !!state });
     return NextResponse.redirect(
       new URL("/settings?error=missing_params", request.url)
     );
@@ -26,6 +35,7 @@ export async function GET(request: NextRequest) {
   const clientSecret = process.env.SHOPIFY_CLIENT_SECRET;
   if (!clientSecret) {
     console.error("SHOPIFY_CLIENT_SECRET is not configured");
+    console.log("[shopify-flow][callback] missing SHOPIFY_CLIENT_SECRET");
     return NextResponse.redirect(
       new URL("/settings?error=config_error", request.url)
     );
@@ -49,6 +59,7 @@ export async function GET(request: NextRequest) {
   // Verify HMAC matches (timing-safe comparison)
   if (hmac !== expectedHmac) {
     console.error("HMAC verification failed");
+    console.log("[shopify-flow][callback] hmac mismatch", { shop });
     return NextResponse.redirect(
       new URL("/settings?error=invalid_signature", request.url)
     );
@@ -63,6 +74,7 @@ export async function GET(request: NextRequest) {
 
   if (stateError || !storedState) {
     console.error("State verification failed:", stateError);
+    console.log("[shopify-flow][callback] state lookup failed", { state, shop });
     return NextResponse.redirect(
       new URL("/settings?error=invalid_state", request.url)
     );
@@ -70,6 +82,7 @@ export async function GET(request: NextRequest) {
 
   // Check if state has expired
   if (new Date(storedState.expires_at) < new Date()) {
+    console.log("[shopify-flow][callback] state expired", { state, shop });
     // Clean up expired state
     await supabase.from("shopify_oauth_states").delete().eq("state", state);
     return NextResponse.redirect(
@@ -79,6 +92,10 @@ export async function GET(request: NextRequest) {
 
   // Verify shop matches
   if (storedState.shop !== shop) {
+    console.log("[shopify-flow][callback] shop mismatch", {
+      callbackShop: shop,
+      stateShop: storedState.shop,
+    });
     return NextResponse.redirect(
       new URL("/settings?error=shop_mismatch", request.url)
     );
@@ -88,6 +105,7 @@ export async function GET(request: NextRequest) {
   const clientId = process.env.SHOPIFY_CLIENT_ID;
   if (!clientId) {
     console.error("SHOPIFY_CLIENT_ID is not configured");
+    console.log("[shopify-flow][callback] missing SHOPIFY_CLIENT_ID");
     return NextResponse.redirect(
       new URL("/settings?error=config_error", request.url)
     );
@@ -112,6 +130,10 @@ export async function GET(request: NextRequest) {
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
       console.error("Token exchange failed:", errorText);
+      console.log("[shopify-flow][callback] token exchange failed", {
+        shop,
+        status: tokenResponse.status,
+      });
       return NextResponse.redirect(
         new URL("/settings?error=token_exchange_failed", request.url)
       );
@@ -160,15 +182,25 @@ export async function GET(request: NextRequest) {
 
     if (saveError) {
       console.error("Failed to save access token:", saveError);
+      console.log("[shopify-flow][callback] save shopify_settings failed", {
+        userId: storedState.user_id,
+        shop,
+      });
       return NextResponse.redirect(
         new URL("/settings?error=save_failed", request.url)
       );
     }
+    console.log("[shopify-flow][callback] saved shopify_settings", {
+      userId: storedState.user_id,
+      shop,
+      scope,
+    });
 
     // Clean up the used state
     await supabase.from("shopify_oauth_states").delete().eq("state", state);
 
     if (isBillingBypassEnabled()) {
+      console.log("[shopify-flow][callback] billing bypass enabled, redirect install");
       const installUrl = new URL("/api/shopify/install", request.url);
       installUrl.searchParams.set("shop", shop);
       installUrl.searchParams.set("shopify", "connected");
@@ -180,6 +212,11 @@ export async function GET(request: NextRequest) {
     }
 
     const billingSubscription = await getShopifyActiveSubscription(shop, accessToken);
+    console.log("[shopify-flow][callback] active subscription check", {
+      shop,
+      subscriptionStatus: billingSubscription?.status || null,
+      subscriptionId: billingSubscription?.id || null,
+    });
 
     // Persist latest billing snapshot from Shopify.
     await supabase
@@ -188,6 +225,7 @@ export async function GET(request: NextRequest) {
       .eq("user_id", storedState.user_id);
 
     if (billingSubscription && isBillingActive(billingSubscription.status)) {
+      console.log("[shopify-flow][callback] billing active, redirect install", { shop });
       const installUrl = new URL("/api/shopify/install", request.url);
       installUrl.searchParams.set("shop", shop);
       installUrl.searchParams.set("shopify", "connected");
@@ -200,6 +238,10 @@ export async function GET(request: NextRequest) {
 
     const pricingPlansUrl = getManagedPricingPlansUrl(shop);
     if (pricingPlansUrl) {
+      console.log("[shopify-flow][callback] billing inactive, redirect pricing plans", {
+        shop,
+        pricingPlansUrl,
+      });
       const response = NextResponse.redirect(pricingPlansUrl);
       response.cookies.set("shopify_pending_shop", shop, {
         httpOnly: true,
@@ -218,9 +260,11 @@ export async function GET(request: NextRequest) {
     if (host) {
       settingsUrl.searchParams.set("host", host);
     }
+    console.log("[shopify-flow][callback] billing inactive fallback redirect settings", { shop });
     return NextResponse.redirect(settingsUrl);
   } catch (error) {
     console.error("OAuth callback error:", error);
+    console.log("[shopify-flow][callback] unhandled error", { shop });
     return NextResponse.redirect(
       new URL("/settings?error=callback_error", request.url)
     );

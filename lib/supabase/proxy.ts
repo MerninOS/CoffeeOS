@@ -3,6 +3,9 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { hasBillingAccess, hasShopifyConnectionAccess } from '@/lib/shopify-billing'
 
 export async function updateSession(request: NextRequest) {
+  console.log("[shopify-flow][proxy] request", {
+    path: request.nextUrl.pathname,
+  })
   let supabaseResponse = NextResponse.next({
     request,
   })
@@ -53,6 +56,9 @@ export async function updateSession(request: NextRequest) {
   )
 
   if (isProtectedRoute && !user) {
+    console.log("[shopify-flow][proxy] redirect auth required", {
+      path: request.nextUrl.pathname,
+    })
     // no user, redirect to the login page
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
@@ -66,6 +72,10 @@ export async function updateSession(request: NextRequest) {
   )
 
   if (isAuthRoute && user) {
+    console.log("[shopify-flow][proxy] redirect authed user away from auth", {
+      path: request.nextUrl.pathname,
+      userId: user.id,
+    })
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
@@ -91,6 +101,19 @@ export async function updateSession(request: NextRequest) {
     const isConnected = !!(settings?.connected_via_oauth && settings?.admin_access_token)
     const hasBilling = hasBillingAccess(settings?.billing_status, user.email)
     const hasConnectionAccess = hasShopifyConnectionAccess(isConnected, user.email)
+    console.log("[shopify-flow][proxy] billing gate evaluation", {
+      path: request.nextUrl.pathname,
+      userId: user.id,
+      userEmail: user.email,
+      role: profile?.role || null,
+      ownerId,
+      connectedViaOauth: !!settings?.connected_via_oauth,
+      hasAdminToken: !!settings?.admin_access_token,
+      billingStatus: settings?.billing_status || null,
+      isConnected,
+      hasConnectionAccess,
+      hasBilling,
+    })
 
     if (!hasConnectionAccess || !hasBilling) {
       const url = request.nextUrl.clone()
@@ -99,6 +122,12 @@ export async function updateSession(request: NextRequest) {
       if (hasConnectionAccess && !hasBilling && settings?.admin_access_token) {
         url.searchParams.set("action", "activate_billing")
       }
+      console.log("[shopify-flow][proxy] redirect settings due to gate", {
+        fromPath: request.nextUrl.pathname,
+        error: !hasConnectionAccess ? "shopify_not_connected" : "billing_not_active",
+        hasConnectionAccess,
+        hasBilling,
+      })
       return NextResponse.redirect(url)
     }
   }

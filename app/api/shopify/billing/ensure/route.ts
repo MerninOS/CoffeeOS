@@ -4,7 +4,12 @@ import { getShopifyActiveSubscription } from "@/lib/shopify";
 import { getManagedPricingPlansUrl, isBillingBypassEnabled, isBillingActive, subscriptionToBillingFields } from "@/lib/shopify-billing";
 
 export async function GET(request: NextRequest) {
+  console.log("[shopify-flow][billing-ensure] request", {
+    shop: request.nextUrl.searchParams.get("shop"),
+    hasHost: !!request.nextUrl.searchParams.get("host"),
+  });
   if (isBillingBypassEnabled()) {
+    console.log("[shopify-flow][billing-ensure] billing bypass enabled");
     return NextResponse.redirect(new URL("/dashboard?billing=active", request.url));
   }
 
@@ -14,6 +19,7 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    console.log("[shopify-flow][billing-ensure] no session user");
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
     return NextResponse.redirect(loginUrl);
@@ -27,6 +33,7 @@ export async function GET(request: NextRequest) {
 
   const ownerId = profile?.role === "owner" ? user.id : profile?.owner_id;
   if (!ownerId) {
+    console.log("[shopify-flow][billing-ensure] missing ownerId", { userId: user.id, role: profile?.role });
     return NextResponse.redirect(new URL("/settings?error=unauthorized", request.url));
   }
 
@@ -41,6 +48,13 @@ export async function GET(request: NextRequest) {
 
   const storeDomain = shop || settings?.store_domain;
   if (!storeDomain || !settings?.connected_via_oauth || !settings?.admin_access_token) {
+    console.log("[shopify-flow][billing-ensure] not connected", {
+      ownerId,
+      shop,
+      storeDomain,
+      connectedViaOauth: !!settings?.connected_via_oauth,
+      hasAdminToken: !!settings?.admin_access_token,
+    });
     return NextResponse.redirect(new URL("/settings?error=shopify_not_connected", request.url));
   }
 
@@ -49,6 +63,12 @@ export async function GET(request: NextRequest) {
       storeDomain,
       settings.admin_access_token
     );
+    console.log("[shopify-flow][billing-ensure] subscription status", {
+      ownerId,
+      storeDomain,
+      subscriptionStatus: subscription?.status || null,
+      subscriptionId: subscription?.id || null,
+    });
 
     await supabase
       .from("shopify_settings")
@@ -56,11 +76,16 @@ export async function GET(request: NextRequest) {
       .eq("user_id", ownerId);
 
     if (subscription && isBillingActive(subscription.status)) {
+      console.log("[shopify-flow][billing-ensure] billing active, redirect dashboard");
       return NextResponse.redirect(new URL("/dashboard?billing=active", request.url));
     }
 
     const pricingPlansUrl = getManagedPricingPlansUrl(storeDomain);
     if (pricingPlansUrl) {
+      console.log("[shopify-flow][billing-ensure] billing inactive, redirect pricing plans", {
+        storeDomain,
+        pricingPlansUrl,
+      });
       const response = NextResponse.redirect(pricingPlansUrl);
       response.cookies.set("shopify_pending_shop", storeDomain, {
         httpOnly: true,
@@ -79,9 +104,13 @@ export async function GET(request: NextRequest) {
     if (host) {
       settingsUrl.searchParams.set("host", host);
     }
+    console.log("[shopify-flow][billing-ensure] billing inactive fallback redirect settings", {
+      storeDomain,
+    });
     return NextResponse.redirect(settingsUrl);
   } catch (error) {
     console.error("Failed to check Shopify billing:", error);
+    console.log("[shopify-flow][billing-ensure] unhandled error", { ownerId, storeDomain });
     return NextResponse.redirect(new URL("/settings?error=billing_check_failed", request.url));
   }
 }
