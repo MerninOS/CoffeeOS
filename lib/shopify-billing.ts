@@ -28,6 +28,17 @@ export function hasShopifyConnectionAccess(
   return isConnected || isBillingBypassEnabled() || isDemoUserEmail(userEmail);
 }
 
+export function getManagedPricingPlansUrl(storeDomain: string): string | null {
+  const match = storeDomain.toLowerCase().match(/^([a-z0-9][a-z0-9-]*)\.myshopify\.com$/);
+  if (!match) return null;
+
+  const storeHandle = match[1];
+  const appHandle = (process.env.SHOPIFY_APP_HANDLE || "coffeeos").trim();
+  if (!appHandle) return null;
+
+  return `https://admin.shopify.com/store/${storeHandle}/charges/${appHandle}/pricing_plans`;
+}
+
 export function subscriptionToBillingFields(subscription: ShopifyAppSubscription | null) {
   return {
     billing_subscription_id: subscription?.id || null,

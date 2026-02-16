@@ -25,6 +25,7 @@ Set these in local `.env.local` and in your production host:
 - `SHOPIFY_CLIENT_ID`
 - `SHOPIFY_CLIENT_SECRET`
 - `SHOPIFY_BILLING_TEST` (`true` in dev, `false` in production)
+- `SHOPIFY_APP_HANDLE` (optional; defaults to `coffeeos`, used for managed pricing plan URL redirects)
 
 ## Shopify Partner Dashboard Setup
 

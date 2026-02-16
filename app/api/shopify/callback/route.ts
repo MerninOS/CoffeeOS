@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createHmac } from "crypto";
 import { getShopifyActiveSubscription } from "@/lib/shopify";
-import { isBillingBypassEnabled, isBillingActive, subscriptionToBillingFields } from "@/lib/shopify-billing";
+import { getManagedPricingPlansUrl, isBillingBypassEnabled, isBillingActive, subscriptionToBillingFields } from "@/lib/shopify-billing";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -196,6 +196,11 @@ export async function GET(request: NextRequest) {
         installUrl.searchParams.set("host", host);
       }
       return NextResponse.redirect(installUrl);
+    }
+
+    const pricingPlansUrl = getManagedPricingPlansUrl(shop);
+    if (pricingPlansUrl) {
+      return NextResponse.redirect(pricingPlansUrl);
     }
 
     const settingsUrl = new URL("/settings", request.url);

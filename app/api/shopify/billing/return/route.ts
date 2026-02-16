@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getShopifyActiveSubscription } from "@/lib/shopify";
-import { isBillingActive, isBillingBypassEnabled, subscriptionToBillingFields } from "@/lib/shopify-billing";
+import { getManagedPricingPlansUrl, isBillingActive, isBillingBypassEnabled, subscriptionToBillingFields } from "@/lib/shopify-billing";
 
 export async function GET(request: NextRequest) {
   const shop = request.nextUrl.searchParams.get("shop");
@@ -65,6 +65,10 @@ export async function GET(request: NextRequest) {
       .eq("user_id", ownerId);
 
     if (!subscription || !isBillingActive(subscription.status)) {
+      const pricingPlansUrl = getManagedPricingPlansUrl(storeDomain);
+      if (pricingPlansUrl) {
+        return NextResponse.redirect(pricingPlansUrl);
+      }
       return NextResponse.redirect(new URL("/settings?error=billing_not_active", request.url));
     }
 
