@@ -1,8 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { getShopifyActiveSubscription } from "@/lib/shopify";
 import { getManagedPricingPlansUrl, isBillingActive, isBillingBypassEnabled, subscriptionToBillingFields } from "@/lib/shopify-billing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+
+function decodeHostParam(host: string | null): string | null {
+  if (!host) return null;
+  try {
+    const base64 = host.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    return Buffer.from(padded, "base64").toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+function normalizeShopDomain(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const shop = value.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "");
+  if (!shop.endsWith(".myshopify.com")) return null;
+  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop)) return null;
+  return shop;
+}
+
+function inferShopFromDecodedHost(decodedHost: string | null): string | null {
+  if (!decodedHost) return null;
+
+  const myShopifyMatch = decodedHost.match(/([a-z0-9][a-z0-9-]*\.myshopify\.com)/i);
+  if (myShopifyMatch?.[1]) {
+    return normalizeShopDomain(myShopifyMatch[1]);
+  }
+
+  // New Shopify Admin URLs look like: admin.shopify.com/store/{store_handle}
+  const storeHandleMatch = decodedHost.match(/\/store\/([a-z0-9-]+)/i);
+  if (storeHandleMatch?.[1]) {
+    return normalizeShopDomain(`${storeHandleMatch[1]}.myshopify.com`);
+  }
+
+  return null;
+}
 
 export async function GET(request: NextRequest) {
   const shop = request.nextUrl.searchParams.get("shop");
@@ -20,23 +57,64 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.redirect(installUrl);
   }
-  const normalizedShop = (shop || "").trim().toLowerCase();
-  if (!normalizedShop) {
-    return NextResponse.redirect(new URL("/settings?error=missing_shop", request.url));
+
+  const decodedHost = decodeHostParam(host);
+  let normalizedShop = normalizeShopDomain(shop) || inferShopFromDecodedHost(decodedHost);
+  const supabaseAdmin = createAdminClient();
+  let settings:
+    | {
+        user_id: string;
+        store_domain: string;
+        admin_access_token: string | null;
+      }
+    | null = null;
+
+  if (normalizedShop) {
+    const { data } = await supabaseAdmin
+      .from("shopify_settings")
+      .select("user_id, store_domain, admin_access_token")
+      .eq("store_domain", normalizedShop)
+      .single();
+    settings = data;
   }
 
-  const supabaseAdmin = createAdminClient();
-  const { data: settings } = await supabaseAdmin
-    .from("shopify_settings")
-    .select("user_id, store_domain, admin_access_token")
-    .eq("store_domain", normalizedShop)
-    .single();
+  // Fallback: if we still don't have a shop, try current logged-in owner settings.
+  if (!settings) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!settings?.admin_access_token) {
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role, owner_id")
+        .eq("id", user.id)
+        .single();
+
+      const ownerId = profile?.role === "owner" ? user.id : profile?.owner_id;
+      if (ownerId) {
+        const { data } = await supabaseAdmin
+          .from("shopify_settings")
+          .select("user_id, store_domain, admin_access_token")
+          .eq("user_id", ownerId)
+          .single();
+        settings = data;
+        normalizedShop = normalizeShopDomain(data?.store_domain);
+      }
+    }
+  }
+
+  if (!normalizedShop || !settings?.admin_access_token) {
     const loginUrl = new URL("/auth/login", request.url);
     const nextInstallUrl = new URL("/api/shopify/install", request.url);
-    nextInstallUrl.searchParams.set("shop", normalizedShop);
+    if (normalizedShop) {
+      nextInstallUrl.searchParams.set("shop", normalizedShop);
+    }
     nextInstallUrl.searchParams.set("shopify", "connected");
+    if (host) {
+      nextInstallUrl.searchParams.set("host", host);
+    }
     loginUrl.searchParams.set("next", `${nextInstallUrl.pathname}${nextInstallUrl.search}`);
     return NextResponse.redirect(loginUrl);
   }
