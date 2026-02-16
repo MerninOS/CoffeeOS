@@ -22,28 +22,23 @@ function normalizeShop(rawShop: string | null): string | null {
 }
 
 export async function GET(request: NextRequest) {
-  const shop = normalizeShop(request.nextUrl.searchParams.get("shop"));
+  const requestedShop = normalizeShop(request.nextUrl.searchParams.get("shop"));
   const host = request.nextUrl.searchParams.get("host");
   const shopifyStatus = request.nextUrl.searchParams.get("shopify");
-
-  if (!shop) {
-    return NextResponse.json(
-      { error: "Missing or invalid shop parameter" },
-      { status: 400 },
-    );
-  }
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const authPath = `/api/shopify/auth?shop=${encodeURIComponent(shop)}${host ? `&host=${encodeURIComponent(host)}` : ""}`;
-
   if (!user) {
+    if (!requestedShop) {
+      return NextResponse.redirect(new URL("/auth/login", request.url));
+    }
+    const authPath = `/api/shopify/auth?shop=${encodeURIComponent(requestedShop)}${host ? `&host=${encodeURIComponent(host)}` : ""}`;
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("next", authPath);
-    loginUrl.searchParams.set("shop", shop);
+    loginUrl.searchParams.set("shop", requestedShop);
     if (host) {
       loginUrl.searchParams.set("host", host);
     }
@@ -57,6 +52,7 @@ export async function GET(request: NextRequest) {
     .single();
 
   const ownerId = profile?.role === "owner" ? user.id : profile?.owner_id;
+  let effectiveShop = requestedShop;
 
   if (ownerId) {
     const { data: settings } = await supabase
@@ -65,12 +61,29 @@ export async function GET(request: NextRequest) {
       .eq("user_id", ownerId)
       .single();
 
+    const connectedStore = normalizeShop(settings?.store_domain || null);
+    if (!effectiveShop && connectedStore) {
+      effectiveShop = connectedStore;
+    }
+
     const hasExistingConnection =
-      settings?.store_domain === shop &&
+      !!connectedStore &&
+      (!requestedShop || connectedStore === requestedShop) &&
       settings?.connected_via_oauth &&
       !!settings?.admin_access_token;
     const hasActiveBilling = hasBillingAccess(settings?.billing_status, user.email);
     const hasConnectionAccess = hasShopifyConnectionAccess(hasExistingConnection, user.email);
+
+    if (!effectiveShop && hasConnectionAccess) {
+      const dashboardUrl = new URL("/dashboard", request.url);
+      if (shopifyStatus) {
+        dashboardUrl.searchParams.set("shopify", shopifyStatus);
+      }
+      if (request.nextUrl.searchParams.get("billing") === "active") {
+        dashboardUrl.searchParams.set("billing", "active");
+      }
+      return NextResponse.redirect(dashboardUrl);
+    }
 
     if (hasConnectionAccess && hasActiveBilling) {
       const destination = shopifyStatus === "connected" ? "/settings" : "/dashboard";
@@ -81,7 +94,9 @@ export async function GET(request: NextRequest) {
       if (request.nextUrl.searchParams.get("billing") === "active") {
         dashboardUrl.searchParams.set("billing", "active");
       }
-      dashboardUrl.searchParams.set("shop", shop);
+      if (effectiveShop) {
+        dashboardUrl.searchParams.set("shop", effectiveShop);
+      }
       if (host) {
         dashboardUrl.searchParams.set("host", host);
       }
@@ -90,7 +105,9 @@ export async function GET(request: NextRequest) {
 
     if (hasConnectionAccess && !hasActiveBilling) {
       const billingUrl = new URL("/api/shopify/billing/ensure", request.url);
-      billingUrl.searchParams.set("shop", shop);
+      if (effectiveShop) {
+        billingUrl.searchParams.set("shop", effectiveShop);
+      }
       if (host) {
         billingUrl.searchParams.set("host", host);
       }
@@ -98,5 +115,13 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  if (!effectiveShop) {
+    return NextResponse.json(
+      { error: "Missing or invalid shop parameter" },
+      { status: 400 },
+    );
+  }
+
+  const authPath = `/api/shopify/auth?shop=${encodeURIComponent(effectiveShop)}${host ? `&host=${encodeURIComponent(host)}` : ""}`;
   return NextResponse.redirect(new URL(authPath, request.url));
 }
