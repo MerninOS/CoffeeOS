@@ -61,7 +61,15 @@ export async function GET(request: NextRequest) {
 
     const pricingPlansUrl = getManagedPricingPlansUrl(storeDomain);
     if (pricingPlansUrl) {
-      return NextResponse.redirect(pricingPlansUrl);
+      const response = NextResponse.redirect(pricingPlansUrl);
+      response.cookies.set("shopify_pending_shop", storeDomain, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 30,
+      });
+      return response;
     }
 
     const settingsUrl = new URL("/settings", request.url);
