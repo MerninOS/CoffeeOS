@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { hasBillingAccess, hasShopifyConnectionAccess } from '@/lib/shopify-billing'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function updateSession(request: NextRequest) {
   console.log("[shopify-flow][proxy] request", {
@@ -92,14 +93,53 @@ export async function updateSession(request: NextRequest) {
 
     const ownerId = profile?.role === "owner" ? user.id : profile?.owner_id || user.id
 
-    const { data: settings } = await supabase
+    const { data: settings, error: settingsError } = await supabase
       .from("shopify_settings")
       .select("connected_via_oauth, admin_access_token, billing_status")
       .eq("user_id", ownerId)
-      .single()
+      .maybeSingle()
 
-    const isConnected = !!(settings?.connected_via_oauth && settings?.admin_access_token)
-    const hasBilling = hasBillingAccess(settings?.billing_status, user.email)
+    if (settingsError) {
+      console.log("[shopify-flow][proxy] user-scoped settings query error", {
+        ownerId,
+        error: settingsError.message,
+      })
+    }
+
+    let resolvedSettings = settings
+    if (!resolvedSettings) {
+      try {
+        const supabaseAdmin = createAdminClient()
+        const { data: adminSettings, error: adminSettingsError } = await supabaseAdmin
+          .from("shopify_settings")
+          .select("connected_via_oauth, admin_access_token, billing_status")
+          .eq("user_id", ownerId)
+          .maybeSingle()
+
+        if (adminSettingsError) {
+          console.log("[shopify-flow][proxy] admin fallback settings query error", {
+            ownerId,
+            error: adminSettingsError.message,
+          })
+        } else if (adminSettings) {
+          resolvedSettings = adminSettings
+          console.log("[shopify-flow][proxy] using admin fallback settings", {
+            ownerId,
+            connectedViaOauth: !!adminSettings.connected_via_oauth,
+            hasAdminToken: !!adminSettings.admin_access_token,
+            billingStatus: adminSettings.billing_status || null,
+          })
+        }
+      } catch (adminError) {
+        console.log("[shopify-flow][proxy] admin fallback failed", {
+          ownerId,
+          error: adminError instanceof Error ? adminError.message : "unknown_error",
+        })
+      }
+    }
+
+    const isConnected = !!(resolvedSettings?.connected_via_oauth && resolvedSettings?.admin_access_token)
+    const hasBilling = hasBillingAccess(resolvedSettings?.billing_status, user.email)
     const hasConnectionAccess = hasShopifyConnectionAccess(isConnected, user.email)
     console.log("[shopify-flow][proxy] billing gate evaluation", {
       path: request.nextUrl.pathname,
@@ -107,9 +147,9 @@ export async function updateSession(request: NextRequest) {
       userEmail: user.email,
       role: profile?.role || null,
       ownerId,
-      connectedViaOauth: !!settings?.connected_via_oauth,
-      hasAdminToken: !!settings?.admin_access_token,
-      billingStatus: settings?.billing_status || null,
+      connectedViaOauth: !!resolvedSettings?.connected_via_oauth,
+      hasAdminToken: !!resolvedSettings?.admin_access_token,
+      billingStatus: resolvedSettings?.billing_status || null,
       isConnected,
       hasConnectionAccess,
       hasBilling,
@@ -119,7 +159,7 @@ export async function updateSession(request: NextRequest) {
       const url = request.nextUrl.clone()
       url.pathname = "/settings"
       url.searchParams.set("error", !hasConnectionAccess ? "shopify_not_connected" : "billing_not_active")
-      if (hasConnectionAccess && !hasBilling && settings?.admin_access_token) {
+      if (hasConnectionAccess && !hasBilling && resolvedSettings?.admin_access_token) {
         url.searchParams.set("action", "activate_billing")
       }
       console.log("[shopify-flow][proxy] redirect settings due to gate", {
