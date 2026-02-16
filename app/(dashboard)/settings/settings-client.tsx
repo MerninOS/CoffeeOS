@@ -153,8 +153,8 @@ export function SettingsClient({
       cleanDomain = `${cleanDomain}.myshopify.com`;
     }
 
-    // Redirect to OAuth auth endpoint
-    window.location.href = `/api/shopify/auth?shop=${encodeURIComponent(cleanDomain)}`;
+    // Start install bootstrap flow, which handles auth + billing checks consistently.
+    window.location.href = `/api/shopify/install?shop=${encodeURIComponent(cleanDomain)}`;
   };
 
   const handleDisconnectShopify = async () => {
