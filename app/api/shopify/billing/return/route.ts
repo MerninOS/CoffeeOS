@@ -41,9 +41,25 @@ function inferShopFromDecodedHost(decodedHost: string | null): string | null {
   return null;
 }
 
+function inferShopFromReferer(referer: string | null): string | null {
+  if (!referer) return null;
+  try {
+    const url = new URL(referer);
+    const match = url.pathname.match(/\/store\/([a-z0-9-]+)/i);
+    if (match?.[1]) {
+      return normalizeShopDomain(`${match[1]}.myshopify.com`);
+    }
+  } catch {
+    // ignore invalid referer URL
+  }
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   const shop = request.nextUrl.searchParams.get("shop");
   const host = request.nextUrl.searchParams.get("host");
+  const pendingShop = request.cookies.get("shopify_pending_shop")?.value || null;
+  const refererShop = inferShopFromReferer(request.headers.get("referer"));
 
   if (isBillingBypassEnabled()) {
     const installUrl = new URL("/api/shopify/install", request.url);
@@ -59,7 +75,11 @@ export async function GET(request: NextRequest) {
   }
 
   const decodedHost = decodeHostParam(host);
-  let normalizedShop = normalizeShopDomain(shop) || inferShopFromDecodedHost(decodedHost);
+  let normalizedShop =
+    normalizeShopDomain(shop) ||
+    inferShopFromDecodedHost(decodedHost) ||
+    normalizeShopDomain(pendingShop) ||
+    refererShop;
   const supabaseAdmin = createAdminClient();
   let settings:
     | {
@@ -136,7 +156,15 @@ export async function GET(request: NextRequest) {
     if (!subscription || !isBillingActive(subscription.status)) {
       const pricingPlansUrl = getManagedPricingPlansUrl(normalizedShop);
       if (pricingPlansUrl) {
-        return NextResponse.redirect(pricingPlansUrl);
+        const response = NextResponse.redirect(pricingPlansUrl);
+        response.cookies.set("shopify_pending_shop", normalizedShop, {
+          httpOnly: true,
+          secure: true,
+          sameSite: "lax",
+          path: "/",
+          maxAge: 60 * 30,
+        });
+        return response;
       }
       return NextResponse.redirect(new URL("/settings?error=billing_not_active", request.url));
     }
@@ -148,7 +176,15 @@ export async function GET(request: NextRequest) {
     if (host) {
       installUrl.searchParams.set("host", host);
     }
-    return NextResponse.redirect(installUrl);
+    const response = NextResponse.redirect(installUrl);
+    response.cookies.set("shopify_pending_shop", "", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+    return response;
   } catch (error) {
     console.error("Failed to confirm Shopify billing:", error);
     return NextResponse.redirect(new URL("/settings?error=billing_check_failed", request.url));
