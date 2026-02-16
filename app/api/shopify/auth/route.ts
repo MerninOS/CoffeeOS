@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    console.log("[shopify-flow][auth] no session user");
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
@@ -27,6 +28,10 @@ export async function GET(request: NextRequest) {
     .single();
 
   if (profile?.role !== "owner") {
+    console.log("[shopify-flow][auth] forbidden non-owner", {
+      userId: user.id,
+      role: profile?.role,
+    });
     return NextResponse.json(
       { error: "Only owners can connect Shopify stores" },
       { status: 403 }
@@ -37,6 +42,7 @@ export async function GET(request: NextRequest) {
   const shop = request.nextUrl.searchParams.get("shop");
   
   if (!shop) {
+    console.log("[shopify-flow][auth] missing shop param");
     return NextResponse.json(
       { error: "Missing shop parameter" },
       { status: 400 }
@@ -46,6 +52,7 @@ export async function GET(request: NextRequest) {
   // Validate shop domain format
   const shopDomainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$/;
   if (!shopDomainRegex.test(shop)) {
+    console.log("[shopify-flow][auth] invalid shop format", { shop });
     return NextResponse.json(
       { error: "Invalid shop domain format" },
       { status: 400 }
@@ -67,6 +74,7 @@ export async function GET(request: NextRequest) {
 
   if (stateError) {
     console.error("Failed to store OAuth state:", stateError);
+    console.log("[shopify-flow][auth] state insert failed", { userId: user.id, shop });
     return NextResponse.json(
       { error: "Failed to initiate OAuth flow" },
       { status: 500 }
@@ -78,6 +86,7 @@ export async function GET(request: NextRequest) {
   
   if (!clientId) {
     console.error("SHOPIFY_CLIENT_ID is not configured");
+    console.log("[shopify-flow][auth] missing SHOPIFY_CLIENT_ID");
     return NextResponse.json(
       { error: "Shopify app not configured" },
       { status: 500 }
@@ -93,6 +102,11 @@ export async function GET(request: NextRequest) {
   authUrl.searchParams.set("scope", SCOPES);
   authUrl.searchParams.set("redirect_uri", redirectUri);
   authUrl.searchParams.set("state", state);
+  console.log("[shopify-flow][auth] redirect to shopify oauth", {
+    userId: user.id,
+    shop,
+    redirectUri,
+  });
 
   // Redirect to Shopify's OAuth authorization page
   return NextResponse.redirect(authUrl.toString());

@@ -26,6 +26,13 @@ export async function GET(request: NextRequest) {
   const host = request.nextUrl.searchParams.get("host");
   const shopifyStatus = request.nextUrl.searchParams.get("shopify");
   const billingStatus = request.nextUrl.searchParams.get("billing");
+  console.log("[shopify-flow][install] request", {
+    requestedShop,
+    hasHost: !!host,
+    shopifyStatus,
+    billingStatus,
+    path: request.nextUrl.pathname,
+  });
 
   const supabase = await createClient();
   const {
@@ -33,7 +40,9 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    console.log("[shopify-flow][install] no session user", { requestedShop, shopifyStatus, billingStatus });
     if (!requestedShop) {
+      console.log("[shopify-flow][install] redirect login (missing shop)");
       return NextResponse.redirect(new URL("/auth/login", request.url));
     }
 
@@ -50,6 +59,11 @@ export async function GET(request: NextRequest) {
     if (host) {
       loginUrl.searchParams.set("host", host);
     }
+    console.log("[shopify-flow][install] redirect login", {
+      nextPath,
+      requestedShop,
+      hasHost: !!host,
+    });
     return NextResponse.redirect(loginUrl);
   }
 
@@ -61,6 +75,13 @@ export async function GET(request: NextRequest) {
 
   const ownerId = profile?.role === "owner" ? user.id : profile?.owner_id;
   let effectiveShop = requestedShop;
+  console.log("[shopify-flow][install] session user", {
+    userId: user.id,
+    userEmail: user.email,
+    role: profile?.role,
+    ownerId,
+    requestedShop,
+  });
 
   if (ownerId) {
     const { data: settings } = await supabase
@@ -81,8 +102,20 @@ export async function GET(request: NextRequest) {
       !!settings?.admin_access_token;
     const hasActiveBilling = hasBillingAccess(settings?.billing_status, user.email);
     const hasConnectionAccess = hasShopifyConnectionAccess(hasExistingConnection, user.email);
+    console.log("[shopify-flow][install] owner settings", {
+      ownerId,
+      connectedStore,
+      effectiveShop,
+      connectedViaOauth: !!settings?.connected_via_oauth,
+      hasAdminAccessToken: !!settings?.admin_access_token,
+      billingStatus: settings?.billing_status,
+      hasExistingConnection,
+      hasConnectionAccess,
+      hasActiveBilling,
+    });
 
     if (!effectiveShop && hasConnectionAccess) {
+      console.log("[shopify-flow][install] redirect dashboard (no effectiveShop but hasConnectionAccess)");
       const dashboardUrl = new URL("/dashboard", request.url);
       if (shopifyStatus) {
         dashboardUrl.searchParams.set("shopify", shopifyStatus);
@@ -94,6 +127,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (hasConnectionAccess && hasActiveBilling) {
+      console.log("[shopify-flow][install] redirect app (connected + billing)", {
+        destination: shopifyStatus === "connected" ? "/settings" : "/dashboard",
+        effectiveShop,
+      });
       const destination = shopifyStatus === "connected" ? "/settings" : "/dashboard";
       const dashboardUrl = new URL(destination, request.url);
       if (shopifyStatus) {
@@ -112,6 +149,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (hasConnectionAccess && !hasActiveBilling) {
+      console.log("[shopify-flow][install] redirect billing ensure", { effectiveShop });
       const billingUrl = new URL("/api/shopify/billing/ensure", request.url);
       if (effectiveShop) {
         billingUrl.searchParams.set("shop", effectiveShop);
@@ -124,6 +162,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (!effectiveShop) {
+    console.log("[shopify-flow][install] error missing/invalid shop");
     return NextResponse.json(
       { error: "Missing or invalid shop parameter" },
       { status: 400 },
@@ -131,5 +170,6 @@ export async function GET(request: NextRequest) {
   }
 
   const authPath = `/api/shopify/auth?shop=${encodeURIComponent(effectiveShop)}${host ? `&host=${encodeURIComponent(host)}` : ""}`;
+  console.log("[shopify-flow][install] redirect auth", { authPath, effectiveShop });
   return NextResponse.redirect(new URL(authPath, request.url));
 }
