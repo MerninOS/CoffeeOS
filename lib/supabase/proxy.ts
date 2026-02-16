@@ -95,7 +95,7 @@ export async function updateSession(request: NextRequest) {
 
     const { data: settings, error: settingsError } = await supabase
       .from("shopify_settings")
-      .select("connected_via_oauth, admin_access_token, billing_status")
+      .select("*")
       .eq("user_id", ownerId)
       .maybeSingle()
 
@@ -112,7 +112,7 @@ export async function updateSession(request: NextRequest) {
         const supabaseAdmin = createAdminClient()
         const { data: adminSettings, error: adminSettingsError } = await supabaseAdmin
           .from("shopify_settings")
-          .select("connected_via_oauth, admin_access_token, billing_status")
+          .select("*")
           .eq("user_id", ownerId)
           .maybeSingle()
 
@@ -127,7 +127,7 @@ export async function updateSession(request: NextRequest) {
             ownerId,
             connectedViaOauth: !!adminSettings.connected_via_oauth,
             hasAdminToken: !!adminSettings.admin_access_token,
-            billingStatus: adminSettings.billing_status || null,
+            billingStatus: (adminSettings as { billing_status?: string | null }).billing_status || null,
           })
         }
       } catch (adminError) {
@@ -139,7 +139,8 @@ export async function updateSession(request: NextRequest) {
     }
 
     const isConnected = !!(resolvedSettings?.connected_via_oauth && resolvedSettings?.admin_access_token)
-    const hasBilling = hasBillingAccess(resolvedSettings?.billing_status, user.email)
+    const billingStatus = (resolvedSettings as { billing_status?: string | null } | null)?.billing_status || null
+    const hasBilling = hasBillingAccess(billingStatus, user.email)
     const hasConnectionAccess = hasShopifyConnectionAccess(isConnected, user.email)
     console.log("[shopify-flow][proxy] billing gate evaluation", {
       path: request.nextUrl.pathname,
@@ -149,7 +150,7 @@ export async function updateSession(request: NextRequest) {
       ownerId,
       connectedViaOauth: !!resolvedSettings?.connected_via_oauth,
       hasAdminToken: !!resolvedSettings?.admin_access_token,
-      billingStatus: resolvedSettings?.billing_status || null,
+      billingStatus,
       isConnected,
       hasConnectionAccess,
       hasBilling,

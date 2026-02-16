@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
   if (ownerId) {
     const { data: settings } = await supabase
       .from("shopify_settings")
-      .select("store_domain, connected_via_oauth, admin_access_token, billing_status")
+      .select("*")
       .eq("user_id", ownerId)
       .single();
 
@@ -100,7 +100,8 @@ export async function GET(request: NextRequest) {
       (!requestedShop || connectedStore === requestedShop) &&
       settings?.connected_via_oauth &&
       !!settings?.admin_access_token;
-    const hasActiveBilling = hasBillingAccess(settings?.billing_status, user.email);
+    const billingStatus = (settings as { billing_status?: string | null } | null)?.billing_status || null;
+    const hasActiveBilling = hasBillingAccess(billingStatus, user.email);
     const hasConnectionAccess = hasShopifyConnectionAccess(hasExistingConnection, user.email);
     console.log("[shopify-flow][install] owner settings", {
       ownerId,
@@ -108,7 +109,7 @@ export async function GET(request: NextRequest) {
       effectiveShop,
       connectedViaOauth: !!settings?.connected_via_oauth,
       hasAdminAccessToken: !!settings?.admin_access_token,
-      billingStatus: settings?.billing_status,
+      billingStatus,
       hasExistingConnection,
       hasConnectionAccess,
       hasActiveBilling,

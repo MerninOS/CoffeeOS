@@ -70,10 +70,17 @@ export async function GET(request: NextRequest) {
       subscriptionId: subscription?.id || null,
     });
 
-    await supabase
+    const { error: billingSnapshotError } = await supabase
       .from("shopify_settings")
       .update(subscriptionToBillingFields(subscription))
       .eq("user_id", ownerId);
+    if (billingSnapshotError) {
+      console.log("[shopify-flow][billing-ensure] billing snapshot update failed", {
+        ownerId,
+        storeDomain,
+        error: billingSnapshotError.message,
+      });
+    }
 
     if (subscription && isBillingActive(subscription.status)) {
       console.log("[shopify-flow][billing-ensure] billing active, redirect dashboard");

@@ -233,10 +233,16 @@ export async function GET(request: NextRequest) {
     });
 
     // Persist latest billing snapshot from Shopify.
-    await supabaseAdmin
+    const { error: billingSnapshotError } = await supabaseAdmin
       .from("shopify_settings")
       .update(subscriptionToBillingFields(billingSubscription))
       .eq("user_id", storedState.user_id);
+    if (billingSnapshotError) {
+      console.log("[shopify-flow][callback] billing snapshot update failed", {
+        userId: storedState.user_id,
+        error: billingSnapshotError.message,
+      });
+    }
 
     if (billingSubscription && isBillingActive(billingSubscription.status)) {
       console.log("[shopify-flow][callback] billing active, redirect install", { shop });

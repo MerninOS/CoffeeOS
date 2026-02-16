@@ -198,13 +198,21 @@ export async function GET(request: NextRequest) {
       subscriptionId: subscription?.id || null,
     });
 
-    await supabaseAdmin
+    const { error: billingSnapshotError } = await supabaseAdmin
       .from("shopify_settings")
       .update(subscriptionToBillingFields(subscription))
       .eq("user_id", settings.user_id);
-    console.log("[shopify-flow][billing-return] saved billing fields", {
-      settingsUserId: settings.user_id,
-    });
+    if (billingSnapshotError) {
+      console.log("[shopify-flow][billing-return] billing snapshot update failed", {
+        settingsUserId: settings.user_id,
+        normalizedShop,
+        error: billingSnapshotError.message,
+      });
+    } else {
+      console.log("[shopify-flow][billing-return] saved billing fields", {
+        settingsUserId: settings.user_id,
+      });
+    }
 
     revalidatePath("/settings", "layout");
     revalidatePath("/dashboard", "layout");
