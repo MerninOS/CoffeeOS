@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createHmac } from "crypto";
 import { getShopifyActiveSubscription } from "@/lib/shopify";
 import { getManagedPricingPlansUrl, isBillingBypassEnabled, isBillingActive, subscriptionToBillingFields } from "@/lib/shopify-billing";
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
+  const supabaseAdmin = createAdminClient();
 
   // Get query parameters from Shopify callback
   const searchParams = request.nextUrl.searchParams;
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Verify state to prevent CSRF attacks
-  const { data: storedState, error: stateError } = await supabase
+  const { data: storedState, error: stateError } = await supabaseAdmin
     .from("shopify_oauth_states")
     .select("user_id, shop, expires_at")
     .eq("state", state)
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
   if (new Date(storedState.expires_at) < new Date()) {
     console.log("[shopify-flow][callback] state expired", { state, shop });
     // Clean up expired state
-    await supabase.from("shopify_oauth_states").delete().eq("state", state);
+    await supabaseAdmin.from("shopify_oauth_states").delete().eq("state", state);
     return NextResponse.redirect(
       new URL("/settings?error=state_expired", request.url)
     );
@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Store the access token in the database before billing check.
-    const { error: saveError } = await supabase
+    const { error: saveError } = await supabaseAdmin
       .from("shopify_settings")
       .upsert(
         {
@@ -196,8 +196,22 @@ export async function GET(request: NextRequest) {
       scope,
     });
 
+    const { data: persistedSettings, error: persistedSettingsError } = await supabaseAdmin
+      .from("shopify_settings")
+      .select("user_id, store_domain, connected_via_oauth, admin_access_token")
+      .eq("user_id", storedState.user_id)
+      .maybeSingle();
+    console.log("[shopify-flow][callback] post-save readback", {
+      userId: storedState.user_id,
+      readError: persistedSettingsError?.message || null,
+      hasRow: !!persistedSettings,
+      storeDomain: persistedSettings?.store_domain || null,
+      connectedViaOauth: !!persistedSettings?.connected_via_oauth,
+      hasAdminToken: !!persistedSettings?.admin_access_token,
+    });
+
     // Clean up the used state
-    await supabase.from("shopify_oauth_states").delete().eq("state", state);
+    await supabaseAdmin.from("shopify_oauth_states").delete().eq("state", state);
 
     if (isBillingBypassEnabled()) {
       console.log("[shopify-flow][callback] billing bypass enabled, redirect install");
@@ -219,7 +233,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Persist latest billing snapshot from Shopify.
-    await supabase
+    await supabaseAdmin
       .from("shopify_settings")
       .update(subscriptionToBillingFields(billingSubscription))
       .eq("user_id", storedState.user_id);
