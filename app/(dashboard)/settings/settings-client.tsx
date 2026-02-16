@@ -2,7 +2,7 @@
 
 import React from "react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { updateProfile } from "./actions";
 import { Button } from "@/components/ui/button";
@@ -80,14 +80,45 @@ export function SettingsClient({
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const hasAutoCheckedBillingRef = useRef(false);
 
   const searchParams = useSearchParams();
+  const isShopifyConnected = !!(
+    shopifySettings?.connected_via_oauth && shopifySettings?.has_admin_credentials
+  );
+  const isBillingActive = shopifySettings?.billing_status === "ACTIVE";
+  const billingReturnDate = shopifySettings?.billing_current_period_end
+    ? new Date(shopifySettings.billing_current_period_end).toLocaleDateString()
+    : null;
 
   // Handle OAuth callback messages
   useEffect(() => {
     const shopifyStatus = searchParams.get("shopify");
     const errorParam = searchParams.get("error");
+    const actionParam = searchParams.get("action");
     const billingStatus = searchParams.get("billing");
+
+    const shouldAutoCheckBilling =
+      isShopifyConnected &&
+      !isBillingActive &&
+      !!shopifySettings?.store_domain &&
+      (
+        shopifyStatus === "connected" ||
+        actionParam === "activate_billing" ||
+        errorParam === "billing_not_active"
+      );
+
+    if (shouldAutoCheckBilling && !hasAutoCheckedBillingRef.current) {
+      hasAutoCheckedBillingRef.current = true;
+      setMessage({
+        type: "success",
+        text: "Checking your Shopify billing status...",
+      });
+      window.location.href = `/api/shopify/billing/ensure?shop=${encodeURIComponent(
+        shopifySettings.store_domain
+      )}`;
+      return;
+    }
 
     if (shopifyStatus === "connected") {
       setMessage({ type: "success", text: "Shopify store connected successfully! You can now sync products and orders." });
@@ -116,7 +147,7 @@ export function SettingsClient({
       // Clean up URL
       window.history.replaceState({}, "", "/settings");
     }
-  }, [searchParams]);
+  }, [searchParams, isShopifyConnected, isBillingActive, shopifySettings?.store_domain]);
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,12 +212,6 @@ export function SettingsClient({
 
     setIsDisconnecting(false);
   };
-
-  const isShopifyConnected = shopifySettings?.connected_via_oauth && shopifySettings?.has_admin_credentials;
-  const isBillingActive = shopifySettings?.billing_status === "ACTIVE";
-  const billingReturnDate = shopifySettings?.billing_current_period_end
-    ? new Date(shopifySettings.billing_current_period_end).toLocaleDateString()
-    : null;
 
   return (
     <div className="space-y-6">
