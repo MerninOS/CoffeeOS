@@ -7,12 +7,13 @@ export async function POST(request: NextRequest) {
   if (!verification.ok) {
     return verification.response;
   }
-  const { shopDomain, topic, webhookId } = verification.webhook;
 
-  if (topic !== "app/uninstalled") {
+  const { topic, shopDomain, webhookId } = verification.webhook;
+  if (topic !== "shop/redact") {
     return NextResponse.json({ error: "Unexpected webhook topic" }, { status: 400 });
   }
-  console.log("[shopify-webhook][app-uninstalled] received", { shopDomain, webhookId });
+
+  console.log("[shopify-webhook][shop-redact] received", { shopDomain, webhookId });
 
   const supabaseAdmin = createAdminClient();
   const { error } = await supabaseAdmin
@@ -21,10 +22,10 @@ export async function POST(request: NextRequest) {
     .eq("store_domain", shopDomain);
 
   if (error) {
-    console.error("Failed to clean up uninstalled shop:", error);
+    console.error("Failed to process shop redact webhook:", error);
     return NextResponse.json({ error: "Failed to process webhook" }, { status: 500 });
   }
 
-  console.log("[shopify-webhook][app-uninstalled] cleaned up", { shopDomain, webhookId });
+  console.log("[shopify-webhook][shop-redact] cleaned up", { shopDomain, webhookId });
   return NextResponse.json({ ok: true });
 }
