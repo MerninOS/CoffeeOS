@@ -15,6 +15,12 @@ export async function POST(request: NextRequest) {
 
   const { topic, shopDomain, webhookId, body } = verification.webhook;
   if (!topic || !COMPLIANCE_TOPICS.has(topic)) {
+    console.log("[shopify-webhook][compliance] rejected unexpected topic", {
+      topic,
+      shopDomain,
+      webhookId,
+      payloadKeys: Object.keys(body),
+    });
     return NextResponse.json({ error: "Unexpected webhook topic" }, { status: 400 });
   }
 
