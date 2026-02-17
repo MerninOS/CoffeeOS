@@ -52,7 +52,8 @@ npm run shopify:config:push
 
 - Apply DB migration `scripts/018_add_shopify_billing.sql`.
 - Ensure Shopify app scopes include:
-  - `read_own_subscription`
+  - `read_products`
+  - `read_orders`
 - Use Shopify Managed Pricing for plan/charge management (no Billing API charge creation in app code).
 - After users connect Shopify, the app checks subscription status and only allows app access when billing status is `ACTIVE`.
 

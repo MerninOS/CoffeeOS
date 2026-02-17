@@ -1,16 +1,15 @@
 client_id = "8d9808c759838e785321922d75ae3dc6"
 name = "CoffeeOS"
-handle = "coffeeos"
+handle = "coffeos"
 application_url = "https://coffeeos.io/app"
 embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
 dev_store_url = "your-dev-store.myshopify.com"
-include_config_on_deploy = true
 
 [access_scopes]
-scopes = "read_products,read_orders,read_own_subscription"
+scopes = "read_products,read_orders"
 
 [auth]
 redirect_urls = [
