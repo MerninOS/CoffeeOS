@@ -3,6 +3,14 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith('/api/shopify/webhooks/')) {
+    console.log('[shopify-webhook][middleware] incoming', {
+      method: request.method,
+      path: request.nextUrl.pathname,
+      topic: request.headers.get('x-shopify-topic'),
+      shop: request.headers.get('x-shopify-shop-domain'),
+      webhookId: request.headers.get('x-shopify-webhook-id'),
+      userAgent: request.headers.get('user-agent'),
+    })
     return NextResponse.next()
   }
 

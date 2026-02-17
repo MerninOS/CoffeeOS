@@ -7,6 +7,27 @@ const COMPLIANCE_TOPICS = new Set([
   "shop/redact",
 ]);
 
+export async function GET(request: NextRequest) {
+  console.log("[shopify-webhook][compliance] GET probe", {
+    path: request.nextUrl.pathname,
+    userAgent: request.headers.get("user-agent"),
+  });
+  return NextResponse.json({ ok: true });
+}
+
+export async function OPTIONS(request: NextRequest) {
+  console.log("[shopify-webhook][compliance] OPTIONS probe", {
+    path: request.nextUrl.pathname,
+    userAgent: request.headers.get("user-agent"),
+  });
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      Allow: "POST,GET,OPTIONS",
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   const verification = await verifyShopifyWebhook(request);
   if (!verification.ok) {
