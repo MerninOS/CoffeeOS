@@ -26,4 +26,4 @@ api_version = "2026-01"
 
   [[webhooks.subscriptions]]
   compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
-  uri = "/api/shopify/webhooks/compliance"
+  uri = "https://coffeeos.io/api/shopify/webhooks/compliance"
