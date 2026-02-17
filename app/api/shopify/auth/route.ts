@@ -4,8 +4,7 @@ import { randomBytes } from "crypto";
 
 // Shopify OAuth scopes needed for the app
 // read_products/read_orders: app functionality
-// read_own_subscription: read-only billing status checks for managed pricing
-const SCOPES = "read_products,read_orders,read_own_subscription";
+const SCOPES = "read_products,read_orders";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
