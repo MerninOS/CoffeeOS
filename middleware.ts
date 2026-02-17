@@ -2,7 +2,10 @@ import { updateSession } from '@/lib/supabase/proxy'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  if (request.nextUrl.pathname.startsWith('/api/shopify/webhooks/')) {
+  if (
+    request.nextUrl.pathname.startsWith('/api/shopify/webhooks/') ||
+    request.nextUrl.pathname.startsWith('/app/api/shopify/webhooks/')
+  ) {
     console.log('[shopify-webhook][middleware] incoming', {
       method: request.method,
       path: request.nextUrl.pathname,
