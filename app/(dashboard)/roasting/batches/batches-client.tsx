@@ -81,6 +81,14 @@ interface Batch {
     id: string;
     session_date: string;
     vendor_name: string;
+    rate_per_hour: number;
+    cost_mode: "toll_roasting" | "power_usage";
+    machine_energy_kwh_per_hour: number | null;
+    kwh_rate: number | null;
+    setup_minutes: number;
+    cleanup_minutes: number;
+    billing_granularity_minutes: number;
+    session_toll_cost: number | null;
   } | null;
   components: {
     id: string;
@@ -102,6 +110,69 @@ interface BatchesClientProps {
 }
 
 const UNITS = ["g", "oz", "lb", "kg"];
+const COST_PER_UNIT_DECIMALS = 8;
+
+const getSessionAggForBatch = (batch: Batch, allBatches: Batch[]) => {
+  if (!batch.roasting_sessions) {
+    return { totalRoastMinutes: batch.roast_minutes || 0, batchCount: 1 };
+  }
+
+  const sessionId = batch.roasting_sessions.id;
+  const sessionBatches = allBatches.filter((b) => b.roasting_sessions?.id === sessionId);
+  const totalRoastMinutes = sessionBatches.reduce(
+    (sum, b) => sum + (b.roast_minutes || 0),
+    0
+  );
+
+  return {
+    totalRoastMinutes,
+    batchCount: Math.max(sessionBatches.length, 1),
+  };
+};
+
+const getSessionCostForBatch = (batch: Batch, allBatches: Batch[]) => {
+  if (!batch.roasting_sessions) return 0;
+
+  const session = batch.roasting_sessions;
+  const { totalRoastMinutes } = getSessionAggForBatch(batch, allBatches);
+  const totalSessionMinutes =
+    (session.setup_minutes || 0) +
+    totalRoastMinutes +
+    (session.cleanup_minutes || 0);
+  const billableMinutes =
+    Math.ceil(totalSessionMinutes / (session.billing_granularity_minutes || 15)) *
+    (session.billing_granularity_minutes || 15);
+
+  if (session.cost_mode === "power_usage") {
+    return (
+      (billableMinutes / 60) *
+      (session.machine_energy_kwh_per_hour || 0) *
+      (session.kwh_rate || 0)
+    );
+  }
+
+  return (billableMinutes / 60) * (session.rate_per_hour || 0);
+};
+
+const getBatchCostPerGram = (batch: Batch, allBatches: Batch[]) => {
+  if (batch.sellable_g <= 0) return 0;
+
+  const { totalRoastMinutes, batchCount } = getSessionAggForBatch(batch, allBatches);
+  const session = batch.roasting_sessions;
+  const setupMinutes = session?.setup_minutes || 0;
+  const cleanupMinutes = session?.cleanup_minutes || 0;
+  const totalSessionMinutes = setupMinutes + totalRoastMinutes + cleanupMinutes;
+  const batchEffectiveMinutes =
+    (batch.roast_minutes || 0) + (setupMinutes + cleanupMinutes) / batchCount;
+  const totalGreenCost = batch.green_cost_per_g * batch.green_weight_g;
+  const sessionCost = getSessionCostForBatch(batch, allBatches);
+  const allocatedSessionCost =
+    totalSessionMinutes > 0
+      ? sessionCost * (batchEffectiveMinutes / totalSessionMinutes)
+      : 0;
+
+  return (totalGreenCost + allocatedSessionCost) / batch.sellable_g;
+};
 
 export function BatchesClient({ initialBatches, existingComponents }: BatchesClientProps) {
   const [batches, setBatches] = useState(initialBatches);
@@ -142,12 +213,10 @@ export function BatchesClient({ initialBatches, existingComponents }: BatchesCli
     setCreateComponentBatch(batch);
     // Pre-fill with suggested values
     const suggestedName = `Roasted ${batch.coffee_name}`;
-    // Calculate cost per gram from the batch data
-    const totalGreenCost = batch.green_cost_per_g * batch.green_weight_g;
-    const costPerG = batch.sellable_g > 0 ? totalGreenCost / batch.sellable_g : 0;
+    const costPerG = getBatchCostPerGram(batch, batches);
     setComponentFormData({
       name: suggestedName,
-      costPerUnit: costPerG.toFixed(4),
+      costPerUnit: costPerG.toFixed(COST_PER_UNIT_DECIMALS),
       unit: "g",
     });
     // Reset mode and selection
@@ -161,13 +230,10 @@ export function BatchesClient({ initialBatches, existingComponents }: BatchesCli
 
     if (componentMode === "existing" && selectedComponentId) {
       // Add to existing component
-      const totalGreenCost = createComponentBatch.green_cost_per_g * createComponentBatch.green_weight_g;
-      const costPerG = createComponentBatch.sellable_g > 0 ? totalGreenCost / createComponentBatch.sellable_g : 0;
-
-      const result = await addToExistingComponent(createComponentBatch.id, selectedComponentId, {
-        newQuantityG: createComponentBatch.sellable_g,
-        newCostPerUnit: costPerG,
-      });
+      const result = await addToExistingComponent(
+        createComponentBatch.id,
+        selectedComponentId
+      );
       setIsSubmitting(false);
 
       if (result.error) {
@@ -189,7 +255,11 @@ export function BatchesClient({ initialBatches, existingComponents }: BatchesCli
               : b
           )
         );
-        alert(`Added to "${selectedComp?.name}". Cost updated from $${result.previousCost?.toFixed(4)} to $${result.newAveragedCost?.toFixed(4)} per gram.`);
+        alert(
+          `Added to "${selectedComp?.name}". Cost updated from $${result.previousCost?.toFixed(
+            COST_PER_UNIT_DECIMALS
+          )} to $${result.newAveragedCost?.toFixed(COST_PER_UNIT_DECIMALS)} per gram.`
+        );
         setCreateComponentBatch(null);
         setComponentFormData({ name: "", costPerUnit: "", unit: "g" });
         setSelectedComponentId("");
@@ -559,7 +629,7 @@ export function BatchesClient({ initialBatches, existingComponents }: BatchesCli
               <div className="flex items-center justify-between gap-4">
                 <span>{comp.name}</span>
                 <span className="text-muted-foreground text-xs">
-                  ${comp.cost_per_unit.toFixed(4)}/{comp.unit}
+                  ${comp.cost_per_unit.toFixed(COST_PER_UNIT_DECIMALS)}/{comp.unit}
                 </span>
               </div>
             </SelectItem>
@@ -597,7 +667,7 @@ export function BatchesClient({ initialBatches, existingComponents }: BatchesCli
           <Input
             id="costPerUnit"
             type="number"
-            step="0.0001"
+            step="0.00000001"
             value={componentFormData.costPerUnit}
             onChange={(e) =>
               setComponentFormData({

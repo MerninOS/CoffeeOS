@@ -69,6 +69,8 @@ interface Component {
   created_at: string;
 }
 
+const COST_PER_UNIT_DECIMALS = 8;
+
 interface ComponentsClientProps {
   initialComponents: Component[];
 }
@@ -320,7 +322,7 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
                         </div>
                         <div className="mt-2">
                           <span className="text-sm font-medium">
-                            ${component.cost_per_unit.toFixed(4)}/{component.unit}
+                            ${component.cost_per_unit.toFixed(COST_PER_UNIT_DECIMALS)}/{component.unit}
                           </span>
                         </div>
                       </div>
@@ -350,7 +352,7 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
                               {component.notes || "-"}
                             </TableCell>
                             <TableCell className="text-right">
-                              ${component.cost_per_unit.toFixed(4)}/
+                              ${component.cost_per_unit.toFixed(COST_PER_UNIT_DECIMALS)}/
                               {component.unit}
                             </TableCell>
                             <TableCell className="text-right">
@@ -462,7 +464,7 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
                 <Input
                   id="costPerUnit"
                   type="number"
-                  step="0.0001"
+                  step="0.00000001"
                   min="0"
                   placeholder="0.00"
                   value={formData.costPerUnit}

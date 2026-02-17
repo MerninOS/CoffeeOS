@@ -17,6 +17,7 @@ export default async function RoastingSessionsPage() {
       *,
       roasting_batches (
         id,
+        roast_minutes,
         green_weight_g,
         roasted_weight_g
       )
@@ -75,12 +76,44 @@ export default async function RoastingSessionsPage() {
       session_date: session.session_date,
       vendor_name: session.vendor_name,
       rate_per_hour: session.rate_per_hour,
+      cost_mode: session.cost_mode || "toll_roasting",
+      machine_energy_kwh_per_hour: session.machine_energy_kwh_per_hour,
+      kwh_rate: session.kwh_rate,
       setup_minutes: session.setup_minutes,
       cleanup_minutes: session.cleanup_minutes,
       billing_granularity_minutes: session.billing_granularity_minutes,
       allocation_mode: session.allocation_mode,
-      billable_minutes: session.billable_minutes,
-      session_toll_cost: session.session_toll_cost,
+      billable_minutes:
+        session.billable_minutes ??
+        Math.ceil(
+          (session.setup_minutes +
+            batches.reduce(
+              (sum: number, b: { roast_minutes: number | null }) =>
+                sum + (b.roast_minutes || 0),
+              0
+            ) +
+            session.cleanup_minutes) / session.billing_granularity_minutes
+        ) * session.billing_granularity_minutes,
+      session_toll_cost: (() => {
+        const totalRoastMinutes = batches.reduce(
+          (sum: number, b: { roast_minutes: number | null }) =>
+            sum + (b.roast_minutes || 0),
+          0
+        );
+        const totalSessionMinutes =
+          session.setup_minutes + totalRoastMinutes + session.cleanup_minutes;
+        const billableMinutes =
+          Math.ceil(totalSessionMinutes / session.billing_granularity_minutes) *
+          session.billing_granularity_minutes;
+
+        if (session.cost_mode === "power_usage") {
+          const machineKwhPerHour = session.machine_energy_kwh_per_hour || 0;
+          const kwhRate = session.kwh_rate || 0;
+          return (billableMinutes / 60) * machineKwhPerHour * kwhRate;
+        }
+
+        return (billableMinutes / 60) * session.rate_per_hour;
+      })(),
       notes: session.notes,
       created_at: session.created_at,
       batch_count: batches.length,
