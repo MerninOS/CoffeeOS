@@ -10,6 +10,11 @@ export async function POST(request: NextRequest) {
   const { shopDomain, topic, webhookId } = verification.webhook;
 
   if (topic !== "app/uninstalled") {
+    console.log("[shopify-webhook][app-uninstalled] rejected unexpected topic", {
+      topic,
+      shopDomain,
+      webhookId,
+    });
     return NextResponse.json({ error: "Unexpected webhook topic" }, { status: 400 });
   }
   console.log("[shopify-webhook][app-uninstalled] received", { shopDomain, webhookId });

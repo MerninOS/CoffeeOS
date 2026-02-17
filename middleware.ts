@@ -1,7 +1,11 @@
 import { updateSession } from '@/lib/supabase/proxy'
-import { type NextRequest } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith('/api/shopify/webhooks/')) {
+    return NextResponse.next()
+  }
+
   const response = await updateSession(request)
   const cspValue = "frame-ancestors 'self' https://admin.shopify.com https://*.myshopify.com;"
 
