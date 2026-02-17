@@ -14,7 +14,15 @@ export default async function BatchesPage() {
       roasting_sessions (
         id,
         session_date,
-        vendor_name
+        vendor_name,
+        rate_per_hour,
+        cost_mode,
+        machine_energy_kwh_per_hour,
+        kwh_rate,
+        setup_minutes,
+        cleanup_minutes,
+        billing_granularity_minutes,
+        session_toll_cost
       ),
       components (
         id,

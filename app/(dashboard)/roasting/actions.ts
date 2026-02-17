@@ -4,11 +4,120 @@ import { createClient } from "@/lib/supabase/server";
 import { getEffectiveOwnerId } from "@/lib/team";
 import { revalidatePath } from "next/cache";
 
+type SessionCostContext = {
+  rate_per_hour: number | null;
+  cost_mode: "toll_roasting" | "power_usage" | null;
+  machine_energy_kwh_per_hour: number | null;
+  kwh_rate: number | null;
+  setup_minutes: number | null;
+  cleanup_minutes: number | null;
+  billing_granularity_minutes: number | null;
+};
+
+type BatchCostContext = {
+  session_id: string;
+  roast_minutes: number;
+  green_cost_per_g: number;
+  green_weight_g: number;
+  sellable_g: number;
+  roasting_sessions: SessionCostContext | null;
+};
+
+function getSessionCostContext(
+  sessionRelation: SessionCostContext | SessionCostContext[] | null | undefined
+) {
+  if (!sessionRelation) return null;
+  if (Array.isArray(sessionRelation)) {
+    return sessionRelation[0] || null;
+  }
+  return sessionRelation;
+}
+
+function computeSessionTollCost(
+  session: SessionCostContext | null,
+  totalRoastMinutesForSession: number
+) {
+  if (!session) return 0;
+
+  const setupMinutes = Number(session.setup_minutes || 0);
+  const cleanupMinutes = Number(session.cleanup_minutes || 0);
+  const billingGranularityMinutes = Number(
+    session.billing_granularity_minutes || 15
+  );
+
+  const totalSessionMinutes =
+    setupMinutes + Number(totalRoastMinutesForSession || 0) + cleanupMinutes;
+  const billableMinutes =
+    Math.ceil(totalSessionMinutes / billingGranularityMinutes) *
+    billingGranularityMinutes;
+
+  if (session.cost_mode === "power_usage") {
+    const machineKwhPerHour = session.machine_energy_kwh_per_hour || 0;
+    const kwhRate = session.kwh_rate || 0;
+    return (billableMinutes / 60) * Number(machineKwhPerHour) * Number(kwhRate);
+  }
+
+  return (billableMinutes / 60) * Number(session.rate_per_hour || 0);
+}
+
+function computeBatchCostPerGram(
+  batch: BatchCostContext,
+  totalRoastMinutesForSession: number,
+  batchCountForSession: number
+) {
+  const sellableG = Number(batch.sellable_g || 0);
+  if (sellableG <= 0) return 0;
+
+  const roastMinutes = Number(batch.roast_minutes || 0);
+  const setupMinutes = Number(batch.roasting_sessions?.setup_minutes || 0);
+  const cleanupMinutes = Number(batch.roasting_sessions?.cleanup_minutes || 0);
+  const totalSessionMinutes =
+    setupMinutes + Number(totalRoastMinutesForSession || 0) + cleanupMinutes;
+  const safeBatchCount = Math.max(Number(batchCountForSession || 0), 1);
+  const totalGreenCost =
+    Number(batch.green_cost_per_g || 0) * Number(batch.green_weight_g || 0);
+  const sessionCost = computeSessionTollCost(
+    batch.roasting_sessions,
+    totalRoastMinutesForSession
+  );
+  const batchEffectiveMinutes =
+    roastMinutes + (setupMinutes + cleanupMinutes) / safeBatchCount;
+  const batchSessionAllocatedCost =
+    totalSessionMinutes > 0
+      ? sessionCost * (batchEffectiveMinutes / totalSessionMinutes)
+      : 0;
+
+  return (totalGreenCost + batchSessionAllocatedCost) / sellableG;
+}
+
+type SessionAgg = {
+  totalRoastMinutes: number;
+  batchCount: number;
+};
+
+function buildSessionAggMap(
+  sessionBatches: Array<{ session_id: string | null; roast_minutes: number | null }>
+) {
+  const aggMap: Record<string, SessionAgg> = {};
+  for (const sb of sessionBatches) {
+    if (!sb.session_id) continue;
+    if (!aggMap[sb.session_id]) {
+      aggMap[sb.session_id] = { totalRoastMinutes: 0, batchCount: 0 };
+    }
+    aggMap[sb.session_id].totalRoastMinutes += Number(sb.roast_minutes || 0);
+    aggMap[sb.session_id].batchCount += 1;
+  }
+  return aggMap;
+}
+
 // Session Actions
 export async function createSession(data: {
   sessionDate: string;
   vendorName: string;
-  ratePerHour: number;
+  ratePerHour?: number;
+  costMode?: "toll_roasting" | "power_usage";
+  machineEnergyKwhPerHour?: number;
+  kwhRate?: number;
   setupMinutes?: number;
   cleanupMinutes?: number;
   billingGranularityMinutes?: number;
@@ -28,7 +137,10 @@ export async function createSession(data: {
       user_id: ownerId,
       session_date: data.sessionDate,
       vendor_name: data.vendorName,
-      rate_per_hour: data.ratePerHour,
+      rate_per_hour: data.ratePerHour || 0,
+      cost_mode: data.costMode || "toll_roasting",
+      machine_energy_kwh_per_hour: data.machineEnergyKwhPerHour || null,
+      kwh_rate: data.kwhRate || null,
       setup_minutes: data.setupMinutes || 0,
       cleanup_minutes: data.cleanupMinutes || 0,
       billing_granularity_minutes: data.billingGranularityMinutes || 15,
@@ -52,6 +164,9 @@ export async function updateSession(
     sessionDate?: string;
     vendorName?: string;
     ratePerHour?: number;
+    costMode?: "toll_roasting" | "power_usage";
+    machineEnergyKwhPerHour?: number;
+    kwhRate?: number;
     setupMinutes?: number;
     cleanupMinutes?: number;
     billingGranularityMinutes?: number;
@@ -70,6 +185,9 @@ export async function updateSession(
   if (data.sessionDate) updateData.session_date = data.sessionDate;
   if (data.vendorName) updateData.vendor_name = data.vendorName;
   if (data.ratePerHour !== undefined) updateData.rate_per_hour = data.ratePerHour;
+  if (data.costMode !== undefined) updateData.cost_mode = data.costMode;
+  if (data.machineEnergyKwhPerHour !== undefined) updateData.machine_energy_kwh_per_hour = data.machineEnergyKwhPerHour;
+  if (data.kwhRate !== undefined) updateData.kwh_rate = data.kwhRate;
   if (data.setupMinutes !== undefined) updateData.setup_minutes = data.setupMinutes;
   if (data.cleanupMinutes !== undefined) updateData.cleanup_minutes = data.cleanupMinutes;
   if (data.billingGranularityMinutes !== undefined) updateData.billing_granularity_minutes = data.billingGranularityMinutes;
@@ -660,13 +778,51 @@ export async function createComponentFromBatch(
   // Get the batch details
   const { data: batch } = await supabase
     .from("roasting_batches")
-    .select("*, roasting_sessions(session_date)")
+    .select(`
+      *,
+      roasting_sessions(
+        session_date,
+        rate_per_hour,
+        cost_mode,
+        machine_energy_kwh_per_hour,
+        kwh_rate,
+        setup_minutes,
+        cleanup_minutes,
+        billing_granularity_minutes
+      )
+    `)
     .eq("id", batchId)
     .single();
 
   if (!batch) {
     return { error: "Batch not found" };
   }
+
+  const { data: sessionBatches } = await supabase
+    .from("roasting_batches")
+    .select("session_id, roast_minutes")
+    .eq("session_id", batch.session_id)
+    .eq("user_id", ownerId);
+  const sessionAggMap = buildSessionAggMap(sessionBatches || []);
+  const sessionAgg = sessionAggMap[batch.session_id] || {
+    totalRoastMinutes: Number(batch.roast_minutes || 0),
+    batchCount: 1,
+  };
+
+  const computedCostPerG = computeBatchCostPerGram(
+    {
+      session_id: batch.session_id,
+      roast_minutes: batch.roast_minutes || 0,
+      green_cost_per_g: batch.green_cost_per_g || 0,
+      green_weight_g: batch.green_weight_g || 0,
+      sellable_g: batch.sellable_g || 0,
+      roasting_sessions: getSessionCostContext(
+        batch.roasting_sessions as SessionCostContext | SessionCostContext[] | null
+      ),
+    },
+    sessionAgg.totalRoastMinutes,
+    sessionAgg.batchCount
+  );
 
   // Create the component
   const { data: component, error } = await supabase
@@ -675,7 +831,7 @@ export async function createComponentFromBatch(
       user_id: ownerId,
       name: data.name,
       type: "ingredient",
-      cost_per_unit: data.costPerUnit,
+      cost_per_unit: computedCostPerG || data.costPerUnit,
       unit: data.unit,
       notes: `Created from roasting batch "${batch.coffee_name}" on ${batch.roasting_sessions?.session_date || batch.batch_date || "unknown date"}. Lot: ${batch.lot_code || "N/A"}`,
     })
@@ -700,11 +856,7 @@ export async function createComponentFromBatch(
 // Add roasted coffee to an existing component with averaged pricing
 export async function addToExistingComponent(
   batchId: string,
-  componentId: string,
-  data: {
-    newQuantityG: number; // The sellable grams from this batch
-    newCostPerUnit: number; // The cost per unit for this batch
-  }
+  componentId: string
 ) {
   const supabase = await createClient();
 
@@ -717,7 +869,19 @@ export async function addToExistingComponent(
   // Get the batch details
   const { data: batch } = await supabase
     .from("roasting_batches")
-    .select("*, roasting_sessions(session_date)")
+    .select(`
+      *,
+      roasting_sessions(
+        session_date,
+        rate_per_hour,
+        cost_mode,
+        machine_energy_kwh_per_hour,
+        kwh_rate,
+        setup_minutes,
+        cleanup_minutes,
+        billing_granularity_minutes
+      )
+    `)
     .eq("id", batchId)
     .eq("user_id", ownerId)
     .single();
@@ -738,17 +902,43 @@ export async function addToExistingComponent(
     return { error: "Component not found" };
   }
 
-  // Count how many batches are already linked to this component to estimate existing quantity
-  const { count: linkedBatchCount } = await supabase
-    .from("roasting_batches")
-    .select("id", { count: "exact", head: true })
-    .eq("component_id", componentId);
-
   // Get total sellable weight from existing linked batches
   const { data: linkedBatches } = await supabase
     .from("roasting_batches")
-    .select("sellable_g, green_cost_per_g, green_weight_g")
-    .eq("component_id", componentId);
+    .select(`
+      session_id,
+      roast_minutes,
+      sellable_g,
+      green_cost_per_g,
+      green_weight_g,
+      roasting_sessions(
+        rate_per_hour,
+        cost_mode,
+        machine_energy_kwh_per_hour,
+        kwh_rate,
+        setup_minutes,
+        cleanup_minutes,
+        billing_granularity_minutes
+      )
+    `)
+    .eq("user_id", ownerId)
+    .eq("component_id", componentId)
+    .neq("id", batchId);
+
+  const sessionIds = Array.from(
+    new Set(
+      [batch.session_id, ...(linkedBatches || []).map((lb) => lb.session_id)].filter(
+        Boolean
+      )
+    )
+  ) as string[];
+
+  const { data: sessionBatches } = await supabase
+    .from("roasting_batches")
+    .select("session_id, roast_minutes")
+    .eq("user_id", ownerId)
+    .in("session_id", sessionIds);
+  const sessionAggMap = buildSessionAggMap(sessionBatches || []);
 
   // Calculate existing total cost and quantity
   let existingTotalCost = 0;
@@ -756,24 +946,57 @@ export async function addToExistingComponent(
 
   if (linkedBatches && linkedBatches.length > 0) {
     for (const lb of linkedBatches) {
-      const batchGreenCost = lb.green_cost_per_g * lb.green_weight_g;
-      existingTotalCost += batchGreenCost;
-      existingTotalQuantityG += lb.sellable_g;
+      const linkedSellableG = Number(lb.sellable_g || 0);
+      const linkedSessionAgg = sessionAggMap[lb.session_id] || {
+        totalRoastMinutes: Number(lb.roast_minutes || 0),
+        batchCount: 1,
+      };
+      const costPerG = computeBatchCostPerGram(
+        {
+          session_id: lb.session_id,
+          roast_minutes: lb.roast_minutes || 0,
+          sellable_g: lb.sellable_g || 0,
+          green_cost_per_g: lb.green_cost_per_g || 0,
+          green_weight_g: lb.green_weight_g || 0,
+          roasting_sessions: getSessionCostContext(
+            lb.roasting_sessions as SessionCostContext | SessionCostContext[] | null
+          ),
+        },
+        linkedSessionAgg.totalRoastMinutes,
+        linkedSessionAgg.batchCount
+      );
+
+      existingTotalCost += costPerG * linkedSellableG;
+      existingTotalQuantityG += linkedSellableG;
     }
-  } else {
-    // No linked batches, use component's current cost as baseline
-    // Assume some existing quantity based on the component being used
-    existingTotalCost = 0;
-    existingTotalQuantityG = 0;
   }
 
   // Add this batch's contribution
-  const newBatchTotalCost = batch.green_cost_per_g * batch.green_weight_g;
-  const totalQuantityG = existingTotalQuantityG + data.newQuantityG;
+  const newQuantityG = Number(batch.sellable_g || 0);
+  const newBatchSessionAgg = sessionAggMap[batch.session_id] || {
+    totalRoastMinutes: Number(batch.roast_minutes || 0),
+    batchCount: 1,
+  };
+  const newBatchCostPerG = computeBatchCostPerGram(
+    {
+      session_id: batch.session_id,
+      roast_minutes: batch.roast_minutes || 0,
+      sellable_g: batch.sellable_g || 0,
+      green_cost_per_g: batch.green_cost_per_g || 0,
+      green_weight_g: batch.green_weight_g || 0,
+      roasting_sessions: getSessionCostContext(
+        batch.roasting_sessions as SessionCostContext | SessionCostContext[] | null
+      ),
+    },
+    newBatchSessionAgg.totalRoastMinutes,
+    newBatchSessionAgg.batchCount
+  );
+  const newBatchTotalCost = newBatchCostPerG * newQuantityG;
+  const totalQuantityG = existingTotalQuantityG + newQuantityG;
   const totalCost = existingTotalCost + newBatchTotalCost;
 
   // Calculate new averaged cost per gram
-  const newCostPerG = totalQuantityG > 0 ? totalCost / totalQuantityG : data.newCostPerUnit;
+  const newCostPerG = totalQuantityG > 0 ? totalCost / totalQuantityG : 0;
 
   // Update the component with averaged cost
   const { data: updatedComponent, error: updateError } = await supabase

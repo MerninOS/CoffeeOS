@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS public.components (
   name TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('ingredient', 'labor', 'packaging', 'other')),
   unit TEXT NOT NULL,
-  cost_per_unit DECIMAL(10, 4) NOT NULL DEFAULT 0,
+  cost_per_unit DECIMAL(18, 8) NOT NULL DEFAULT 0,
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

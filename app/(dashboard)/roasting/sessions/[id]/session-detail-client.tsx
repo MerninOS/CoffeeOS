@@ -77,6 +77,9 @@ interface Session {
   session_date: string;
   vendor_name: string;
   rate_per_hour: number;
+  cost_mode: "toll_roasting" | "power_usage";
+  machine_energy_kwh_per_hour: number | null;
+  kwh_rate: number | null;
   setup_minutes: number;
   cleanup_minutes: number;
   billing_granularity_minutes: number;
@@ -268,7 +271,12 @@ export function SessionDetailClient({
   const totalRoastMinutes = batches.reduce((sum, b) => sum + b.roast_minutes, 0);
   const totalSessionMinutes = session.setup_minutes + totalRoastMinutes + session.cleanup_minutes;
   const billableMinutes = Math.ceil(totalSessionMinutes / session.billing_granularity_minutes) * session.billing_granularity_minutes;
-  const sessionTollCost = (billableMinutes / 60) * session.rate_per_hour;
+  const sessionTollCost =
+    session.cost_mode === "power_usage"
+      ? (billableMinutes / 60) *
+        (session.machine_energy_kwh_per_hour || 0) *
+        (session.kwh_rate || 0)
+      : (billableMinutes / 60) * session.rate_per_hour;
 
   // Handle coffee inventory selection
   const handleCoffeeSelect = (coffeeId: string) => {
@@ -533,7 +541,11 @@ export function SessionDetailClient({
               <Badge variant="outline" className="shrink-0">{session.vendor_name}</Badge>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground truncate">
-              ${session.rate_per_hour}/hr | {session.billing_granularity_minutes} min billing
+              {session.cost_mode === "power_usage"
+                ? `${session.machine_energy_kwh_per_hour || 0} kWh/hr | $${(
+                    session.kwh_rate || 0
+                  ).toFixed(4)}/kWh | ${session.billing_granularity_minutes} min billing`
+                : `$${session.rate_per_hour}/hr | ${session.billing_granularity_minutes} min billing`}
             </p>
           </div>
         </div>
