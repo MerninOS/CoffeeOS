@@ -1,11 +1,27 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { updateProductComponents, updateProductPrice, updateWholesalePricing } from "./actions";
+import {
+  createProductVariant,
+  deleteProductVariant,
+  updateProductComponents,
+  updateProductPrice,
+  updateProductVariantPrice,
+  updateProductVariantComponents,
+  updateWholesalePricing,
+} from "./actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,7 +48,7 @@ interface Component {
   name: string;
   cost_per_unit: number;
   unit: string;
-  type: string;
+  type?: string;
 }
 
 interface ProductComponent {
@@ -40,6 +56,18 @@ interface ProductComponent {
   quantity: number;
   component_id: string;
   components: Component | null;
+}
+
+interface ProductVariant {
+  id: string;
+  title: string;
+  sku: string | null;
+  price: number | null;
+  shopify_variant_id: string | null;
+}
+
+interface ProductVariantComponent extends ProductComponent {
+  product_variant_id: string;
 }
 
 interface Product {
@@ -64,6 +92,8 @@ interface ProductDetailClientProps {
   product: Product;
   availableComponents: Component[];
   productComponents: ProductComponent[];
+  productVariants: ProductVariant[];
+  productVariantComponents: ProductVariantComponent[];
   wholesaleTiers: WholesaleTier[];
 }
 
@@ -89,22 +119,75 @@ export function ProductDetailClient({
   product,
   availableComponents,
   productComponents: initialProductComponents,
+  productVariants,
+  productVariantComponents: initialVariantComponents,
   wholesaleTiers: initialWholesaleTiers,
 }: ProductDetailClientProps) {
-  const [selectedComponents, setSelectedComponents] = useState<SelectedComponent[]>(
+  const [variants, setVariants] = useState<ProductVariant[]>(productVariants);
+  const [defaultSelectedComponents, setDefaultSelectedComponents] = useState<SelectedComponent[]>(
     initialProductComponents.map((pc) => ({
       componentId: pc.component_id,
       quantity: pc.quantity,
     }))
   );
+  const [selectedVariantId, setSelectedVariantId] = useState<string>(productVariants[0]?.id || "");
+  const [variantComponentMap, setVariantComponentMap] = useState<Record<string, SelectedComponent[]>>(() => {
+    const grouped: Record<string, SelectedComponent[]> = {};
+    for (const vc of initialVariantComponents) {
+      if (!grouped[vc.product_variant_id]) {
+        grouped[vc.product_variant_id] = [];
+      }
+      grouped[vc.product_variant_id].push({
+        componentId: vc.component_id,
+        quantity: vc.quantity,
+      });
+    }
+    return grouped;
+  });
 
   const [sellingPrice, setSellingPrice] = useState(product.price?.toString() || "");
   const [isSaving, setIsSaving] = useState(false);
   const [isPriceUpdating, setIsPriceUpdating] = useState(false);
+  const [isAddingVariant, setIsAddingVariant] = useState(false);
+  const [isRemovingVariant, setIsRemovingVariant] = useState(false);
+  const [isAddVariantDialogOpen, setIsAddVariantDialogOpen] = useState(false);
+  const [newVariantTitle, setNewVariantTitle] = useState("");
+  const [newVariantSku, setNewVariantSku] = useState("");
+  const [newVariantPrice, setNewVariantPrice] = useState(product.price?.toString() || "");
+  const [newVariantCopySource, setNewVariantCopySource] = useState<string>(
+    productVariants.length === 0 && initialProductComponents.length > 0
+      ? "product"
+      : productVariants[0]
+        ? `variant:${productVariants[0].id}`
+        : "none"
+  );
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  const isVariantMode = variants.length > 0;
+  const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) || null;
+
+  const selectedComponents = useMemo(() => {
+    if (!isVariantMode) return defaultSelectedComponents;
+    if (!selectedVariantId) return [];
+    return variantComponentMap[selectedVariantId] || [];
+  }, [isVariantMode, defaultSelectedComponents, selectedVariantId, variantComponentMap]);
+
+  const setSelectedComponents = (components: SelectedComponent[]) => {
+    if (!isVariantMode) {
+      setDefaultSelectedComponents(components);
+      return;
+    }
+
+    if (!selectedVariantId) return;
+
+    setVariantComponentMap((prev) => ({
+      ...prev,
+      [selectedVariantId]: components,
+    }));
+  };
 
   // Wholesale state
   const [wholesaleEnabled, setWholesaleEnabled] = useState(product.wholesale_enabled || false);
@@ -114,6 +197,14 @@ export function ProductDetailClient({
     initialWholesaleTiers.map((t) => ({ min_quantity: t.min_quantity, price: t.price }))
   );
   const [isWholesaleSaving, setIsWholesaleSaving] = useState(false);
+
+  useEffect(() => {
+    if (isVariantMode) {
+      setSellingPrice(selectedVariant?.price?.toString() || "");
+      return;
+    }
+    setSellingPrice(product.price?.toString() || "");
+  }, [isVariantMode, product.price, selectedVariant?.id, selectedVariant?.price]);
 
   const calculatedCogs = useMemo(() => {
     return selectedComponents.reduce((sum, sc) => {
@@ -170,18 +261,86 @@ export function ProductDetailClient({
   };
 
   const handleSaveComponents = async () => {
+    if (isVariantMode && !selectedVariantId) {
+      setMessage({ type: "error", text: "Select a variant first" });
+      return;
+    }
+
     setIsSaving(true);
     setMessage(null);
 
-    const result = await updateProductComponents(product.id, selectedComponents);
+    const result = isVariantMode
+      ? await updateProductVariantComponents(product.id, selectedVariantId, selectedComponents)
+      : await updateProductComponents(product.id, selectedComponents);
 
     if (result.error) {
       setMessage({ type: "error", text: result.error });
     } else {
-      setMessage({ type: "success", text: "Components saved successfully" });
+      setMessage({
+        type: "success",
+        text: isVariantMode ? "Variant COGS saved successfully" : "Components saved successfully",
+      });
     }
 
     setIsSaving(false);
+  };
+
+  const handleAddVariant = async () => {
+    const title = newVariantTitle.trim();
+    const parsedPrice = newVariantPrice.trim() ? parseFloat(newVariantPrice) : null;
+
+    if (!title) {
+      setMessage({ type: "error", text: "Variant title is required" });
+      return;
+    }
+
+    if (newVariantPrice.trim() && (parsedPrice === null || Number.isNaN(parsedPrice) || parsedPrice < 0)) {
+      setMessage({ type: "error", text: "Please enter a valid variant price" });
+      return;
+    }
+
+    setIsAddingVariant(true);
+    setMessage(null);
+
+    const copyFromVariantId = newVariantCopySource.startsWith("variant:")
+      ? newVariantCopySource.replace("variant:", "")
+      : null;
+    const copyFromProductCogs = newVariantCopySource === "product";
+
+    const result = await createProductVariant(product.id, {
+      title,
+      sku: newVariantSku.trim() || null,
+      price: parsedPrice,
+    }, {
+      copyFromVariantId,
+      copyFromProductCogs,
+    });
+
+    if (result.error || !result.variant) {
+      setMessage({ type: "error", text: result.error || "Failed to add variant" });
+      setIsAddingVariant(false);
+      return;
+    }
+
+    setVariants((prev) => [...prev, result.variant]);
+    const copiedComponents = copyFromProductCogs
+      ? defaultSelectedComponents
+      : copyFromVariantId
+        ? (variantComponentMap[copyFromVariantId] || [])
+        : [];
+
+    setVariantComponentMap((prev) => ({
+      ...prev,
+      [result.variant.id]: copiedComponents.map((item) => ({ ...item })),
+    }));
+    setSelectedVariantId(result.variant.id);
+    setNewVariantTitle("");
+    setNewVariantSku("");
+    setNewVariantPrice(result.variant.price?.toString() || "");
+    setNewVariantCopySource(`variant:${result.variant.id}`);
+    setMessage({ type: "success", text: "Variant added successfully" });
+    setIsAddVariantDialogOpen(false);
+    setIsAddingVariant(false);
   };
 
   const handleUpdatePrice = async () => {
@@ -194,15 +353,77 @@ export function ProductDetailClient({
     setIsPriceUpdating(true);
     setMessage(null);
 
-    const result = await updateProductPrice(product.id, price);
+    const result = isVariantMode && selectedVariant
+      ? await updateProductVariantPrice(product.id, selectedVariant.id, price)
+      : await updateProductPrice(product.id, price);
 
     if (result.error) {
       setMessage({ type: "error", text: result.error });
     } else {
-      setMessage({ type: "success", text: "Price updated successfully" });
+      if (isVariantMode && selectedVariant) {
+        setVariants((prev) =>
+          prev.map((variant) =>
+            variant.id === selectedVariant.id
+              ? { ...variant, price }
+              : variant
+          )
+        );
+      }
+      setMessage({
+        type: "success",
+        text: isVariantMode ? "Variant price updated successfully" : "Price updated successfully",
+      });
     }
 
     setIsPriceUpdating(false);
+  };
+
+  const handleRemoveVariant = async () => {
+    if (!selectedVariant) {
+      setMessage({ type: "error", text: "Select a variant to remove" });
+      return;
+    }
+
+    const shouldDelete = window.confirm(
+      `Remove variant "${selectedVariant.title}"? This will also delete its COGS assignments.`
+    );
+    if (!shouldDelete) return;
+
+    setIsRemovingVariant(true);
+    setMessage(null);
+
+    const variantIdToDelete = selectedVariant.id;
+    const result = await deleteProductVariant(product.id, variantIdToDelete);
+
+    if (result.error) {
+      setMessage({ type: "error", text: result.error });
+      setIsRemovingVariant(false);
+      return;
+    }
+
+    const updatedVariants = variants.filter((variant) => variant.id !== variantIdToDelete);
+    setVariants(updatedVariants);
+    setVariantComponentMap((prev) => {
+      const next = { ...prev };
+      delete next[variantIdToDelete];
+      return next;
+    });
+
+    const nextSelectedId = updatedVariants[0]?.id || "";
+    setSelectedVariantId(nextSelectedId);
+
+    if (newVariantCopySource === `variant:${variantIdToDelete}`) {
+      setNewVariantCopySource(
+        defaultSelectedComponents.length > 0
+          ? "product"
+          : updatedVariants[0]
+            ? `variant:${updatedVariants[0].id}`
+            : "none"
+      );
+    }
+
+    setMessage({ type: "success", text: "Variant removed successfully" });
+    setIsRemovingVariant(false);
   };
 
   const addPriceTier = () => {
@@ -269,10 +490,146 @@ export function ProductDetailClient({
           {message.text}
         </div>
       )}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Variants</CardTitle>
+          <CardDescription>
+            Add variants here, then edit COGS per variant.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {variants.map((variant) => (
+              <Button
+                key={variant.id}
+                type="button"
+                variant={variant.id === selectedVariantId ? "default" : "outline"}
+                className="rounded-full px-4"
+                onClick={() => setSelectedVariantId(variant.id)}
+              >
+                {variant.title}
+              </Button>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full px-4"
+              onClick={() => setIsAddVariantDialogOpen(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Variant
+            </Button>
+          </div>
+
+          {isVariantMode ? (
+            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+              <div className="flex items-center justify-between gap-2">
+                <span>
+                  {selectedVariant?.sku
+                    ? `Selected SKU: ${selectedVariant.sku}`
+                    : "Select a variant pill to edit its COGS."}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRemoveVariant}
+                  disabled={!selectedVariant || isRemovingVariant}
+                  className="text-destructive hover:text-destructive"
+                >
+                  {isRemovingVariant ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+                  Remove Variant
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No variants yet. Click the Add Variant pill to create your first one.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+      <Dialog open={isAddVariantDialogOpen} onOpenChange={setIsAddVariantDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Variant</DialogTitle>
+            <DialogDescription>
+              Create a new variant and optionally copy COGS from an existing source.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="new-variant-title">Variant title</Label>
+              <Input
+                id="new-variant-title"
+                placeholder="e.g. 12oz Bag"
+                value={newVariantTitle}
+                onChange={(e) => setNewVariantTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="new-variant-sku">SKU (optional)</Label>
+              <Input
+                id="new-variant-sku"
+                placeholder="SKU"
+                value={newVariantSku}
+                onChange={(e) => setNewVariantSku(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="new-variant-price">Price (optional)</Label>
+              <Input
+                id="new-variant-price"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={newVariantPrice}
+                onChange={(e) => setNewVariantPrice(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Copy COGS from</Label>
+              <Select value={newVariantCopySource} onValueChange={setNewVariantCopySource}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Copy COGS from..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Do not copy COGS</SelectItem>
+                  {defaultSelectedComponents.length > 0 ? (
+                    <SelectItem value="product">Current product COGS</SelectItem>
+                  ) : null}
+                  {variants.map((variant) => (
+                    <SelectItem key={`copy-${variant.id}`} value={`variant:${variant.id}`}>
+                      {`Variant: ${variant.title}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsAddVariantDialogOpen(false)}
+              disabled={isAddingVariant}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleAddVariant} disabled={isAddingVariant}>
+              {isAddingVariant ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Add Variant
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
         <Card>
           <CardHeader className="md:pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Selling Price</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {isVariantMode ? "Variant Price" : "Selling Price"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatMoney(priceValue)}</div>
@@ -352,9 +709,15 @@ export function ProductDetailClient({
 
             <div className="min-w-0">
               <h2 className="truncate text-xl font-semibold">{product.title}</h2>
-              {product.sku && (
+              {isVariantMode ? (
+                selectedVariant?.sku ? (
+                  <p className="mt-1 font-mono text-sm text-muted-foreground">SKU: {selectedVariant.sku}</p>
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">{selectedVariant?.title || "No variant selected"}</p>
+                )
+              ) : product.sku ? (
                 <p className="mt-1 font-mono text-sm text-muted-foreground">SKU: {product.sku}</p>
-              )}
+              ) : null}
             </div>
 
             <div className="space-y-3 pt-2">
@@ -376,7 +739,7 @@ export function ProductDetailClient({
                   </div>
                   <Button
                     onClick={handleUpdatePrice}
-                    disabled={isPriceUpdating}
+                    disabled={isPriceUpdating || (isVariantMode && !selectedVariant)}
                     size="icon"
                     variant="outline"
                   >
@@ -387,6 +750,11 @@ export function ProductDetailClient({
                     )}
                   </Button>
                 </div>
+                {isVariantMode ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Price updates apply to the currently selected variant.
+                  </p>
+                ) : null}
               </div>
             </div>
           </CardContent>
@@ -648,7 +1016,7 @@ export function ProductDetailClient({
                 <div className="flex justify-end">
                   <Button
                     onClick={handleSaveComponents}
-                    disabled={isSaving}
+                    disabled={isSaving || (isVariantMode && !selectedVariantId)}
                     className="w-full sm:w-auto"
                   >
                     {isSaving ? (
@@ -656,7 +1024,7 @@ export function ProductDetailClient({
                     ) : (
                       <Save className="mr-2 h-4 w-4" />
                     )}
-                    Save Components
+                    {isVariantMode ? "Save Variant COGS" : "Save Components"}
                   </Button>
                 </div>
               </div>
