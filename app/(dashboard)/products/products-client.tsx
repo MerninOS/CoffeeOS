@@ -44,6 +44,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   RefreshCw,
   Search,
   Package,
@@ -53,7 +60,16 @@ import {
   Loader2,
   Plus,
   Percent,
+  ChevronDown,
 } from "lucide-react";
+
+interface ProductVariant {
+  id: string;
+  title: string;
+  sku: string | null;
+  price: number | null;
+  total_cogs: number | null;
+}
 
 interface Product {
   id: string;
@@ -63,6 +79,9 @@ interface Product {
   sku: string | null;
   price: number | null;
   total_cogs?: number | null;
+  min_selling_price?: number | null;
+  average_margin?: number | null;
+  variants?: ProductVariant[];
   image_url: string | null;
   created_at: string;
 }
@@ -142,6 +161,55 @@ export function ProductsClient({
     return ((price - cogs) / price) * 100;
   };
 
+  const renderVariantDropdown = (product: Product) => {
+    const variants = product.variants || [];
+    if (variants.length === 0) {
+      return <span className="text-xs text-muted-foreground">No variants</span>;
+    }
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="h-8">
+            {variants.length} variants
+            <ChevronDown className="ml-2 h-3.5 w-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-80">
+          <DropdownMenuLabel>Variant COGS & Margin</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <div className="max-h-80 space-y-2 overflow-y-auto p-2">
+            {variants.map((variant) => {
+              const margin = calculateMargin(variant.price, variant.total_cogs);
+              return (
+                <div key={variant.id} className="rounded-md border p-2">
+                  <p className="text-sm font-medium">{variant.title}</p>
+                  {variant.sku ? (
+                    <p className="font-mono text-[11px] text-muted-foreground">{variant.sku}</p>
+                  ) : null}
+                  <div className="mt-1 grid grid-cols-3 gap-1 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Price</p>
+                      <p>{variant.price ? `$${variant.price.toFixed(2)}` : "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">COGS</p>
+                      <p>{variant.total_cogs ? `$${variant.total_cogs.toFixed(2)}` : "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Margin</p>
+                      <p>{margin !== null ? `${margin.toFixed(1)}%` : "-"}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
   const handleCreateProduct = async () => {
     if (!newProduct.title || !newProduct.price) {
       setSyncMessage({ type: "error", text: "Title and price are required" });
@@ -170,15 +238,15 @@ export function ProductsClient({
 
   // Calculate stats
   const totalProducts = products.length;
-  const productsWithCogs = products.filter((p) => p.total_cogs && p.total_cogs > 0);
-  const totalRevenue = products.reduce((sum, p) => sum + (p.price || 0), 0);
-  const totalCogs = products.reduce((sum, p) => sum + (p.total_cogs || 0), 0);
-  const avgMargin = productsWithCogs.length > 0
-    ? productsWithCogs.reduce((sum, p) => {
-        const margin = calculateMargin(p.price, p.total_cogs);
-        return sum + (margin || 0);
-      }, 0) / productsWithCogs.length
+  const allVariantMargins = products.flatMap((product) =>
+    (product.variants || [])
+      .map((variant) => calculateMargin(variant.price, variant.total_cogs))
+      .filter((margin): margin is number => margin !== null)
+  );
+  const avgMargin = allVariantMargins.length > 0
+    ? allVariantMargins.reduce((sum, margin) => sum + margin, 0) / allVariantMargins.length
     : 0;
+  const variantCount = products.reduce((sum, product) => sum + (product.variants?.length || 0), 0);
   const productsNeedingCogs = products.filter((p) => !p.total_cogs || p.total_cogs === 0).length;
 
   return (
@@ -301,13 +369,13 @@ export function ProductsClient({
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 pb-1 pt-3 md:px-6 md:pb-2 md:pt-6">
-            <CardTitle className="text-xs font-medium md:text-sm">Avg Margin</CardTitle>
+            <CardTitle className="text-xs font-medium md:text-sm">Avg Variant Margin</CardTitle>
             <Percent className="hidden h-4 w-4 text-muted-foreground md:block" />
           </CardHeader>
           <CardContent className="px-3 pb-3 md:px-6 md:pb-6">
             <div className="text-lg font-bold md:text-2xl">{avgMargin.toFixed(1)}%</div>
             <p className="text-[10px] text-muted-foreground md:text-xs">
-              Across {productsWithCogs.length} products
+              Across {variantCount} variants
             </p>
           </CardContent>
         </Card>
@@ -366,7 +434,7 @@ export function ProductsClient({
             {/* Mobile card layout */}
             <div className="space-y-2 md:hidden">
               {filteredProducts.map((product) => {
-                const margin = calculateMargin(product.price, product.total_cogs);
+                const margin = product.average_margin ?? calculateMargin(product.price, product.total_cogs);
                 return (
                   <div key={product.id} className="rounded-lg border p-3">
                     <div className="flex items-start gap-3">
@@ -414,15 +482,19 @@ export function ProductsClient({
                     </div>
                     <div className="mt-2 grid grid-cols-3 gap-1 text-xs">
                       <div>
-                        <span className="text-muted-foreground">Price</span>
-                        <p className="font-medium">{product.price ? `$${product.price.toFixed(2)}` : "-"}</p>
+                        <span className="text-muted-foreground">Min Price</span>
+                        <p className="font-medium">
+                          {product.min_selling_price !== null && product.min_selling_price !== undefined
+                            ? `$${product.min_selling_price.toFixed(2)}`
+                            : "-"}
+                        </p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">COGS</span>
                         <p className="font-medium">{product.total_cogs ? `$${product.total_cogs.toFixed(2)}` : "-"}</p>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">Margin</span>
+                        <span className="text-muted-foreground">Avg Margin</span>
                         {margin !== null ? (
                           <Badge
                             variant="outline"
@@ -441,6 +513,9 @@ export function ProductsClient({
                         )}
                       </div>
                     </div>
+                    <div className="mt-2">
+                      {renderVariantDropdown(product)}
+                    </div>
                   </div>
                 );
               })}
@@ -453,18 +528,16 @@ export function ProductsClient({
                   <TableRow>
                     <TableHead>Product</TableHead>
                     <TableHead>SKU</TableHead>
-                    <TableHead className="text-right">Selling Price</TableHead>
+                    <TableHead className="text-right">Min Selling Price</TableHead>
                     <TableHead className="text-right">COGS</TableHead>
-                    <TableHead className="text-right">Margin</TableHead>
+                    <TableHead className="text-right">Avg Margin</TableHead>
+                    <TableHead className="text-right">Variants</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredProducts.map((product) => {
-                    const margin = calculateMargin(
-                      product.price,
-                      product.total_cogs
-                    );
+                    const margin = product.average_margin ?? calculateMargin(product.price, product.total_cogs);
 
                     return (
                       <TableRow key={product.id}>
@@ -497,8 +570,8 @@ export function ProductsClient({
                           {product.sku || "-"}
                         </TableCell>
                         <TableCell className="text-right">
-                          {product.price
-                            ? `$${product.price.toFixed(2)}`
+                          {product.min_selling_price !== null && product.min_selling_price !== undefined
+                            ? `$${product.min_selling_price.toFixed(2)}`
                             : "-"}
                         </TableCell>
                         <TableCell className="text-right">
@@ -523,6 +596,11 @@ export function ProductsClient({
                           ) : (
                             "-"
                           )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end">
+                            {renderVariantDropdown(product)}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">

@@ -50,6 +50,61 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     )
     .eq("product_id", id);
 
+  const normalizeJoinedComponent = (
+    value: unknown
+  ): { id: string; name: string; cost_per_unit: number; unit: string } | null => {
+    if (Array.isArray(value)) {
+      return value[0] || null;
+    }
+    return (value as { id: string; name: string; cost_per_unit: number; unit: string } | null) || null;
+  };
+
+  // Fetch Shopify/manual variants for this product
+  const { data: productVariants } = await supabase
+    .from("product_variants")
+    .select("id, title, sku, price, shopify_variant_id")
+    .eq("product_id", id)
+    .order("created_at", { ascending: true });
+
+  let productVariantComponents: Array<{
+    id: string;
+    quantity: number;
+    component_id: string;
+    product_variant_id: string;
+    components: { id: string; name: string; cost_per_unit: number; unit: string } | null;
+  }> = [];
+
+  const variantIds = (productVariants || []).map((variant) => variant.id);
+  if (variantIds.length > 0) {
+    const { data } = await supabase
+      .from("product_variant_components")
+      .select(
+        `
+        id,
+        quantity,
+        component_id,
+        product_variant_id,
+        components (
+          id,
+          name,
+          cost_per_unit,
+          unit
+        )
+      `
+      )
+      .in("product_variant_id", variantIds);
+
+    productVariantComponents = (data || []).map((row) => ({
+      ...row,
+      components: normalizeJoinedComponent(row.components),
+    }));
+  }
+
+  const normalizedProductComponents = (productComponents || []).map((row) => ({
+    ...row,
+    components: normalizeJoinedComponent(row.components),
+  }));
+
   // Fetch wholesale price tiers
   const { data: wholesaleTiers } = await supabase
     .from("wholesale_price_tiers")
@@ -61,7 +116,9 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     <ProductDetailClient
       product={product}
       availableComponents={components || []}
-      productComponents={productComponents || []}
+      productComponents={normalizedProductComponents}
+      productVariants={productVariants || []}
+      productVariantComponents={productVariantComponents}
       wholesaleTiers={wholesaleTiers || []}
     />
   );

@@ -4,7 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 import { getEffectiveOwnerId } from "@/lib/team";
 import { fetchShopifyProducts, parseShopifyGid } from "@/lib/shopify";
 import { revalidatePath } from "next/cache";
-import { User } from "@supabase/supabase-js";
 
 export async function syncShopifyProducts() {
   const supabase = await createClient();
@@ -56,7 +55,7 @@ export async function syncShopifyProducts() {
           continue;
         }
 
-        const { error: upsertError } = await supabase.from("products").upsert(
+        const { data: upsertedProduct, error: upsertError } = await supabase.from("products").upsert(
           {
             shopify_id: shopifyId,
             user_id: ownerId,
@@ -73,20 +72,66 @@ export async function syncShopifyProducts() {
           {
             onConflict: "shopify_id,user_id",
           }
-        );
+        ).select("id").single();
 
-        if (upsertError) {
+        if (upsertError || !upsertedProduct) {
           console.error("Error upserting product:", upsertError);
-        } else {
-          syncedCount++;
+          continue;
         }
+
+        const variantPayload = product.variants.edges.map((variantEdge) => ({
+          product_id: upsertedProduct.id,
+          user_id: ownerId,
+          shopify_variant_id: variantEdge.node.id,
+          title: variantEdge.node.title,
+          sku: variantEdge.node.sku || null,
+          price: parseFloat(variantEdge.node.price),
+        }));
+
+        if (variantPayload.length > 0) {
+          const { error: variantUpsertError } = await supabase
+            .from("product_variants")
+            .upsert(variantPayload, {
+              onConflict: "product_id,shopify_variant_id",
+            });
+
+          if (variantUpsertError) {
+            console.error("Error upserting product variants:", variantUpsertError);
+          }
+        }
+
+        const { data: existingVariants, error: existingVariantsError } = await supabase
+          .from("product_variants")
+          .select("id, shopify_variant_id")
+          .eq("product_id", upsertedProduct.id);
+
+        if (existingVariantsError) {
+          console.error("Error loading existing variants:", existingVariantsError);
+        } else {
+          const incomingVariantIds = new Set(variantPayload.map((v) => v.shopify_variant_id));
+          const staleVariantIds = (existingVariants || [])
+            .filter((variant) => !incomingVariantIds.has(variant.shopify_variant_id))
+            .map((variant) => variant.id);
+
+          if (staleVariantIds.length > 0) {
+            const { error: variantDeleteError } = await supabase
+              .from("product_variants")
+              .delete()
+              .in("id", staleVariantIds);
+            if (variantDeleteError) {
+              console.error("Error deleting stale product variants:", variantDeleteError);
+            }
+          }
+        }
+
+        syncedCount++;
       }
 
       hasMore = productsData.pageInfo.hasNextPage;
       cursor = productsData.pageInfo.endCursor;
     }
 
-    revalidatePath("/products", "max");
+    revalidatePath("/products");
     return { success: true, count: syncedCount };
   } catch (error) {
     console.error("Shopify sync error:", error);
@@ -151,6 +196,6 @@ export async function deleteProduct(productId: string) {
     return { error: error.message };
   }
 
-  revalidatePath("/products", "max");
+  revalidatePath("/products");
   return { success: true };
 }
