@@ -29,6 +29,14 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
+    // When embedded in Shopify's iframe, browsers block third-party cookies,
+    // which prevents Supabase from persisting the session. Break out to the
+    // top-level frame so login runs in a first-party context.
+    if (window.self !== window.top) {
+      window.top!.location.href = window.location.href;
+      return;
+    }
+
     const next = new URLSearchParams(window.location.search).get("next");
     if (next) {
       setNextPath(next);
@@ -55,6 +63,7 @@ export default function LoginPage() {
 
     router.push(nextPath);
     router.refresh();
+    setIsLoading(false);
   };
 
   return (
