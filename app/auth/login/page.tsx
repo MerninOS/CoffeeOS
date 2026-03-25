@@ -82,16 +82,27 @@ export default function LoginPage() {
 
       const { token_hash } = await res.json();
       const supabase = createClient();
-      const { error: otpError } = await supabase.auth.verifyOtp({
+      const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
         token_hash,
         type: "email",
       });
 
-      if (otpError) {
+      if (otpError || !otpData.session) {
         setIsShopifyContext(false);
         setIsLoading(false);
         return;
       }
+
+      // Exchange tokens via server so cookies are set with SameSite=None;
+      // Secure — required for them to be sent in the Shopify admin iframe.
+      await fetch("/api/auth/set-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_token: otpData.session.access_token,
+          refresh_token: otpData.session.refresh_token,
+        }),
+      });
 
       router.push(destination);
       router.refresh();
@@ -108,7 +119,7 @@ export default function LoginPage() {
 
     const supabase = createClient();
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -117,6 +128,19 @@ export default function LoginPage() {
       setError(error.message);
       setIsLoading(false);
       return;
+    }
+
+    // Exchange tokens via server so cookies are set with SameSite=None;
+    // Secure — required for them to be sent in the Shopify admin iframe.
+    if (data.session) {
+      await fetch("/api/auth/set-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        }),
+      });
     }
 
     router.push(nextPath);
