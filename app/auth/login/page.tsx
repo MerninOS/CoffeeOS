@@ -25,23 +25,81 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isShopifyContext, setIsShopifyContext] = useState(false);
   const [nextPath, setNextPath] = useState("/dashboard");
   const router = useRouter();
 
   useEffect(() => {
-    // When embedded in Shopify's iframe, browsers block third-party cookies,
-    // which prevents Supabase from persisting the session. Break out to the
-    // top-level frame so login runs in a first-party context.
-    if (window.self !== window.top) {
-      window.top!.location.href = window.location.href;
+    const params = new URLSearchParams(window.location.search);
+    const next = params.get("next");
+    const shop = params.get("shop");
+    const host = params.get("host");
+
+    if (next) setNextPath(next);
+
+    // When shop + host params are present we're running inside the Shopify
+    // admin iframe. Use App Bridge session tokens for seamless SSO instead of
+    // showing the email/password form.
+    if (shop && host) {
+      setIsShopifyContext(true);
+      setIsLoading(true);
+      signInWithShopify(next || "/dashboard");
+    }
+  }, []);
+
+  async function signInWithShopify(destination: string) {
+    // Wait for App Bridge to initialise (loaded async from CDN)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let shopify = (window as any).shopify;
+    const deadline = Date.now() + 5000;
+    while (!shopify?.idToken && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 100));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      shopify = (window as any).shopify;
+    }
+
+    if (!shopify?.idToken) {
+      // App Bridge unavailable — fall back to the login form
+      setIsShopifyContext(false);
+      setIsLoading(false);
       return;
     }
 
-    const next = new URLSearchParams(window.location.search).get("next");
-    if (next) {
-      setNextPath(next);
+    try {
+      const sessionToken = await shopify.idToken();
+
+      const res = await fetch("/api/shopify/session-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: sessionToken }),
+      });
+
+      if (!res.ok) {
+        setIsShopifyContext(false);
+        setIsLoading(false);
+        return;
+      }
+
+      const { token_hash } = await res.json();
+      const supabase = createClient();
+      const { error: otpError } = await supabase.auth.verifyOtp({
+        token_hash,
+        type: "email",
+      });
+
+      if (otpError) {
+        setIsShopifyContext(false);
+        setIsLoading(false);
+        return;
+      }
+
+      router.push(destination);
+      router.refresh();
+    } catch {
+      setIsShopifyContext(false);
+      setIsLoading(false);
     }
-  }, []);
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +123,17 @@ export default function LoginPage() {
     router.refresh();
     setIsLoading(false);
   };
+
+  if (isShopifyContext) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <p className="text-sm">Signing in with Shopify…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
