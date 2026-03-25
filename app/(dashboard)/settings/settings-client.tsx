@@ -114,9 +114,10 @@ export function SettingsClient({
         type: "success",
         text: "Checking your Shopify billing status...",
       });
-      window.location.href = `/api/shopify/billing/ensure?shop=${encodeURIComponent(
-        shopifySettings.store_domain
-      )}`;
+      // May redirect to external Shopify billing URL — use top frame so it
+      // doesn't crash when running inside the Shopify admin iframe.
+      const billingUrl = `/api/shopify/billing/ensure?shop=${encodeURIComponent(shopifySettings.store_domain)}`;
+      (window.top || window).location.href = billingUrl;
       return;
     }
 
@@ -184,8 +185,9 @@ export function SettingsClient({
       cleanDomain = `${cleanDomain}.myshopify.com`;
     }
 
-    // Start install bootstrap flow, which handles auth + billing checks consistently.
-    window.location.href = `/api/shopify/install?shop=${encodeURIComponent(cleanDomain)}`;
+    // Install flow can redirect to external Shopify OAuth/billing URLs — use
+    // top frame so it doesn't crash inside the Shopify admin iframe.
+    (window.top || window).location.href = `/api/shopify/install?shop=${encodeURIComponent(cleanDomain)}`;
   };
 
   const handleDisconnectShopify = async () => {
@@ -421,10 +423,14 @@ export function SettingsClient({
               {isShopifyConnected ? (
                 <div className="flex flex-wrap gap-2">
                   {!isBillingActive ? (
-                    <Button asChild variant="outline">
-                      <a href={`/api/shopify/billing/ensure?shop=${encodeURIComponent(shopifySettings?.store_domain || "")}`}>
-                        Refresh Billing Status
-                      </a>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        const url = `/api/shopify/billing/ensure?shop=${encodeURIComponent(shopifySettings?.store_domain || "")}`;
+                        (window.top || window).location.href = url;
+                      }}
+                    >
+                      Refresh Billing Status
                     </Button>
                   ) : null}
                   <Button asChild variant="outline">

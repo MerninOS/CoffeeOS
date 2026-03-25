@@ -4,7 +4,6 @@ import React from "react"
 import Image from "next/image"
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -27,7 +26,6 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isShopifyContext, setIsShopifyContext] = useState(false);
   const [nextPath, setNextPath] = useState("/dashboard");
-  const router = useRouter();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -104,8 +102,13 @@ export default function LoginPage() {
         }),
       });
 
-      router.push(destination);
-      router.refresh();
+      // /api/shopify/* paths can redirect to external Shopify URLs (OAuth,
+      // billing) which can't load in an iframe. Redirect the top frame instead.
+      if (destination.startsWith("/api/shopify/") && window.top) {
+        window.top.location.href = destination;
+      } else {
+        window.location.href = destination;
+      }
     } catch {
       setIsShopifyContext(false);
       setIsLoading(false);
@@ -143,9 +146,13 @@ export default function LoginPage() {
       });
     }
 
-    router.push(nextPath);
-    router.refresh();
-    setIsLoading(false);
+    // /api/shopify/* paths can redirect to external Shopify URLs (OAuth,
+    // billing) which can't load in an iframe. Redirect the top frame instead.
+    if (nextPath.startsWith("/api/shopify/") && window.top) {
+      window.top.location.href = nextPath;
+    } else {
+      window.location.href = nextPath;
+    }
   };
 
   if (isShopifyContext) {
