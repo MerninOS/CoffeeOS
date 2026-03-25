@@ -37,6 +37,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {process.env.SHOPIFY_CLIENT_ID && (
+          <meta name="shopify-api-key" content={process.env.SHOPIFY_CLIENT_ID} />
+        )}
+        {/* App Bridge must be loaded synchronously (no async/defer) per Shopify requirements */}
+        <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js" />
+      </head>
       <body className={`font-sans antialiased`}>
         {children}
         <Analytics />
