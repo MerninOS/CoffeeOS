@@ -93,11 +93,15 @@ export async function GET(request: NextRequest) {
         storeDomain,
         pricingPlansUrl,
       });
-      const response = NextResponse.redirect(pricingPlansUrl);
+      // Route through /shopify/redirect so the client can use window.top to
+      // break out of the Shopify admin iframe before navigating to the external URL.
+      const redirectPage = new URL("/shopify/redirect", request.url);
+      redirectPage.searchParams.set("url", pricingPlansUrl);
+      const response = NextResponse.redirect(redirectPage);
       response.cookies.set("shopify_pending_shop", storeDomain, {
         httpOnly: true,
         secure: true,
-        sameSite: "lax",
+        sameSite: "none",
         path: "/",
         maxAge: 60 * 30,
       });
