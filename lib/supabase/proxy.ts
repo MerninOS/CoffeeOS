@@ -29,7 +29,13 @@ export async function updateSession(request: NextRequest) {
             request,
           })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options),
+            // SameSite=None; Secure is required so cookies are included in
+            // requests from within the Shopify admin iframe (cross-site context).
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              sameSite: "none",
+              secure: true,
+            }),
           )
         },
       },
