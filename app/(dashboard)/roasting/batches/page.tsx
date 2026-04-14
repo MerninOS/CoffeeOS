@@ -17,6 +17,7 @@ export default async function BatchesPage() {
         vendor_name,
         rate_per_hour,
         cost_mode,
+        rate_per_lb,
         machine_energy_kwh_per_hour,
         kwh_rate,
         setup_minutes,

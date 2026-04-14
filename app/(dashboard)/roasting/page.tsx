@@ -77,6 +77,7 @@ export default async function RoastingSessionsPage() {
       vendor_name: session.vendor_name,
       rate_per_hour: session.rate_per_hour,
       cost_mode: session.cost_mode || "toll_roasting",
+      rate_per_lb: session.rate_per_lb ?? null,
       machine_energy_kwh_per_hour: session.machine_energy_kwh_per_hour,
       kwh_rate: session.kwh_rate,
       setup_minutes: session.setup_minutes,
@@ -105,6 +106,14 @@ export default async function RoastingSessionsPage() {
         const billableMinutes =
           Math.ceil(totalSessionMinutes / session.billing_granularity_minutes) *
           session.billing_granularity_minutes;
+
+        if (session.cost_mode === "co_roasting") {
+          return batches.reduce(
+            (sum: number, b: { green_weight_g: number | null }) =>
+              sum + ((b.green_weight_g || 0) / 453.592) * Number(session.rate_per_lb || 0),
+            0
+          );
+        }
 
         if (session.cost_mode === "power_usage") {
           const machineKwhPerHour = session.machine_energy_kwh_per_hour || 0;

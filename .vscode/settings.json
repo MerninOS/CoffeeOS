@@ -1,6 +1,3 @@
 {
-    "typescript.tsdk": "node_modules/typescript/lib",
-    "files.readonlyInclude": {
-        "**/*": true
-    }
+    "typescript.tsdk": "node_modules/typescript/lib"
 }
