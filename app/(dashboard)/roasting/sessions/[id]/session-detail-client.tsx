@@ -77,7 +77,8 @@ interface Session {
   session_date: string;
   vendor_name: string;
   rate_per_hour: number;
-  cost_mode: "toll_roasting" | "power_usage";
+  cost_mode: "toll_roasting" | "power_usage" | "co_roasting";
+  rate_per_lb: number | null;
   machine_energy_kwh_per_hour: number | null;
   kwh_rate: number | null;
   setup_minutes: number;
@@ -153,8 +154,9 @@ export function SessionDetailClient({
   const [selectedRequestId, setSelectedRequestId] = useState<string>("");
 
   const handleAddBatch = async () => {
-    if (!batchData.coffeeName || !batchData.greenWeightG || !batchData.roastedWeightG || !batchData.roastMinutes || !batchData.priceValue) {
-      alert("Please fill in all required fields: Coffee Name, Price, Green Weight, Roasted Weight, and Roast Duration");
+    const roastMinutesRequired = session.cost_mode !== "co_roasting";
+    if (!batchData.coffeeName || !batchData.greenWeightG || !batchData.roastedWeightG || (roastMinutesRequired && !batchData.roastMinutes) || !batchData.priceValue) {
+      alert(`Please fill in all required fields: Coffee Name, Price, Green Weight, Roasted Weight${roastMinutesRequired ? ", and Roast Duration" : ""}`);
       return;
     }
 
@@ -272,7 +274,9 @@ export function SessionDetailClient({
   const totalSessionMinutes = session.setup_minutes + totalRoastMinutes + session.cleanup_minutes;
   const billableMinutes = Math.ceil(totalSessionMinutes / session.billing_granularity_minutes) * session.billing_granularity_minutes;
   const sessionTollCost =
-    session.cost_mode === "power_usage"
+    session.cost_mode === "co_roasting"
+      ? batches.reduce((sum, b) => sum + (b.green_weight_g / 453.592) * Number(session.rate_per_lb || 0), 0)
+      : session.cost_mode === "power_usage"
       ? (billableMinutes / 60) *
         (session.machine_energy_kwh_per_hour || 0) *
         (session.kwh_rate || 0)
@@ -465,6 +469,11 @@ export function SessionDetailClient({
             }
             placeholder="e.g., 5000"
           />
+          {batchData.greenWeightG && (
+            <p className="text-xs text-muted-foreground">
+              {(parseFloat(batchData.greenWeightG) / LBS_TO_GRAMS).toFixed(2)} lbs
+            </p>
+          )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="roastedWeightG">Roasted Weight (g) *</Label>
@@ -477,6 +486,11 @@ export function SessionDetailClient({
             }
             placeholder="e.g., 4250"
           />
+          {batchData.roastedWeightG && (
+            <p className="text-xs text-muted-foreground">
+              {(parseFloat(batchData.roastedWeightG) / LBS_TO_GRAMS).toFixed(2)} lbs
+            </p>
+          )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="rejectsG">Rejects (g)</Label>
@@ -541,7 +555,9 @@ export function SessionDetailClient({
               <Badge variant="outline" className="shrink-0">{session.vendor_name}</Badge>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground truncate">
-              {session.cost_mode === "power_usage"
+              {session.cost_mode === "co_roasting"
+                ? `$${Number(session.rate_per_lb || 0).toFixed(2)}/lb (green)`
+                : session.cost_mode === "power_usage"
                 ? `${session.machine_energy_kwh_per_hour || 0} kWh/hr | $${(
                     session.kwh_rate || 0
                   ).toFixed(4)}/kWh | ${session.billing_granularity_minutes} min billing`
@@ -573,7 +589,7 @@ export function SessionDetailClient({
               </Button>
               <Button
                 onClick={handleAddBatch}
-                disabled={isSubmitting || !batchData.coffeeName || !batchData.greenWeightG || !batchData.roastedWeightG || !batchData.roastMinutes || !batchData.priceValue}
+                disabled={isSubmitting || !batchData.coffeeName || !batchData.greenWeightG || !batchData.roastedWeightG || (session.cost_mode !== "co_roasting" && !batchData.roastMinutes) || !batchData.priceValue}
               >
                 {isSubmitting ? "Adding..." : "Add Batch"}
               </Button>
@@ -655,7 +671,9 @@ export function SessionDetailClient({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${sessionTollCost.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">{billableMinutes} min billed</p>
+            {session.cost_mode !== "co_roasting" && (
+              <p className="text-xs text-muted-foreground">{billableMinutes} min billed</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -710,7 +728,33 @@ export function SessionDetailClient({
         </Card>
       ) : (
         <div className="space-y-3 sm:space-y-0 sm:grid sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {batches.map((batch) => (
+          {batches.map((batch) => {
+            // Compute per-batch cost breakdown
+            const greenCostPerG = batch.green_cost_per_g;
+            const totalGreenCost = greenCostPerG * batch.green_weight_g;
+            let roastingCostPerG = 0;
+            let totalCostPerG = 0;
+
+            if (batch.sellable_g > 0) {
+              if (session.cost_mode === "co_roasting") {
+                const roastingCost = (batch.green_weight_g / 453.592) * Number(session.rate_per_lb || 0);
+                roastingCostPerG = roastingCost / batch.sellable_g;
+                totalCostPerG = (totalGreenCost + roastingCost) / batch.sellable_g;
+              } else {
+                const batchCount = Math.max(batches.length, 1);
+                const batchEffectiveMinutes =
+                  batch.roast_minutes +
+                  (session.setup_minutes + session.cleanup_minutes) / batchCount;
+                const batchAllocatedCost =
+                  totalSessionMinutes > 0
+                    ? sessionTollCost * (batchEffectiveMinutes / totalSessionMinutes)
+                    : 0;
+                roastingCostPerG = batchAllocatedCost / batch.sellable_g;
+                totalCostPerG = (totalGreenCost + batchAllocatedCost) / batch.sellable_g;
+              }
+            }
+
+            return (
             <Card key={batch.id}>
               <CardHeader className="pb-2 px-4 sm:px-6">
                 <div className="flex items-start justify-between gap-2">
@@ -783,9 +827,27 @@ export function SessionDetailClient({
                     </span>
                   </div>
                 </div>
+                <div className="mt-3 pt-3 border-t">
+                  <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wide font-semibold">Cost / gram</p>
+                  <div className="grid grid-cols-3 gap-x-2 text-sm">
+                    <div>
+                      <span className="text-xs text-muted-foreground block">Green</span>
+                      <span className="font-medium">${greenCostPerG.toFixed(5)}</span>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted-foreground block">Roasting</span>
+                      <span className="font-medium">${roastingCostPerG.toFixed(5)}</span>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted-foreground block">Total</span>
+                      <span className="font-semibold">${totalCostPerG.toFixed(5)}</span>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 

@@ -6,12 +6,13 @@ import { revalidatePath } from "next/cache";
 
 type SessionCostContext = {
   rate_per_hour: number | null;
-  cost_mode: "toll_roasting" | "power_usage" | null;
+  cost_mode: "toll_roasting" | "power_usage" | "co_roasting" | null;
   machine_energy_kwh_per_hour: number | null;
   kwh_rate: number | null;
   setup_minutes: number | null;
   cleanup_minutes: number | null;
   billing_granularity_minutes: number | null;
+  rate_per_lb: number | null;
 };
 
 type BatchCostContext = {
@@ -68,6 +69,14 @@ function computeBatchCostPerGram(
   const sellableG = Number(batch.sellable_g || 0);
   if (sellableG <= 0) return 0;
 
+  if (batch.roasting_sessions?.cost_mode === "co_roasting") {
+    const ratePerLb = Number(batch.roasting_sessions.rate_per_lb || 0);
+    const greenWeightLbs = Number(batch.green_weight_g || 0) / 453.592;
+    const roastingCost = greenWeightLbs * ratePerLb;
+    const totalGreenCost = Number(batch.green_cost_per_g || 0) * Number(batch.green_weight_g || 0);
+    return (totalGreenCost + roastingCost) / sellableG;
+  }
+
   const roastMinutes = Number(batch.roast_minutes || 0);
   const setupMinutes = Number(batch.roasting_sessions?.setup_minutes || 0);
   const cleanupMinutes = Number(batch.roasting_sessions?.cleanup_minutes || 0);
@@ -115,7 +124,8 @@ export async function createSession(data: {
   sessionDate: string;
   vendorName: string;
   ratePerHour?: number;
-  costMode?: "toll_roasting" | "power_usage";
+  costMode?: "toll_roasting" | "power_usage" | "co_roasting";
+  ratePerLb?: number;
   machineEnergyKwhPerHour?: number;
   kwhRate?: number;
   setupMinutes?: number;
@@ -139,6 +149,7 @@ export async function createSession(data: {
       vendor_name: data.vendorName,
       rate_per_hour: data.ratePerHour || 0,
       cost_mode: data.costMode || "toll_roasting",
+      rate_per_lb: data.ratePerLb || null,
       machine_energy_kwh_per_hour: data.machineEnergyKwhPerHour || null,
       kwh_rate: data.kwhRate || null,
       setup_minutes: data.setupMinutes || 0,
@@ -164,7 +175,8 @@ export async function updateSession(
     sessionDate?: string;
     vendorName?: string;
     ratePerHour?: number;
-    costMode?: "toll_roasting" | "power_usage";
+    costMode?: "toll_roasting" | "power_usage" | "co_roasting";
+    ratePerLb?: number;
     machineEnergyKwhPerHour?: number;
     kwhRate?: number;
     setupMinutes?: number;
@@ -186,6 +198,7 @@ export async function updateSession(
   if (data.vendorName) updateData.vendor_name = data.vendorName;
   if (data.ratePerHour !== undefined) updateData.rate_per_hour = data.ratePerHour;
   if (data.costMode !== undefined) updateData.cost_mode = data.costMode;
+  if (data.ratePerLb !== undefined) updateData.rate_per_lb = data.ratePerLb;
   if (data.machineEnergyKwhPerHour !== undefined) updateData.machine_energy_kwh_per_hour = data.machineEnergyKwhPerHour;
   if (data.kwhRate !== undefined) updateData.kwh_rate = data.kwhRate;
   if (data.setupMinutes !== undefined) updateData.setup_minutes = data.setupMinutes;
@@ -784,6 +797,7 @@ export async function createComponentFromBatch(
         session_date,
         rate_per_hour,
         cost_mode,
+        rate_per_lb,
         machine_energy_kwh_per_hour,
         kwh_rate,
         setup_minutes,
@@ -875,6 +889,7 @@ export async function addToExistingComponent(
         session_date,
         rate_per_hour,
         cost_mode,
+        rate_per_lb,
         machine_energy_kwh_per_hour,
         kwh_rate,
         setup_minutes,
@@ -914,6 +929,7 @@ export async function addToExistingComponent(
       roasting_sessions(
         rate_per_hour,
         cost_mode,
+        rate_per_lb,
         machine_energy_kwh_per_hour,
         kwh_rate,
         setup_minutes,

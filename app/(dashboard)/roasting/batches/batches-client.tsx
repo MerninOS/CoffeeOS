@@ -82,7 +82,8 @@ interface Batch {
     session_date: string;
     vendor_name: string;
     rate_per_hour: number;
-    cost_mode: "toll_roasting" | "power_usage";
+    cost_mode: "toll_roasting" | "power_usage" | "co_roasting";
+    rate_per_lb: number | null;
     machine_energy_kwh_per_hour: number | null;
     kwh_rate: number | null;
     setup_minutes: number;
@@ -134,6 +135,17 @@ const getSessionCostForBatch = (batch: Batch, allBatches: Batch[]) => {
   if (!batch.roasting_sessions) return 0;
 
   const session = batch.roasting_sessions;
+
+  if (session.cost_mode === "co_roasting") {
+    // Co-roasting: charged per pound of green coffee, summed across all batches in session
+    const sessionId = session.id;
+    const sessionBatches = allBatches.filter((b) => b.roasting_sessions?.id === sessionId);
+    return sessionBatches.reduce(
+      (sum, b) => sum + (b.green_weight_g / 453.592) * (session.rate_per_lb || 0),
+      0
+    );
+  }
+
   const { totalRoastMinutes } = getSessionAggForBatch(batch, allBatches);
   const totalSessionMinutes =
     (session.setup_minutes || 0) +
@@ -157,14 +169,20 @@ const getSessionCostForBatch = (batch: Batch, allBatches: Batch[]) => {
 const getBatchCostPerGram = (batch: Batch, allBatches: Batch[]) => {
   if (batch.sellable_g <= 0) return 0;
 
-  const { totalRoastMinutes, batchCount } = getSessionAggForBatch(batch, allBatches);
   const session = batch.roasting_sessions;
+  const totalGreenCost = batch.green_cost_per_g * batch.green_weight_g;
+
+  if (session?.cost_mode === "co_roasting") {
+    const roastingCost = (batch.green_weight_g / 453.592) * (session.rate_per_lb || 0);
+    return (totalGreenCost + roastingCost) / batch.sellable_g;
+  }
+
+  const { totalRoastMinutes, batchCount } = getSessionAggForBatch(batch, allBatches);
   const setupMinutes = session?.setup_minutes || 0;
   const cleanupMinutes = session?.cleanup_minutes || 0;
   const totalSessionMinutes = setupMinutes + totalRoastMinutes + cleanupMinutes;
   const batchEffectiveMinutes =
     (batch.roast_minutes || 0) + (setupMinutes + cleanupMinutes) / batchCount;
-  const totalGreenCost = batch.green_cost_per_g * batch.green_weight_g;
   const sessionCost = getSessionCostForBatch(batch, allBatches);
   const allocatedSessionCost =
     totalSessionMinutes > 0

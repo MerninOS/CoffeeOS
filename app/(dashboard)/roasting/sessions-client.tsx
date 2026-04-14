@@ -18,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -52,7 +52,8 @@ export interface Session {
   session_date: string;
   vendor_name: string;
   rate_per_hour: number;
-  cost_mode: "toll_roasting" | "power_usage";
+  cost_mode: "toll_roasting" | "power_usage" | "co_roasting";
+  rate_per_lb: number | null;
   machine_energy_kwh_per_hour: number | null;
   kwh_rate: number | null;
   setup_minutes: number;
@@ -82,8 +83,9 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
   const [formData, setFormData] = useState({
     sessionDate: format(new Date(), "yyyy-MM-dd"),
     vendorName: "",
-    costMode: "toll_roasting" as "toll_roasting" | "power_usage",
+    costMode: "toll_roasting" as "toll_roasting" | "power_usage" | "co_roasting",
     ratePerHour: "",
+    ratePerLb: "",
     machineEnergyKwhPerHour: "",
     kwhRate: "",
     setupMinutes: "0",
@@ -112,6 +114,11 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
       return;
     }
 
+    if (formData.costMode === "co_roasting" && !formData.ratePerLb) {
+      alert("Please fill in rate per pound for co-roasting");
+      return;
+    }
+
     setIsSubmitting(true);
     const result = await createSession({
       sessionDate: formData.sessionDate,
@@ -121,6 +128,10 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
         formData.costMode === "toll_roasting"
           ? parseFloat(formData.ratePerHour)
           : 0,
+      ratePerLb:
+        formData.costMode === "co_roasting"
+          ? parseFloat(formData.ratePerLb)
+          : undefined,
       machineEnergyKwhPerHour:
         formData.costMode === "power_usage"
           ? parseFloat(formData.machineEnergyKwhPerHour)
@@ -158,6 +169,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
         vendorName: "",
         costMode: "toll_roasting",
         ratePerHour: "",
+        ratePerLb: "",
         machineEnergyKwhPerHour: "",
         kwhRate: "",
         setupMinutes: "0",
@@ -238,34 +250,26 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
                   />
                 </div>
               </div>
-              <div className="space-y-2 rounded-md border p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <Label htmlFor="costModeToggle">Roasting Cost Method</Label>
-                    <p className="text-xs text-muted-foreground">
-                      {formData.costMode === "toll_roasting"
-                        ? "Using toll roasting hourly rate"
-                        : "Using machine power usage (kWh)"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Toll</span>
-                    <Switch
-                      id="costModeToggle"
-                      checked={formData.costMode === "power_usage"}
-                      onCheckedChange={(checked) =>
-                        setFormData({
-                          ...formData,
-                          costMode: checked ? "power_usage" : "toll_roasting",
-                        })
-                      }
-                    />
-                    <span className="text-xs text-muted-foreground">Power</span>
-                  </div>
-                </div>
+              <div className="space-y-2">
+                <Label>Roasting Cost Method</Label>
+                <Tabs
+                  value={formData.costMode}
+                  onValueChange={(v) =>
+                    setFormData({
+                      ...formData,
+                      costMode: v as "toll_roasting" | "power_usage" | "co_roasting",
+                    })
+                  }
+                >
+                  <TabsList className="w-full">
+                    <TabsTrigger value="toll_roasting" className="flex-1">Toll Roasting</TabsTrigger>
+                    <TabsTrigger value="power_usage" className="flex-1">Power Usage</TabsTrigger>
+                    <TabsTrigger value="co_roasting" className="flex-1">Co-Roasting</TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {formData.costMode === "toll_roasting" ? (
+                {formData.costMode === "toll_roasting" && (
                   <div className="space-y-2">
                     <Label htmlFor="ratePerHour">Rate per Hour ($)</Label>
                     <Input
@@ -281,7 +285,8 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
                       required
                     />
                   </div>
-                ) : (
+                )}
+                {formData.costMode === "power_usage" && (
                   <div className="space-y-2">
                     <Label htmlFor="machineEnergyKwhPerHour">Machine Usage (kWh/hr)</Label>
                     <Input
@@ -318,48 +323,69 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
                     />
                   </div>
                 )}
+                {formData.costMode === "co_roasting" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="ratePerLb">Rate per Pound – Green ($)</Label>
+                    <Input
+                      id="ratePerLb"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.ratePerLb}
+                      onChange={(e) =>
+                        setFormData({ ...formData, ratePerLb: e.target.value })
+                      }
+                      placeholder="e.g., 2.50"
+                      required
+                    />
+                  </div>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="billingGranularityMinutes">Billing Granularity (min)</Label>
-                <Input
-                  id="billingGranularityMinutes"
-                  type="number"
-                  min="1"
-                  value={formData.billingGranularityMinutes}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      billingGranularityMinutes: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {formData.costMode !== "co_roasting" && (
                 <div className="space-y-2">
-                  <Label htmlFor="setupMinutes">Setup Time (min)</Label>
+                  <Label htmlFor="billingGranularityMinutes">Billing Granularity (min)</Label>
                   <Input
-                    id="setupMinutes"
+                    id="billingGranularityMinutes"
                     type="number"
-                    min="0"
-                    value={formData.setupMinutes}
+                    min="1"
+                    value={formData.billingGranularityMinutes}
                     onChange={(e) =>
-                      setFormData({ ...formData, setupMinutes: e.target.value })
+                      setFormData({
+                        ...formData,
+                        billingGranularityMinutes: e.target.value,
+                      })
                     }
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cleanupMinutes">Cleanup Time (min)</Label>
-                  <Input
-                    id="cleanupMinutes"
-                    type="number"
-                    min="0"
-                    value={formData.cleanupMinutes}
-                    onChange={(e) =>
-                      setFormData({ ...formData, cleanupMinutes: e.target.value })
-                    }
-                  />
+              )}
+              {formData.costMode !== "co_roasting" && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="setupMinutes">Setup Time (min)</Label>
+                    <Input
+                      id="setupMinutes"
+                      type="number"
+                      min="0"
+                      value={formData.setupMinutes}
+                      onChange={(e) =>
+                        setFormData({ ...formData, setupMinutes: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cleanupMinutes">Cleanup Time (min)</Label>
+                    <Input
+                      id="cleanupMinutes"
+                      type="number"
+                      min="0"
+                      value={formData.cleanupMinutes}
+                      onChange={(e) =>
+                        setFormData({ ...formData, cleanupMinutes: e.target.value })
+                      }
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes (optional)</Label>
                 <Textarea
