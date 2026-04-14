@@ -405,3 +405,193 @@
 @media (prefers-reduced-motion: reduce) {
   .lp-fade-up, .lp-marquee-track { animation: none; }
 }
+
+/* ── TRUST ROW ──────────────────────────────────────────────── */
+
+.lp-trust-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.lp-trust-stars {
+  display: flex;
+  gap: 2px;
+}
+
+/* ── HAMBURGER & MOBILE MENU ────────────────────────────────── */
+
+.lp-hamburger {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #1C0F05;
+  padding: 4px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.lp-mobile-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #FDFAF0;
+  border-bottom: 3px solid #1C0F05;
+  padding: 16px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  z-index: 50;
+  box-shadow: 0 6px 0 #1C0F05;
+}
+
+.lp-mobile-link {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #1C0F05;
+  text-decoration: none;
+  padding: 13px 0;
+  border-bottom: 1px solid #D8D0B8;
+  display: block;
+}
+.lp-mobile-link:last-of-type { border-bottom: none; }
+
+.lp-mobile-cta {
+  margin-top: 16px;
+  display: flex !important;
+  justify-content: center;
+  text-align: center;
+}
+
+/* ── HERO CTA BUTTONS ───────────────────────────────────────── */
+
+.lp-hero-ctas {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 40px;
+  flex-wrap: wrap;
+}
+
+/* ── RESPONSIVE LAYOUT CLASSES ──────────────────────────────── */
+
+.lp-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.lp-hero-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: center;
+}
+
+.lp-features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.lp-cogs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+}
+
+.lp-shopify-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 52px;
+  align-items: center;
+}
+
+.lp-three-col-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+}
+
+.lp-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+}
+
+.lp-footer-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 48px;
+  padding-bottom: 48px;
+}
+
+.lp-footer-bottom {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding-top: 22px;
+  padding-bottom: 28px;
+  border-top: 2px solid #3B1F0A;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Tablet */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .lp-features-grid    { grid-template-columns: repeat(2, 1fr); }
+  .lp-three-col-grid   { grid-template-columns: repeat(2, 1fr); }
+  .lp-pricing-grid     { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .lp-nav-links        { display: none; }
+  .lp-hamburger        { display: flex; }
+
+  .lp-hero-grid        { grid-template-columns: 1fr; gap: 40px; }
+  .lp-hero-mock-wrapper { display: none; }
+
+  .lp-hero-ctas {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .lp-hero-ctas .lp-btn {
+    justify-content: center;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  /* Hide the arrow icon so the first button text fits without overflow */
+  .lp-hero-ctas .lp-btn svg { display: none; }
+
+  /* Trust row: stars wrap to own line, text + pill stay together */
+  .lp-trust-stars { width: 100%; }
+  .lp-trust-row   { gap: 10px; }
+
+  .lp-features-grid    { grid-template-columns: 1fr; gap: 16px; }
+  .lp-cogs-grid        { grid-template-columns: 1fr; gap: 40px; }
+  .lp-shopify-grid     { grid-template-columns: 1fr; gap: 36px; }
+  .lp-three-col-grid   { grid-template-columns: 1fr; gap: 16px; }
+  .lp-pricing-grid     { grid-template-columns: 1fr; gap: 20px; }
+
+  .lp-footer-grid      { grid-template-columns: 1fr 1fr; gap: 28px; padding-bottom: 32px; }
+  .lp-footer-bottom    { flex-direction: column; gap: 8px; text-align: center; }
+
+  /* Shrink mock table columns on narrow screens */
+  .lp-row {
+    grid-template-columns: 1fr 48px 48px 56px;
+    gap: 6px;
+    padding: 8px 12px;
+  }
+}
+
+/* Very small phones */
+@media (max-width: 480px) {
+  .lp-footer-grid { grid-template-columns: 1fr; gap: 20px; }
+}

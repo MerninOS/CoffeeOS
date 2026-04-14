@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { MobileNav } from "@/components/mobile-nav";
 import {
   Package,
   BarChart2,
@@ -61,7 +62,7 @@ export default async function HomePage() {
           <Link href="/">
             <Image alt="CoffeeOS" src="/coffee_os_logo.png" width={140} height={56} priority style={{ objectFit: "contain" }} />
           </Link>
-          <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
+          <div className="lp-nav-links">
             <Link href="#features" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.espresso, textDecoration: "none" }}>Features</Link>
             <Link href="#shopify"  style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.espresso, textDecoration: "none" }}>Shopify</Link>
             <Link href="#pricing"  style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.espresso, textDecoration: "none" }}>Pricing</Link>
@@ -70,6 +71,7 @@ export default async function HomePage() {
               Get started free
             </Link>
           </div>
+          <MobileNav />
         </div>
       </nav>
 
@@ -78,7 +80,7 @@ export default async function HomePage() {
         {/* Background tomato blob */}
         <div style={{ position: "absolute", top: -120, right: -120, width: 480, height: 480, borderRadius: "50%", background: C.tomato, opacity: 0.08, pointerEvents: "none" }} />
 
-        <div style={{ maxWidth: 1160, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}>
+        <div className="lp-hero-grid" style={{ maxWidth: 1160, margin: "0 auto" }}>
 
           {/* Left — headline */}
           <div>
@@ -98,7 +100,7 @@ export default async function HomePage() {
               CoffeeOS connects inventory, roasting, and your Shopify store to deliver real-time COGS and margin data — without the spreadsheet chaos.
             </p>
 
-            <div className="lp-fade-up lp-d4" style={{ display: "flex", gap: 12, marginBottom: 40, flexWrap: "wrap" }}>
+            <div className="lp-fade-up lp-d4 lp-hero-ctas">
               <Link href="/auth/sign-up" className="lp-btn lp-btn-cream" style={{ fontSize: 14, padding: "13px 28px" }}>
                 Start free — no card required <ArrowRight size={16} />
               </Link>
@@ -108,11 +110,11 @@ export default async function HomePage() {
             </div>
 
             {/* Trust row */}
-            <div className="lp-fade-up lp-d5" style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", gap: 2 }}>
+            <div className="lp-fade-up lp-d5 lp-trust-row">
+              <div className="lp-trust-stars">
                 {Array.from({ length: 5 }).map((_, i) => <Star key={i} size={14} fill={C.tomato} color={C.tomato} />)}
               </div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: C.cream }}>Loved by 200+ roasters</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: C.cream }}>Loved by coffee roasters</span>
               <span className="lp-tag" style={{ background: "#ffffffde", border: "2px solid #96BF48", color: "#4a7020", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 12px" }}>
                 <svg width="9" height="11" viewBox="0 0 14 16" fill="currentColor"><path d="M11.5 3.4c0-.1-.1-.1-.2-.1s-.9-.1-.9-.1-.7-.7-.8-.8V15l4-1S12 3.6 11.5 3.4zM8.3 2.2c-.2-.6-.6-1.2-1.3-1.2h-.2C6.5.4 6 .1 5.5.1 3.3.1 2.2 2.9 1.9 4.3H.7L0 15l9 1.6V2.5c-.3 0-.6-.1-.7-.3zm-1.5.4c-.5 0-.7-.3-.7-.5V2c.2-.7.7-1.3 1.2-1.4.5.4.8 1.2.9 1.9H6.8v.1z"/></svg>
                 Shopify Partner
@@ -121,7 +123,7 @@ export default async function HomePage() {
           </div>
 
           {/* Right — COGS dashboard mock */}
-          <div className="lp-fade-up lp-d4">
+          <div className="lp-fade-up lp-d4 lp-hero-mock-wrapper">
             <div className="lp-mock">
               {/* Window bar */}
               <div className="lp-mock-bar" style={{ justifyContent: "space-between" }}>
@@ -200,12 +202,12 @@ export default async function HomePage() {
             <h2 style={{ fontFamily: "'Adore Cats', Fredoka, cursive", fontSize: "clamp(36px, 4vw, 56px)", color: C.espresso, marginBottom: 16, lineHeight: 1.08 }}>
               Built for the way<br />roasters actually work
             </h2>
-            <p style={{ fontSize: 16, color: C.cream, opacity: 0.65, maxWidth: 480, margin: "0 auto", lineHeight: 1.75 }}>
+            <p style={{ fontSize: 16, color: C.espresso, opacity: 0.65, maxWidth: 480, margin: "0 auto", lineHeight: 1.75 }}>
               From green coffee intake to final sale — every cost tracked automatically.
             </p>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+          <div className="lp-features-grid">
             {[
               { icon: <Package size={18} />,     title: "Real-Time Inventory",    desc: "Track green coffee, roasted stock, and packaging across all SKUs. Automatic adjustments on every sale and roast batch." },
               { icon: <BarChart2 size={18} />,    title: "COGS Per SKU",           desc: "Know the true cost of every bag — green bean cost, roast loss, labor, and packaging — broken down per product, automatically." },
@@ -226,7 +228,7 @@ export default async function HomePage() {
 
       {/* ── COGS SPOTLIGHT (tomato) ──────────────────────────────── */}
       <section style={{ background: C.tomato, color: C.cream, padding: "96px 24px", borderBottom: `3px solid ${C.espresso}` }}>
-        <div style={{ maxWidth: 1160, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "center" }}>
+        <div className="lp-cogs-grid" style={{ maxWidth: 1160, margin: "0 auto" }}>
 
           {/* Left — copy */}
           <div>
@@ -324,7 +326,7 @@ export default async function HomePage() {
             </p>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 52, alignItems: "center" }}>
+          <div className="lp-shopify-grid">
 
             {/* Sync status mock */}
             <div className="lp-mock">
@@ -396,7 +398,7 @@ export default async function HomePage() {
             Built with the people using it.
           </h2>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 22 }}>
+          <div className="lp-three-col-grid">
             {[
               { quote: "We were guessing at our margins for years. CoffeeOS showed us we were underpricing our 250g bags by almost 20%. We fixed it within a week.", name: "Sarah K.", title: "Owner, Northlight Roasters" },
               { quote: "The Shopify integration alone is worth it. Every order syncs, inventory stays accurate, and I can see COGS without touching a single spreadsheet.", name: "Marcus T.", title: "Head Roaster, Parallel Coffee" },
@@ -432,7 +434,7 @@ export default async function HomePage() {
             </p>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 22 }}>
+          <div className="lp-pricing-grid">
             {[
               {
                 name: "Starter", price: "$0", featured: false,
@@ -509,7 +511,7 @@ export default async function HomePage() {
 
       {/* ── FOOTER ──────────────────────────────────────────────── */}
       <footer style={{ background: C.espresso, color: C.cream, padding: "52px 24px 0", borderTop: `3px solid ${C.espresso}` }}>
-        <div style={{ maxWidth: 1160, margin: "0 auto", display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1fr", gap: 48, paddingBottom: 48 }}>
+        <div className="lp-footer-grid" style={{ maxWidth: 1160, margin: "0 auto" }}>
           <div>
             <Image alt="CoffeeOS" src="/coffee_os_logo.png" width={120} height={48} style={{ objectFit: "contain", marginBottom: 16, filter: "brightness(0) invert(1)" }} />
             <p style={{ fontSize: 13.5, color: C.fog, lineHeight: 1.65, maxWidth: 280 }}>
@@ -535,7 +537,7 @@ export default async function HomePage() {
           ))}
         </div>
 
-        <div style={{ maxWidth: 1160, margin: "0 auto", paddingTop: 22, paddingBottom: 28, borderTop: `2px solid ${C.roast}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="lp-footer-bottom">
           <span style={{ fontSize: 12.5, color: C.fog }}>© 2026 CoffeeOS. All rights reserved.</span>
           <span style={{ fontSize: 10, color: C.fog, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700 }}>Roasted with ☕ in Austin, TX</span>
         </div>
