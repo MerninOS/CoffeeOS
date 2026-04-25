@@ -1,19 +1,7 @@
 "use client";
 
-import React from "react";
-
-import { useState } from "react";
+import React, { useState } from "react";
 import { createComponent, updateComponent, deleteComponent } from "./actions";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -22,18 +10,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -47,8 +25,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Plus,
   Pencil,
@@ -75,7 +51,6 @@ interface ComponentsClientProps {
   initialComponents: Component[];
 }
 
-// Types must match the database CHECK constraint: ('ingredient', 'labor', 'packaging', 'other')
 const COMPONENT_TYPES = [
   { value: "ingredient", label: "Ingredient" },
   { value: "labor", label: "Labor" },
@@ -85,13 +60,117 @@ const COMPONENT_TYPES = [
 
 const UNITS = ["unit", "oz", "lb", "g", "kg", "ml", "L", "each", "hour"];
 
-const CATEGORIES = ["ingredient", "labor", "packaging", "other"];
+// ── Mernin' primitives ───────────────────────────────────────────────────────
+
+function Btn({
+  children,
+  variant = "primary",
+  size = "md",
+  disabled,
+  onClick,
+  type = "button",
+  className = "",
+}: {
+  children: React.ReactNode;
+  variant?: "primary" | "outline" | "ghost" | "danger";
+  size?: "sm" | "md";
+  disabled?: boolean;
+  onClick?: () => void;
+  type?: "button" | "submit";
+  className?: string;
+}) {
+  const base =
+    "inline-flex items-center justify-center font-body font-extrabold uppercase tracking-widest transition-all duration-100 cursor-pointer disabled:opacity-50 disabled:pointer-events-none";
+  const sizes = {
+    sm: "text-[0.65rem] px-3 py-1.5 gap-1",
+    md: "text-[0.7rem] px-4 py-2 gap-1.5",
+  };
+  const variants = {
+    primary:
+      "bg-tomato text-cream border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none",
+    outline:
+      "bg-transparent text-espresso border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:bg-espresso hover:text-cream active:translate-x-0.5 active:translate-y-0.5 active:shadow-none",
+    ghost:
+      "bg-transparent text-espresso border-[2px] border-transparent rounded-lg hover:bg-fog/40 active:bg-fog/60",
+    danger:
+      "bg-tomato text-cream border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none",
+  };
+  return (
+    <button
+      type={type}
+      disabled={disabled}
+      onClick={onClick}
+      className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function FieldLabel({
+  children,
+  htmlFor,
+}: {
+  children: React.ReactNode;
+  htmlFor?: string;
+}) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className="block text-[0.65rem] font-extrabold uppercase tracking-widest text-espresso font-body mb-1"
+    >
+      {children}
+    </label>
+  );
+}
+
+function MerninInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={`w-full bg-chalk border-[2.5px] border-espresso rounded-xl px-3 py-2 font-body text-sm text-espresso placeholder:text-espresso/30 shadow-[3px_3px_0_#1C0F05] focus:outline-none focus:-translate-x-0.5 focus:-translate-y-0.5 focus:shadow-[4px_4px_0_#E8442A] focus:border-tomato transition-all ${props.className ?? ""}`}
+    />
+  );
+}
+
+function MerninTextarea(
+  props: React.TextareaHTMLAttributes<HTMLTextAreaElement>
+) {
+  return (
+    <textarea
+      {...props}
+      className={`w-full bg-chalk border-[2.5px] border-espresso rounded-xl px-3 py-2 font-body text-sm text-espresso placeholder:text-espresso/30 shadow-[3px_3px_0_#1C0F05] focus:outline-none focus:-translate-x-0.5 focus:-translate-y-0.5 focus:shadow-[4px_4px_0_#E8442A] focus:border-tomato transition-all resize-none ${props.className ?? ""}`}
+    />
+  );
+}
+
+const TYPE_COLORS: Record<string, string> = {
+  ingredient: "bg-sky/20 text-espresso border-sky",
+  labor: "bg-honey/20 text-espresso border-honey",
+  packaging: "bg-sun/30 text-espresso border-sun",
+  other: "bg-fog/60 text-espresso border-fog",
+};
+
+function TypePill({ type }: { type: string }) {
+  const colors = TYPE_COLORS[type] ?? "bg-fog/60 text-espresso border-fog";
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[0.6rem] font-extrabold uppercase tracking-widest border-[2px] font-body ${colors}`}
+    >
+      {type}
+    </span>
+  );
+}
+
+// ── Main Component ───────────────────────────────────────────────────────────
 
 export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
   const [components, setComponents] = useState(initialComponents);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingComponent, setEditingComponent] = useState<Component | null>(null);
+  const [editingComponent, setEditingComponent] = useState<Component | null>(
+    null
+  );
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{
@@ -99,7 +178,6 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
     text: string;
   } | null>(null);
 
-  // Form state
   const [formData, setFormData] = useState({
     name: "",
     category: "",
@@ -109,18 +187,15 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
   });
 
   const filteredComponents = components.filter(
-    (component) =>
-      component.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      component.type.toLowerCase().includes(searchQuery.toLowerCase())
+    (c) =>
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.type.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Group by category
   const groupedComponents = filteredComponents.reduce(
-    (acc, component) => {
-      if (!acc[component.type]) {
-        acc[component.type] = [];
-      }
-      acc[component.type].push(component);
+    (acc, c) => {
+      if (!acc[c.type]) acc[c.type] = [];
+      acc[c.type].push(c);
       return acc;
     },
     {} as Record<string, Component[]>
@@ -128,13 +203,7 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
 
   const openCreateDialog = () => {
     setEditingComponent(null);
-    setFormData({
-      name: "",
-      category: "",
-      costPerUnit: "",
-      unit: "",
-      description: "",
-    });
+    setFormData({ name: "", category: "", costPerUnit: "", unit: "", description: "" });
     setIsDialogOpen(true);
   };
 
@@ -171,14 +240,7 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
         setComponents(
           components.map((c) =>
             c.id === editingComponent.id
-              ? {
-                  ...c,
-                  name: data.name,
-                  type: data.type,
-                  cost_per_unit: data.costPerUnit,
-                  unit: data.unit,
-                  notes: data.notes || null,
-                }
+              ? { ...c, name: data.name, type: data.type, cost_per_unit: data.costPerUnit, unit: data.unit, notes: data.notes || null }
               : c
           )
         );
@@ -201,332 +263,327 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
 
   const handleDelete = async () => {
     if (!deleteId) return;
-
     setIsLoading(true);
     const result = await deleteComponent(deleteId);
-
     if (result.error) {
       setMessage({ type: "error", text: result.error });
     } else {
       setComponents(components.filter((c) => c.id !== deleteId));
       setMessage({ type: "success", text: "Component deleted successfully" });
     }
-
     setIsLoading(false);
     setDeleteId(null);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold tracking-tight md:text-3xl">Components</h1>
-          <p className="text-sm text-muted-foreground md:text-base">
-            Manage your cost components for COGS calculations
+        <div>
+          <h1 className="text-[28px] md:text-[36px] font-extrabold uppercase tracking-tight leading-none text-espresso">
+            Components
+          </h1>
+          <p className="text-[13px] text-espresso/60 font-body mt-1">
+            {components.length} component{components.length !== 1 ? "s" : ""} defined
           </p>
         </div>
-        <Button onClick={openCreateDialog} size="sm" className="shrink-0 md:size-default">
-          <Plus className="mr-1.5 h-3.5 w-3.5 md:mr-2 md:h-4 md:w-4" />
+        <Btn onClick={openCreateDialog} size="sm">
+          <Plus className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Add Component</span>
           <span className="sm:hidden">Add</span>
-        </Button>
+        </Btn>
       </div>
 
+      {/* Message */}
       {message && (
         <div
-          className={`flex items-center gap-2 rounded-md p-3 text-sm ${
+          className={`flex items-center gap-2 rounded-xl border-[2.5px] p-3 text-sm font-body font-bold ${
             message.type === "error"
-              ? "bg-destructive/10 text-destructive"
-              : "bg-green-500/10 text-green-600"
+              ? "bg-tomato/10 border-tomato text-tomato"
+              : "bg-matcha/10 border-matcha text-matcha"
           }`}
         >
-          <AlertCircle className="h-4 w-4" />
+          <AlertCircle className="h-4 w-4 shrink-0" />
           {message.text}
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Component Library</CardTitle>
-              <CardDescription>
-                {components.length} component{components.length !== 1 ? "s" : ""}{" "}
-                defined
-              </CardDescription>
-            </div>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search components..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+      {/* Component Library panel */}
+      <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden">
+        {/* Panel header */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b-2 border-espresso bg-cream">
+          <h2 className="font-body font-extrabold text-sm uppercase tracking-widest text-espresso">
+            Component Library
+          </h2>
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-espresso/40 pointer-events-none" />
+            <MerninInput
+              placeholder="Search components..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
           </div>
-        </CardHeader>
-        <CardContent>
+        </div>
+
+        {/* Content */}
+        <div className="p-5">
           {Object.keys(groupedComponents).length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Layers className="mb-4 h-12 w-12 text-muted-foreground" />
-              <h3 className="text-lg font-medium">No components found</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-16 h-16 rounded-full bg-fog/40 border-[3px] border-espresso flex items-center justify-center mb-4">
+                <Layers className="h-7 w-7 text-espresso/50" />
+              </div>
+              <p className="font-body font-extrabold text-sm uppercase tracking-widest text-espresso">
+                Nothing here yet
+              </p>
+              <p className="mt-1 text-xs text-espresso/50 font-body">
                 {components.length === 0
-                  ? "Create your first component to start tracking costs"
-                  : "Try adjusting your search query"}
+                  ? "Add your first component to start tracking costs"
+                  : "Try adjusting your search"}
               </p>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-8">
               {Object.entries(groupedComponents).map(([type, items]) => (
                 <div key={type}>
-                  <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                    <Badge variant="outline" className="capitalize">{type}</Badge>
-                    <span className="text-muted-foreground">
-                      ({items.length})
+                  {/* Group header */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <TypePill type={type} />
+                    <span className="text-xs text-espresso/50 font-body font-bold">
+                      {items.length}
                     </span>
-                  </h3>
+                  </div>
 
-                  {/* Mobile card layout */}
+                  {/* Mobile cards */}
                   <div className="space-y-2 md:hidden">
                     {items.map((component) => (
-                      <div key={component.id} className="rounded-lg border p-3">
+                      <div
+                        key={component.id}
+                        className="bg-cream border-[2.5px] border-espresso rounded-[16px] shadow-[3px_3px_0_#1C0F05] p-3"
+                      >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="font-medium">{component.name}</p>
+                            <p className="font-body font-extrabold text-sm text-espresso">
+                              {component.name}
+                            </p>
                             {component.notes && (
-                              <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{component.notes}</p>
+                              <p className="mt-0.5 text-xs text-espresso/50 font-body line-clamp-2">
+                                {component.notes}
+                              </p>
                             )}
                           </div>
                           <div className="flex shrink-0 items-center gap-1">
-                            <Button
+                            <Btn
                               variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
+                              size="sm"
                               onClick={() => openEditDialog(component)}
                             >
                               <Pencil className="h-3.5 w-3.5" />
-                              <span className="sr-only">Edit</span>
-                            </Button>
-                            <Button
+                            </Btn>
+                            <Btn
                               variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              size="sm"
                               onClick={() => setDeleteId(component.id)}
+                              className="text-tomato hover:text-tomato"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
-                              <span className="sr-only">Delete</span>
-                            </Button>
+                            </Btn>
                           </div>
                         </div>
-                        <div className="mt-2">
-                          <span className="text-sm font-medium">
-                            ${component.cost_per_unit.toFixed(COST_PER_UNIT_DECIMALS)}/{component.unit}
-                          </span>
-                        </div>
+                        <p className="mt-2 text-sm font-extrabold font-body text-espresso">
+                          ${component.cost_per_unit.toFixed(COST_PER_UNIT_DECIMALS)}/{component.unit}
+                        </p>
                       </div>
                     ))}
                   </div>
 
-                  {/* Desktop table layout */}
-                  <div className="hidden md:block overflow-x-auto rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Description</TableHead>
-                          <TableHead className="text-right">
-                            Cost per Unit
-                          </TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {items.map((component) => (
-                          <TableRow key={component.id}>
-                            <TableCell className="font-medium">
-                              {component.name}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {component.notes || "-"}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              ${component.cost_per_unit.toFixed(COST_PER_UNIT_DECIMALS)}/
-                              {component.unit}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => openEditDialog(component)}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                  <span className="sr-only">Edit</span>
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setDeleteId(component.id)}
-                                  className="text-destructive hover:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  <span className="sr-only">Delete</span>
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                  {/* Desktop table */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <div className="min-w-[560px]">
+                      {/* Table header */}
+                      <div className="grid grid-cols-[minmax(160px,1fr)_minmax(200px,2fr)_160px_80px] gap-x-4 px-4 py-2 border-b-[2px] border-espresso">
+                        {["Name", "Description", "Cost / Unit", ""].map((h) => (
+                          <span
+                            key={h}
+                            className={`text-[0.6rem] font-extrabold uppercase tracking-widest text-espresso/60 font-body ${h === "Cost / Unit" ? "text-right" : h === "" ? "text-right" : ""}`}
+                          >
+                            {h}
+                          </span>
                         ))}
-                      </TableBody>
-                    </Table>
+                      </div>
+                      {/* Table rows */}
+                      {items.map((component, i) => (
+                        <div
+                          key={component.id}
+                          className={`grid grid-cols-[minmax(160px,1fr)_minmax(200px,2fr)_160px_80px] gap-x-4 px-4 py-3 items-center ${i < items.length - 1 ? "border-b-[1.5px] border-dashed border-fog" : ""} hover:bg-cream/60 transition-colors`}
+                        >
+                          <span className="font-body font-extrabold text-sm text-espresso truncate">
+                            {component.name}
+                          </span>
+                          <span className="font-body text-sm text-espresso/60 truncate">
+                            {component.notes || "—"}
+                          </span>
+                          <span className="font-body font-extrabold text-sm text-espresso text-right tabular-nums">
+                            ${component.cost_per_unit.toFixed(COST_PER_UNIT_DECIMALS)}/{component.unit}
+                          </span>
+                          <div className="flex items-center justify-end gap-1">
+                            <Btn
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditDialog(component)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Btn>
+                            <Btn
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setDeleteId(component.id)}
+                              className="text-tomato hover:text-tomato"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Btn>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Create/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingComponent ? "Edit Component" : "Create Component"}
-            </DialogTitle>
-            <DialogDescription>
-              {editingComponent
-                ? "Update the component details below"
-                : "Add a new cost component to your library"}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-[8px_8px_0_#1C0F05]">
+          <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
+            <DialogHeader>
+              <DialogTitle className="font-body font-extrabold uppercase tracking-widest text-espresso text-sm">
+                {editingComponent ? "Edit Component" : "New Component"}
+              </DialogTitle>
+            </DialogHeader>
+          </div>
           <form onSubmit={handleSubmit}>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <FieldLabel htmlFor="name">Name</FieldLabel>
+                <MerninInput
                   id="name"
                   placeholder="e.g., 12oz Kraft Bag"
                   value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="category">Type</Label>
+                <div>
+                  <FieldLabel htmlFor="category">Type</FieldLabel>
                   <Select
                     value={formData.category}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, category: value })
-                    }
+                    onValueChange={(v) => setFormData({ ...formData, category: v })}
                     required
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="border-[2.5px] border-espresso rounded-xl bg-chalk shadow-[3px_3px_0_#1C0F05] font-body text-sm">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {COMPONENT_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
+                      {COMPONENT_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="unit">Unit</Label>
+                <div>
+                  <FieldLabel htmlFor="unit">Unit</FieldLabel>
                   <Select
                     value={formData.unit}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, unit: value })
-                    }
+                    onValueChange={(v) => setFormData({ ...formData, unit: v })}
                     required
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="border-[2.5px] border-espresso rounded-xl bg-chalk shadow-[3px_3px_0_#1C0F05] font-body text-sm">
                       <SelectValue placeholder="Select unit" />
                     </SelectTrigger>
                     <SelectContent>
-                      {UNITS.map((unit) => (
-                        <SelectItem key={unit} value={unit}>
-                          {unit}
+                      {UNITS.map((u) => (
+                        <SelectItem key={u} value={u}>
+                          {u}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="costPerUnit">Cost per Unit ($)</Label>
-                <Input
+              <div>
+                <FieldLabel htmlFor="costPerUnit">Cost per Unit ($)</FieldLabel>
+                <MerninInput
                   id="costPerUnit"
                   type="number"
                   step="0.00000001"
                   min="0"
                   placeholder="0.00"
                   value={formData.costPerUnit}
-                  onChange={(e) =>
-                    setFormData({ ...formData, costPerUnit: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, costPerUnit: e.target.value })}
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description (optional)</Label>
-                <Textarea
+              <div>
+                <FieldLabel htmlFor="description">Description (optional)</FieldLabel>
+                <MerninTextarea
                   id="description"
                   placeholder="Additional details about this component"
                   value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={2}
                 />
               </div>
             </div>
-            <DialogFooter>
-              <Button
+            <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
+              <Btn
                 type="button"
                 variant="outline"
                 onClick={() => setIsDialogOpen(false)}
                 disabled={isLoading}
               >
                 Cancel
-              </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
-                {editingComponent ? "Save Changes" : "Create Component"}
-              </Button>
-            </DialogFooter>
+              </Btn>
+              <Btn type="submit" disabled={isLoading}>
+                {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {editingComponent ? "Save Changes" : "Create"}
+              </Btn>
+            </div>
           </form>
         </DialogContent>
       </Dialog>
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Component</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this component? This action cannot
-              be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
+        <AlertDialogContent className="max-w-sm p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-[8px_8px_0_#1C0F05]">
+          <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-body font-extrabold uppercase tracking-widest text-espresso text-sm">
+                Delete Component
+              </AlertDialogTitle>
+              <AlertDialogDescription className="font-body text-sm text-espresso/60 mt-1">
+                This can&apos;t be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+          </div>
+          <AlertDialogFooter className="px-6 py-4 flex justify-end gap-2">
+            <AlertDialogCancel
+              disabled={isLoading}
+              className="inline-flex items-center justify-center font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-transparent text-espresso border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:bg-espresso hover:text-cream transition-all cursor-pointer"
+            >
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={isLoading}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="inline-flex items-center justify-center gap-1.5 font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-tomato text-cream border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
             >
-              {isLoading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
+              {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

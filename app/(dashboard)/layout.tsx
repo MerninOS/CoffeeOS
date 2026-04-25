@@ -103,11 +103,11 @@ export default async function DashboardLayout({
     <SidebarProvider>
       <AppSidebar user={userData} />
       <SidebarInset>
-         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b-[3px] border-espresso bg-cream px-4">
+          <SidebarTrigger className="-ml-1 text-espresso hover:bg-fog/50" />
+          <Separator orientation="vertical" className="mr-2 h-4 bg-fog" />
         </header>
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <main className="flex-1 overflow-auto bg-cream">{children}</main>
         {onboardingStatus ? (
           <OnboardingTourWidget userId={user.id} initialStatus={onboardingStatus} />
         ) : null}

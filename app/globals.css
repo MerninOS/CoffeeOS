@@ -40,13 +40,13 @@
   --input: oklch(0.92 0.015 75);
   --ring: #E8442A;
   --radius: 0.75rem;
-  --sidebar: #FDFAF0;
-  --sidebar-foreground: #1C0F05;
+  --sidebar: #1C0F05;
+  --sidebar-foreground: #F5F0D8;
   --sidebar-primary: #E8442A;
   --sidebar-primary-foreground: #F5F0D8;
-  --sidebar-accent: #F5F0D8;
-  --sidebar-accent-foreground: #1C0F05;
-  --sidebar-border: #D8D0B8;
+  --sidebar-accent: #2a1508;
+  --sidebar-accent-foreground: #F5F0D8;
+  --sidebar-border: #1C0F05;
   --sidebar-ring: #E8442A;
 }
 
@@ -85,11 +85,11 @@
    ============================================================ */
 @theme inline {
   /* Fonts */
-  --font-sans:     'Inter', 'Cal Sans', system-ui, sans-serif;
+  --font-sans:     'Cal Sans', system-ui, sans-serif;
   --font-mono:     'Geist Mono', 'Geist Mono Fallback', monospace;
   --font-display:  'Adore Cats', Fredoka, cursive;
   --font-headline: 'Adore Cats', Fredoka, cursive;
-  --font-body:     'Inter', 'Cal Sans', system-ui, sans-serif;
+  --font-body:     'Cal Sans', system-ui, sans-serif;
 
   /* shadcn mapping */
   --color-background:    var(--background);
@@ -124,24 +124,26 @@
   --radius-lg:           var(--radius);
   --radius-xl:           calc(var(--radius) + 4px);
 
-  /* ─── Mernin' Brand Palette ─── */
-  --color-tomato:   #E8442A;
-  --color-cream:    #F5F0D8;
-  --color-espresso: #1C0F05;
-  --color-sun:      #F5C842;
-  --color-sky:      #5BC8D5;
-  --color-chalk:    #FDFAF0;
-  --color-roast:    #3B1F0A;
-  --color-honey:    #E8913A;
-  --color-matcha:   #5A7A3A;
-  --color-fog:      #D8D0B8;
+  /* ─── Mernin' Brand Palette ───
+     Tailwind v4 tokens resolve from --mernin-* with hex fallback.
+     Override --mernin-* at :root or on [data-palette="X"] to reskin the app. */
+  --color-tomato:   var(--mernin-tomato,   #E8442A);
+  --color-cream:    var(--mernin-cream,    #F5F0D8);
+  --color-espresso: var(--mernin-espresso, #1C0F05);
+  --color-sun:      var(--mernin-sun,      #F5C842);
+  --color-sky:      var(--mernin-sky,      #5BC8D5);
+  --color-chalk:    var(--mernin-chalk,    #FDFAF0);
+  --color-roast:    var(--mernin-roast,    #3B1F0A);
+  --color-honey:    var(--mernin-honey,    #E8913A);
+  --color-matcha:   var(--mernin-matcha,   #5A7A3A);
+  --color-fog:      var(--mernin-fog,      #D8D0B8);
 
   /* ─── Flat Offset Shadows (NO blur) ─── */
-  --shadow-flat-sm:     3px 3px 0px #1C0F05;
-  --shadow-flat-md:     5px 5px 0px #1C0F05;
-  --shadow-flat-lg:     8px 8px 0px #1C0F05;
-  --shadow-flat-tomato: 5px 5px 0px #E8442A;
-  --shadow-flat-cream:  5px 5px 0px #F5F0D8;
+  --shadow-flat-sm:     3px 3px 0px var(--mernin-espresso, #1C0F05);
+  --shadow-flat-md:     5px 5px 0px var(--mernin-espresso, #1C0F05);
+  --shadow-flat-lg:     8px 8px 0px var(--mernin-espresso, #1C0F05);
+  --shadow-flat-tomato: 5px 5px 0px var(--mernin-tomato,   #E8442A);
+  --shadow-flat-cream:  5px 5px 0px var(--mernin-cream,    #F5F0D8);
 }
 
 @layer base {
@@ -150,6 +152,9 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  button {
+    cursor: pointer;
   }
 }
 
@@ -161,7 +166,7 @@
 .lp {
   background: #F5F0D8;
   color: #1C0F05;
-  font-family: 'Inter', 'Cal Sans', system-ui, sans-serif;
+  font-family: 'Cal Sans', system-ui, sans-serif;
   overflow-x: hidden;
 }
 

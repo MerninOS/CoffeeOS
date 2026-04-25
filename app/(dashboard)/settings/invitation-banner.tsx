@@ -2,9 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { getMyPendingInvitations, acceptInvitation } from "./team-actions";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Loader2, UserPlus, Shield, Flame } from "lucide-react";
 
 interface PendingInvitation {
@@ -19,6 +16,23 @@ interface PendingInvitation {
   };
 }
 
+function RolePill({ role }: { role: string }) {
+  const colors =
+    role === "admin"
+      ? "bg-sky/20 text-espresso border-sky"
+      : "bg-fog/60 text-espresso border-fog";
+  const icon =
+    role === "admin" ? <Shield className="h-3 w-3" /> : <Flame className="h-3 w-3" />;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[0.6rem] font-extrabold uppercase tracking-widest border-[2px] font-body ${colors}`}
+    >
+      {icon}
+      {role}
+    </span>
+  );
+}
+
 export function InvitationBanner() {
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [accepting, setAccepting] = useState<string | null>(null);
@@ -27,9 +41,7 @@ export function InvitationBanner() {
   useEffect(() => {
     async function load() {
       const result = await getMyPendingInvitations();
-      if (result.invitations) {
-        setInvitations(result.invitations);
-      }
+      if (result.invitations) setInvitations(result.invitations);
     }
     load();
   }, []);
@@ -37,73 +49,63 @@ export function InvitationBanner() {
   const handleAccept = async (invitationId: string) => {
     setAccepting(invitationId);
     setMessage(null);
-
     const result = await acceptInvitation(invitationId);
-
     if (result.error) {
       setMessage({ type: "error", text: result.error });
     } else {
       setMessage({ type: "success", text: "Invitation accepted! Reloading..." });
-      // Reload to reflect new role
       setTimeout(() => window.location.reload(), 1000);
     }
-
     setAccepting(null);
   };
 
   if (invitations.length === 0) return null;
 
   return (
-    <div className="space-y-3">
+    <div className="p-6 space-y-3">
       {message && (
         <div
-          className={`rounded-md p-3 text-sm ${
+          className={`rounded-xl border-[2.5px] p-3 text-sm font-body font-bold ${
             message.type === "error"
-              ? "bg-destructive/10 text-destructive"
-              : "bg-green-500/10 text-green-600"
+              ? "bg-tomato/10 border-tomato text-tomato"
+              : "bg-matcha/10 border-matcha text-matcha"
           }`}
         >
           {message.text}
         </div>
       )}
       {invitations.map((invitation) => (
-        <Card key={invitation.id} className="border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/50">
-          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
-                <UserPlus className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">
-                  You have been invited to join a team
-                </p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>Role:</span>
-                  <Badge variant="outline" className="gap-1 capitalize">
-                    {invitation.role === "admin" ? (
-                      <Shield className="h-3 w-3" />
-                    ) : (
-                      <Flame className="h-3 w-3" />
-                    )}
-                    {invitation.role}
-                  </Badge>
-                </div>
+        <div
+          key={invitation.id}
+          className="bg-sky/10 border-[2.5px] border-sky rounded-[16px] shadow-[3px_3px_0_#5BC8D5] px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky/20 border-[2px] border-sky">
+              <UserPlus className="h-5 w-5 text-espresso/60" />
+            </div>
+            <div>
+              <p className="text-sm font-extrabold font-body text-espresso">
+                You have been invited to join a team
+              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-xs text-espresso/50 font-body">Role:</span>
+                <RolePill role={invitation.role} />
               </div>
             </div>
-            <Button
-              size="sm"
-              onClick={() => handleAccept(invitation.id)}
-              disabled={accepting === invitation.id}
-            >
-              {accepting === invitation.id ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <UserPlus className="mr-2 h-4 w-4" />
-              )}
-              Accept Invitation
-            </Button>
-          </CardContent>
-        </Card>
+          </div>
+          <button
+            onClick={() => handleAccept(invitation.id)}
+            disabled={accepting === invitation.id}
+            className="inline-flex items-center justify-center gap-1.5 font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-tomato text-cream border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+          >
+            {accepting === invitation.id ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <UserPlus className="h-3.5 w-3.5" />
+            )}
+            Accept Invitation
+          </button>
+        </div>
       ))}
     </div>
   );
