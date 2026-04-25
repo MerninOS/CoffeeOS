@@ -1,19 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -21,14 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -83,21 +68,145 @@ interface RoastRequestsClientProps {
 }
 
 const LBS_TO_GRAMS = 453.592;
-const gramsToLbs = (g: number) => g / LBS_TO_GRAMS;
+const gramsToLbs = (g: number) => (g / LBS_TO_GRAMS).toFixed(2);
+
+type BtnVariant = "primary" | "outline" | "ghost" | "danger";
+function Btn({
+  variant = "primary",
+  children,
+  onClick,
+  disabled,
+  className = "",
+  type = "button",
+}: {
+  variant?: BtnVariant;
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+  type?: "button" | "submit";
+}) {
+  const base =
+    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border-[2.5px] font-extrabold text-[11px] uppercase tracking-[.08em] transition-all duration-[120ms] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+  const variants: Record<BtnVariant, string> = {
+    primary:
+      "bg-tomato text-cream border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-px hover:-translate-y-px hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
+    outline:
+      "bg-transparent text-espresso border-espresso hover:bg-fog/40",
+    ghost:
+      "bg-transparent text-espresso border-transparent hover:bg-fog/30",
+    danger:
+      "bg-transparent text-tomato border-transparent hover:bg-tomato/10",
+  };
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`${base} ${variants[variant]} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[11px] font-extrabold uppercase tracking-[.08em] text-espresso mb-1.5">
+      {children}
+    </p>
+  );
+}
+
+function MerninInput({
+  id,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+  step,
+  min,
+}: {
+  id?: string;
+  type?: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  step?: string;
+  min?: string;
+}) {
+  return (
+    <input
+      id={id}
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      step={step}
+      min={min}
+      className="w-full px-3 py-2 rounded-[8px] border-[2.5px] border-espresso bg-cream text-[13px] font-medium text-espresso placeholder:text-espresso/30 shadow-[2px_2px_0_#1C0F05] focus:outline-none focus:shadow-[2px_2px_0_#E8442A] focus:border-tomato"
+    />
+  );
+}
+
+function MerninTextarea({
+  value,
+  onChange,
+  placeholder,
+  rows = 3,
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  placeholder?: string;
+  rows?: number;
+}) {
+  return (
+    <textarea
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      rows={rows}
+      className="w-full px-3 py-2 rounded-[8px] border-[2.5px] border-espresso bg-cream text-[13px] font-medium text-espresso placeholder:text-espresso/30 shadow-[2px_2px_0_#1C0F05] focus:outline-none focus:shadow-[2px_2px_0_#E8442A] focus:border-tomato resize-none"
+    />
+  );
+}
 
 const priorityConfig = {
-  low: { label: "Low", className: "bg-muted text-muted-foreground" },
-  normal: { label: "Normal", className: "bg-blue-500/10 text-blue-600 border-blue-500/30" },
-  high: { label: "High", className: "bg-amber-500/10 text-amber-600 border-amber-500/30" },
-  urgent: { label: "Urgent", className: "bg-red-500/10 text-red-600 border-red-500/30" },
+  low: { label: "Low", className: "bg-fog/60 text-espresso border-fog" },
+  normal: { label: "Normal", className: "bg-sky/20 text-espresso border-sky/40" },
+  high: { label: "High", className: "bg-sun/30 text-espresso border-sun/60" },
+  urgent: { label: "Urgent", className: "bg-tomato text-cream border-espresso" },
 };
 
 const statusConfig = {
-  pending: { label: "Pending", icon: Clock, className: "bg-muted text-muted-foreground" },
-  in_progress: { label: "In Progress", icon: Coffee, className: "bg-blue-500/10 text-blue-600 border-blue-500/30" },
-  fulfilled: { label: "Fulfilled", icon: CheckCircle2, className: "bg-green-500/10 text-green-600 border-green-500/30" },
-  cancelled: { label: "Cancelled", icon: XCircle, className: "bg-red-500/10 text-red-600 border-red-500/30" },
+  pending: { label: "Pending", Icon: Clock, className: "bg-fog/60 text-espresso border-fog" },
+  in_progress: { label: "In Progress", Icon: Coffee, className: "bg-honey/20 text-espresso border-honey/40" },
+  fulfilled: { label: "Fulfilled", Icon: CheckCircle2, className: "bg-matcha/20 text-matcha border-matcha/40" },
+  cancelled: { label: "Cancelled", Icon: XCircle, className: "bg-espresso/10 text-espresso/60 border-fog" },
 };
+
+function PriorityPill({ priority }: { priority: keyof typeof priorityConfig }) {
+  const cfg = priorityConfig[priority];
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full border-[1.5px] text-[10px] font-extrabold uppercase tracking-[.06em] ${cfg.className}`}
+    >
+      {cfg.label}
+    </span>
+  );
+}
+
+function StatusPill({ status }: { status: keyof typeof statusConfig }) {
+  const cfg = statusConfig[status];
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border-[1.5px] text-[10px] font-extrabold uppercase tracking-[.06em] ${cfg.className}`}
+    >
+      <cfg.Icon size={10} strokeWidth={2.2} />
+      {cfg.label}
+    </span>
+  );
+}
 
 export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequestsClientProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -112,20 +221,11 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
   });
 
   const resetForm = () => {
-    setFormData({
-      greenCoffeeId: "",
-      quantityG: "",
-      priority: "normal",
-      dueDate: "",
-      notes: "",
-    });
+    setFormData({ greenCoffeeId: "", quantityG: "", priority: "normal", dueDate: "", notes: "" });
     setEditingRequest(null);
   };
 
-  const openCreateDialog = () => {
-    resetForm();
-    setIsDialogOpen(true);
-  };
+  const openCreateDialog = () => { resetForm(); setIsDialogOpen(true); };
 
   const openEditDialog = (request: RoastRequest) => {
     setEditingRequest(request);
@@ -139,16 +239,13 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
     setIsDialogOpen(true);
   };
 
-  // Get selected coffee name for creating request
   const selectedCoffee = coffeeInventory.find((c) => c.id === formData.greenCoffeeId);
 
   const handleSubmit = async () => {
     if (!formData.greenCoffeeId || !formData.quantityG) return;
     setIsSubmitting(true);
-
     try {
       const quantityG = parseFloat(formData.quantityG);
-
       if (editingRequest) {
         const result = await updateRoastRequest(editingRequest.id, {
           requestedRoastedG: quantityG,
@@ -156,10 +253,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
           dueDate: formData.dueDate || undefined,
           notes: formData.notes || undefined,
         });
-        if (result.error) {
-          alert(result.error);
-          return;
-        }
+        if (result.error) { alert(result.error); return; }
       } else {
         if (!selectedCoffee) return;
         const result = await createRoastRequest({
@@ -170,15 +264,11 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
           dueDate: formData.dueDate || undefined,
           notes: formData.notes || undefined,
         });
-        if (result.error) {
-          alert(result.error);
-          return;
-        }
+        if (result.error) { alert(result.error); return; }
         if (result.merged) {
           alert(`Added ${quantityG}g to existing roast request for ${selectedCoffee.name}.`);
         }
       }
-
       setIsDialogOpen(false);
       resetForm();
       window.location.reload();
@@ -189,380 +279,327 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this roast request?")) return;
-    
     const result = await deleteRoastRequest(id);
-    if (result.error) {
-      alert(result.error);
-      return;
-    }
+    if (result.error) { alert(result.error); return; }
     window.location.reload();
   };
 
-  const handleStatusChange = async (id: string, status: "pending" | "in_progress" | "fulfilled" | "cancelled") => {
+  const handleStatusChange = async (
+    id: string,
+    status: "pending" | "in_progress" | "fulfilled" | "cancelled"
+  ) => {
     const result = await updateRoastRequest(id, { status });
-    if (result.error) {
-      alert(result.error);
-      return;
-    }
+    if (result.error) { alert(result.error); return; }
     window.location.reload();
   };
 
-  // Sort by priority (urgent first) then by due date
   const sortedRequests = [...requests].sort((a, b) => {
     const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
     if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
       return priorityOrder[a.priority] - priorityOrder[b.priority];
     }
-    if (a.due_date && b.due_date) {
-      return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
-    }
+    if (a.due_date && b.due_date) return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
     if (a.due_date) return -1;
     if (b.due_date) return 1;
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  const pendingRequests = sortedRequests.filter(r => r.status === "pending" || r.status === "in_progress");
-  const completedRequests = sortedRequests.filter(r => r.status === "fulfilled" || r.status === "cancelled");
+  const pendingRequests = sortedRequests.filter((r) => r.status === "pending" || r.status === "in_progress");
+  const completedRequests = sortedRequests.filter((r) => r.status === "fulfilled" || r.status === "cancelled");
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Roast Requests</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="font-extrabold text-[17px] uppercase tracking-[.04em] text-espresso">
+            Roast Requests
+          </h2>
+          <p className="text-[12px] text-espresso/50 font-medium mt-0.5">
             Track and manage roasting requests from orders
           </p>
         </div>
-        <Button onClick={openCreateDialog} className="w-full sm:w-auto">
-          <Plus className="mr-2 h-4 w-4" />
+        <Btn onClick={openCreateDialog}>
+          <Plus size={12} strokeWidth={2.5} />
           New Request
-        </Button>
+        </Btn>
       </div>
 
       {/* Active Requests */}
       {pendingRequests.length > 0 && (
-        <Card>
-          <CardContent className="p-0">
-            {/* Desktop Table */}
-            <div className="hidden md:block">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Coffee</TableHead>
-                    <TableHead>Quantity</TableHead>
-                    <TableHead>Progress</TableHead>
-                    <TableHead>Priority</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-[80px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pendingRequests.map((request) => {
-                    const StatusIcon = statusConfig[request.status].icon;
-                    const progressPercent = (request.fulfilled_roasted_g / request.requested_roasted_g) * 100;
-                    const isOverdue = request.due_date && new Date(request.due_date) < new Date() && request.status !== "fulfilled";
-                    
-                    return (
-                      <TableRow key={request.id}>
-                        <TableCell>
-                          <div className="font-medium">
-                            {request.green_coffee_inventory?.name || "Unknown"}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {request.green_coffee_inventory?.origin || ""}
-                          </div>
-                        </TableCell>
-<TableCell>
-                          {request.requested_roasted_g.toLocaleString()} g
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-primary rounded-full transition-all"
-                                style={{ width: `${Math.min(progressPercent, 100)}%` }}
-                              />
-                            </div>
-<span className="text-sm text-muted-foreground">
-                              {request.fulfilled_roasted_g.toLocaleString()} / {request.requested_roasted_g.toLocaleString()} g
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={priorityConfig[request.priority].className}>
-                            {priorityConfig[request.priority].label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {request.due_date ? (
-                            <div className="flex items-center gap-1">
-                              {isOverdue && <AlertTriangle className="h-4 w-4 text-red-500" />}
-                              <span className={isOverdue ? "text-red-500" : ""}>
-                                {new Date(request.due_date).toLocaleDateString()}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={statusConfig[request.status].className}>
-                            <StatusIcon className="mr-1 h-3 w-3" />
-                            {statusConfig[request.status].label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openEditDialog(request)}>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleStatusChange(request.id, "fulfilled")}>
-                                <CheckCircle2 className="mr-2 h-4 w-4" />
-                                Mark Fulfilled
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleStatusChange(request.id, "cancelled")}>
-                                <XCircle className="mr-2 h-4 w-4" />
-                                Cancel
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleDelete(request.id)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+        <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden">
+          {/* Desktop table */}
+          <div className="hidden md:block">
+            <div className="grid grid-cols-[1fr_100px_160px_90px_100px_100px_48px] border-b-[2px] border-espresso bg-cream px-5 py-2.5">
+              {["Coffee", "Quantity", "Progress", "Priority", "Due Date", "Status", ""].map((h) => (
+                <div key={h} className="text-[10px] font-extrabold uppercase tracking-[.1em] text-espresso/50">
+                  {h}
+                </div>
+              ))}
             </div>
-
-            {/* Mobile Cards */}
-            <div className="md:hidden divide-y">
+            <div className="divide-y-[1.5px] divide-dashed divide-fog">
               {pendingRequests.map((request) => {
-                const StatusIcon = statusConfig[request.status].icon;
                 const progressPercent = (request.fulfilled_roasted_g / request.requested_roasted_g) * 100;
                 const isOverdue = request.due_date && new Date(request.due_date) < new Date() && request.status !== "fulfilled";
-
                 return (
-                  <div key={request.id} className="p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="font-medium">
-                          {request.green_coffee_inventory?.name || "Unknown"}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {request.green_coffee_inventory?.origin || ""}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={priorityConfig[request.priority].className}>
-                          {priorityConfig[request.priority].label}
-                        </Badge>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEditDialog(request)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleStatusChange(request.id, "fulfilled")}>
-                              <CheckCircle2 className="mr-2 h-4 w-4" />
-                              Mark Fulfilled
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleStatusChange(request.id, "cancelled")}>
-                              <XCircle className="mr-2 h-4 w-4" />
-                              Cancel
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(request.id)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                  <div key={request.id} className="grid grid-cols-[1fr_100px_160px_90px_100px_100px_48px] px-5 py-3 items-center">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-bold text-espresso truncate">
+                        {request.green_coffee_inventory?.name || "Unknown"}
+                      </p>
+                      {request.green_coffee_inventory?.origin && (
+                        <p className="text-[11px] text-espresso/50 font-medium truncate">
+                          {request.green_coffee_inventory.origin}
+                        </p>
+                      )}
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Progress</span>
-                        <span>{request.fulfilled_roasted_g.toLocaleString()} / {request.requested_roasted_g.toLocaleString()} g</span>
-                      </div>
-                      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="text-[13px] font-bold text-espresso">
+                      {request.requested_roasted_g.toLocaleString()}g
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-20 h-2 bg-fog rounded-full overflow-hidden border border-espresso/20">
                         <div
-                          className="h-full bg-primary rounded-full transition-all"
+                          className="h-full bg-honey rounded-full"
                           style={{ width: `${Math.min(progressPercent, 100)}%` }}
                         />
                       </div>
+                      <span className="text-[10px] text-espresso/50 font-medium whitespace-nowrap">
+                        {request.fulfilled_roasted_g.toLocaleString()} / {request.requested_roasted_g.toLocaleString()}g
+                      </span>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <Badge variant="outline" className={statusConfig[request.status].className}>
-                        <StatusIcon className="mr-1 h-3 w-3" />
-                        {statusConfig[request.status].label}
-                      </Badge>
-                      {request.due_date && (
+                    <div>
+                      <PriorityPill priority={request.priority} />
+                    </div>
+                    <div className="text-[12px] font-medium text-espresso">
+                      {request.due_date ? (
                         <div className="flex items-center gap-1">
-                          {isOverdue && <AlertTriangle className="h-4 w-4 text-red-500" />}
-                          <span className={isOverdue ? "text-red-500" : "text-muted-foreground"}>
-                            Due: {new Date(request.due_date).toLocaleDateString()}
+                          {isOverdue && <AlertTriangle size={11} className="text-tomato shrink-0" />}
+                          <span className={isOverdue ? "text-tomato" : ""}>
+                            {new Date(request.due_date).toLocaleDateString()}
                           </span>
                         </div>
+                      ) : (
+                        <span className="text-espresso/30">—</span>
                       )}
+                    </div>
+                    <div>
+                      <StatusPill status={request.status} />
+                    </div>
+                    <div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-transparent text-espresso/50 hover:border-fog hover:text-espresso hover:bg-fog/30 transition-all cursor-pointer">
+                            <MoreHorizontal size={14} strokeWidth={2} />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditDialog(request)}>
+                            <Edit className="mr-2 h-4 w-4" />Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusChange(request.id, "fulfilled")}>
+                            <CheckCircle2 className="mr-2 h-4 w-4" />Mark Fulfilled
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusChange(request.id, "cancelled")}>
+                            <XCircle className="mr-2 h-4 w-4" />Cancel
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDelete(request.id)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden divide-y-[1.5px] divide-dashed divide-fog">
+            {pendingRequests.map((request) => {
+              const progressPercent = (request.fulfilled_roasted_g / request.requested_roasted_g) * 100;
+              const isOverdue = request.due_date && new Date(request.due_date) < new Date() && request.status !== "fulfilled";
+              return (
+                <div key={request.id} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[13px] font-bold text-espresso">
+                        {request.green_coffee_inventory?.name || "Unknown"}
+                      </p>
+                      {request.green_coffee_inventory?.origin && (
+                        <p className="text-[11px] text-espresso/50 font-medium">
+                          {request.green_coffee_inventory.origin}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <PriorityPill priority={request.priority} />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-fog text-espresso/50 hover:text-espresso hover:bg-fog/30 transition-all cursor-pointer">
+                            <MoreHorizontal size={14} strokeWidth={2} />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditDialog(request)}>
+                            <Edit className="mr-2 h-4 w-4" />Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusChange(request.id, "fulfilled")}>
+                            <CheckCircle2 className="mr-2 h-4 w-4" />Mark Fulfilled
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusChange(request.id, "cancelled")}>
+                            <XCircle className="mr-2 h-4 w-4" />Cancel
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDelete(request.id)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-espresso/50 font-medium">Progress</span>
+                      <span className="font-bold text-espresso">
+                        {request.fulfilled_roasted_g.toLocaleString()} / {request.requested_roasted_g.toLocaleString()}g
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-fog rounded-full overflow-hidden border border-espresso/20">
+                      <div
+                        className="h-full bg-honey rounded-full"
+                        style={{ width: `${Math.min(progressPercent, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <StatusPill status={request.status} />
+                    {request.due_date && (
+                      <div className="flex items-center gap-1 text-[11px] font-medium">
+                        {isOverdue && <AlertTriangle size={11} className="text-tomato" />}
+                        <span className={isOverdue ? "text-tomato" : "text-espresso/50"}>
+                          Due: {new Date(request.due_date).toLocaleDateString()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* Empty State */}
       {pendingRequests.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Coffee className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 text-lg font-medium">No active roast requests</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Create a roast request manually or from an order to get started.
-            </p>
-            <Button onClick={openCreateDialog} className="mt-4">
-              <Plus className="mr-2 h-4 w-4" />
-              New Request
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md flex flex-col items-center justify-center py-12 text-center px-6">
+          <Coffee size={32} strokeWidth={1.5} className="text-espresso/20 mb-3" />
+          <h3 className="font-extrabold text-[15px] uppercase tracking-[.04em] text-espresso mb-1">
+            No Active Requests
+          </h3>
+          <p className="text-[12px] text-espresso/50 font-medium mb-4">
+            Create a roast request manually or from an order to get started.
+          </p>
+          <Btn onClick={openCreateDialog}>
+            <Plus size={12} strokeWidth={2.5} />
+            New Request
+          </Btn>
+        </div>
       )}
 
       {/* Completed Requests */}
       {completedRequests.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-muted-foreground">Fulfilled & Cancelled</h3>
-          <Card>
-            <CardContent className="p-0">
-              <div className="hidden md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Coffee</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Completed</TableHead>
-                      <TableHead className="w-[80px]"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {completedRequests.slice(0, 5).map((request) => {
-                      const StatusIcon = statusConfig[request.status].icon;
-                      return (
-                        <TableRow key={request.id} className="opacity-75">
-                          <TableCell>
-                            <div className="font-medium">
-                              {request.green_coffee_inventory?.name || "Unknown"}
-                            </div>
-                          </TableCell>
-<TableCell>
-                            {request.requested_roasted_g.toLocaleString()} g
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={statusConfig[request.status].className}>
-                              <StatusIcon className="mr-1 h-3 w-3" />
-                              {statusConfig[request.status].label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {new Date(request.created_at).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={() => handleDelete(request.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+        <div className="space-y-3">
+          <h3 className="font-extrabold text-[11px] uppercase tracking-[.1em] text-espresso/50">
+            Fulfilled &amp; Cancelled
+          </h3>
+          <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden opacity-75">
+            {/* Desktop */}
+            <div className="hidden md:block">
+              <div className="grid grid-cols-[1fr_100px_100px_100px_48px] border-b-[2px] border-espresso bg-cream px-5 py-2.5">
+                {["Coffee", "Quantity", "Status", "Completed", ""].map((h) => (
+                  <div key={h} className="text-[10px] font-extrabold uppercase tracking-[.1em] text-espresso/50">
+                    {h}
+                  </div>
+                ))}
               </div>
-              <div className="md:hidden divide-y">
-                {completedRequests.slice(0, 5).map((request) => {
-                  const StatusIcon = statusConfig[request.status].icon;
-                  return (
-                    <div key={request.id} className="p-4 opacity-75">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-medium">
-                            {request.green_coffee_inventory?.name || "Unknown"}
-                          </div>
-<div className="text-sm text-muted-foreground">
-                            {request.requested_roasted_g.toLocaleString()} g
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className={statusConfig[request.status].className}>
-                            <StatusIcon className="mr-1 h-3 w-3" />
-                            {statusConfig[request.status].label}
-                          </Badge>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(request.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
+              <div className="divide-y-[1.5px] divide-dashed divide-fog">
+                {completedRequests.slice(0, 5).map((request) => (
+                  <div key={request.id} className="grid grid-cols-[1fr_100px_100px_100px_48px] px-5 py-3 items-center">
+                    <p className="text-[13px] font-bold text-espresso truncate">
+                      {request.green_coffee_inventory?.name || "Unknown"}
+                    </p>
+                    <div className="text-[13px] font-bold text-espresso">
+                      {request.requested_roasted_g.toLocaleString()}g
                     </div>
-                  );
-                })}
+                    <div>
+                      <StatusPill status={request.status} />
+                    </div>
+                    <div className="text-[12px] text-espresso/50 font-medium">
+                      {new Date(request.created_at).toLocaleDateString()}
+                    </div>
+                    <button
+                      onClick={() => handleDelete(request.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-transparent text-espresso/30 hover:border-tomato/30 hover:text-tomato hover:bg-tomato/10 transition-all"
+                    >
+                      <Trash2 size={13} strokeWidth={2} />
+                    </button>
+                  </div>
+                ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+            {/* Mobile */}
+            <div className="md:hidden divide-y-[1.5px] divide-dashed divide-fog">
+              {completedRequests.slice(0, 5).map((request) => (
+                <div key={request.id} className="flex items-center justify-between p-4">
+                  <div>
+                    <p className="text-[13px] font-bold text-espresso">
+                      {request.green_coffee_inventory?.name || "Unknown"}
+                    </p>
+                    <p className="text-[11px] text-espresso/50 font-medium">
+                      {request.requested_roasted_g.toLocaleString()}g
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <StatusPill status={request.status} />
+                    <button
+                      onClick={() => handleDelete(request.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-transparent text-espresso/30 hover:border-tomato/30 hover:text-tomato hover:bg-tomato/10 transition-all"
+                    >
+                      <Trash2 size={13} strokeWidth={2} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
       {/* Create/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingRequest ? "Edit Roast Request" : "New Roast Request"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Coffee</Label>
+        <DialogContent className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
+          <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
+            <DialogHeader>
+              <DialogTitle className="font-extrabold text-[15px] uppercase tracking-[.08em] text-espresso">
+                {editingRequest ? "Edit Roast Request" : "New Roast Request"}
+              </DialogTitle>
+            </DialogHeader>
+          </div>
+          <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+            <div>
+              <FieldLabel>Coffee</FieldLabel>
               <Select
                 value={formData.greenCoffeeId}
                 onValueChange={(value) => setFormData({ ...formData, greenCoffeeId: value })}
                 disabled={!!editingRequest}
               >
-                <SelectTrigger>
+                <SelectTrigger className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
                   <SelectValue placeholder="Select coffee" />
                 </SelectTrigger>
                 <SelectContent>
@@ -570,9 +607,9 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                     <SelectItem key={coffee.id} value={coffee.id}>
                       <div className="flex items-center justify-between gap-4">
                         <span>{coffee.name}</span>
-<span className="text-muted-foreground text-xs">
-                                          {coffee.current_green_quantity_g.toLocaleString()} g available
-                                        </span>
+                        <span className="text-muted-foreground text-xs">
+                          {coffee.current_green_quantity_g.toLocaleString()}g available
+                        </span>
                       </div>
                     </SelectItem>
                   ))}
@@ -580,9 +617,9 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Quantity (grams)</Label>
-              <Input
+            <div>
+              <FieldLabel>Quantity (grams)</FieldLabel>
+              <MerninInput
                 type="number"
                 step="1"
                 value={formData.quantityG}
@@ -591,15 +628,15 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Priority</Label>
+            <div>
+              <FieldLabel>Priority</FieldLabel>
               <Select
                 value={formData.priority}
                 onValueChange={(value: "low" | "normal" | "high" | "urgent") =>
                   setFormData({ ...formData, priority: value })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -611,18 +648,18 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Due Date (optional)</Label>
-              <Input
+            <div>
+              <FieldLabel>Due Date (optional)</FieldLabel>
+              <MerninInput
                 type="date"
                 value={formData.dueDate}
                 onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Notes (optional)</Label>
-              <Textarea
+            <div>
+              <FieldLabel>Notes (optional)</FieldLabel>
+              <MerninTextarea
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 placeholder="Add any notes..."
@@ -630,17 +667,15 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
+          <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
+            <Btn variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Btn>
+            <Btn
               onClick={handleSubmit}
               disabled={isSubmitting || !formData.greenCoffeeId || !formData.quantityG}
             >
               {isSubmitting ? "Saving..." : editingRequest ? "Update" : "Create"}
-            </Button>
-          </DialogFooter>
+            </Btn>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

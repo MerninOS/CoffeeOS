@@ -4,20 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -98,7 +91,6 @@ interface CoffeeInventory {
   current_green_quantity_g: number;
 }
 
-// Conversion: 1 lb = 453.592 grams
 const LBS_TO_GRAMS = 453.592;
 
 interface RoastRequest {
@@ -112,10 +104,7 @@ interface RoastRequest {
   due_date: string | null;
   order_id: string | null;
   notes: string | null;
-  green_coffee_inventory?: {
-    name: string;
-    origin: string;
-  };
+  green_coffee_inventory?: { name: string; origin: string };
 }
 
 interface SessionDetailClientProps {
@@ -124,6 +113,82 @@ interface SessionDetailClientProps {
   coffeeInventory: CoffeeInventory[];
   pendingRequests: RoastRequest[];
 }
+
+type BtnVariant = "primary" | "outline" | "ghost" | "danger";
+function Btn({
+  variant = "primary",
+  children,
+  onClick,
+  disabled,
+  className = "",
+  href,
+}: {
+  variant?: BtnVariant;
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+  href?: string;
+}) {
+  const base =
+    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border-[2.5px] font-extrabold text-[11px] uppercase tracking-[.08em] transition-all duration-[120ms] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+  const variants: Record<BtnVariant, string> = {
+    primary:
+      "bg-tomato text-cream border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-px hover:-translate-y-px hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
+    outline: "bg-transparent text-espresso border-espresso hover:bg-fog/40",
+    ghost: "bg-transparent text-espresso border-transparent hover:bg-fog/30",
+    danger: "bg-transparent text-tomato border-transparent hover:bg-tomato/10",
+  };
+  const cls = `${base} ${variants[variant]} ${className}`;
+  if (href) return <Link href={href} className={cls}>{children}</Link>;
+  return (
+    <button onClick={onClick} disabled={disabled} className={cls}>
+      {children}
+    </button>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[11px] font-extrabold uppercase tracking-[.08em] text-espresso mb-1.5">
+      {children}
+    </p>
+  );
+}
+
+function MerninInput({
+  id,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+  step,
+  min,
+}: {
+  id?: string;
+  type?: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  step?: string;
+  min?: string;
+}) {
+  return (
+    <input
+      id={id}
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      step={step}
+      min={min}
+      className="w-full px-3 py-2 rounded-[8px] border-[2.5px] border-espresso bg-cream text-[13px] font-medium text-espresso placeholder:text-espresso/30 shadow-[2px_2px_0_#1C0F05] focus:outline-none focus:shadow-[2px_2px_0_#E8442A] focus:border-tomato"
+    />
+  );
+}
+
+const lossColor = (pct: number) =>
+  pct > 18 ? "text-tomato" : pct < 12 ? "text-honey" : "text-matcha";
 
 const defaultBatchData = {
   coffeeInventoryId: "",
@@ -153,13 +218,35 @@ export function SessionDetailClient({
   const [batchData, setBatchData] = useState(defaultBatchData);
   const [selectedRequestId, setSelectedRequestId] = useState<string>("");
 
+  const handleCoffeeSelect = (coffeeId: string) => {
+    const coffee = coffeeInventory.find((c) => c.id === coffeeId);
+    if (coffee) {
+      setBatchData({
+        ...batchData,
+        coffeeInventoryId: coffeeId,
+        coffeeName: coffee.name,
+        lotCode: coffee.lot_code || "",
+        priceBasis: "per_lb",
+        priceValue: coffee.price_per_lb.toString(),
+      });
+    }
+  };
+
+  const handleRequestSelect = (requestId: string) => {
+    setSelectedRequestId(requestId);
+    const request = pendingRequests.find((r) => r.id === requestId);
+    if (request) {
+      const coffee = coffeeInventory.find((c) => c.id === request.green_coffee_id);
+      if (coffee) handleCoffeeSelect(coffee.id);
+    }
+  };
+
   const handleAddBatch = async () => {
     const roastMinutesRequired = session.cost_mode !== "co_roasting";
     if (!batchData.coffeeName || !batchData.greenWeightG || !batchData.roastedWeightG || (roastMinutesRequired && !batchData.roastMinutes) || !batchData.priceValue) {
       alert(`Please fill in all required fields: Coffee Name, Price, Green Weight, Roasted Weight${roastMinutesRequired ? ", and Roast Duration" : ""}`);
       return;
     }
-
     setIsSubmitting(true);
     const result = await createBatch({
       sessionId: session.id,
@@ -175,14 +262,7 @@ export function SessionDetailClient({
       batchDate: session.session_date,
       energyKwh: batchData.energyKwh ? parseFloat(batchData.energyKwh) : undefined,
     });
-
-    if (result.error) {
-      setIsSubmitting(false);
-      alert(result.error);
-      return;
-    }
-
-    // If a roast request was selected, fulfill it with this batch
+    if (result.error) { setIsSubmitting(false); alert(result.error); return; }
     if (result.batch && selectedRequestId) {
       const roastedWeightG = parseFloat(batchData.roastedWeightG);
       const fulfillResult = await fulfillRoastRequest({
@@ -190,26 +270,21 @@ export function SessionDetailClient({
         batchId: result.batch.id,
         quantityG: roastedWeightG,
       });
-      if (fulfillResult.error) {
-        console.warn("Failed to fulfill roast request:", fulfillResult.error);
-      }
+      if (fulfillResult.error) console.warn("Failed to fulfill roast request:", fulfillResult.error);
     }
-
     setIsSubmitting(false);
-
     if (result.batch) {
       setBatches([...batches, result.batch]);
       setIsAddBatchOpen(false);
       setBatchData(defaultBatchData);
       setSelectedRequestId("");
-      router.refresh(); // Refresh to update pending requests
+      router.refresh();
     }
   };
 
   const handleUpdateBatch = async () => {
     if (!editingBatch) return;
     setIsSubmitting(true);
-
     const result = await updateBatch(editingBatch.id, {
       coffeeName: batchData.coffeeName || undefined,
       lotCode: batchData.lotCode || undefined,
@@ -222,13 +297,7 @@ export function SessionDetailClient({
       energyKwh: batchData.energyKwh ? parseFloat(batchData.energyKwh) : undefined,
     });
     setIsSubmitting(false);
-
-    if (result.error) {
-      alert(result.error);
-      return;
-    }
-
-    // Refresh to get recalculated values
+    if (result.error) { alert(result.error); return; }
     router.refresh();
     setEditingBatch(null);
     setBatchData(defaultBatchData);
@@ -236,11 +305,8 @@ export function SessionDetailClient({
 
   const handleDeleteBatch = async () => {
     if (!deleteBatchId) return;
-
     const result = await deleteBatch(deleteBatchId);
-    if (result.error) {
-      alert(result.error);
-    } else {
+    if (result.error) { alert(result.error); } else {
       setBatches(batches.filter((b) => b.id !== deleteBatchId));
     }
     setDeleteBatchId(null);
@@ -263,74 +329,37 @@ export function SessionDetailClient({
   };
 
   const totalGreenG = batches.reduce((sum, b) => sum + b.green_weight_g, 0);
-  const totalRoastedG = batches.reduce((sum, b) => sum + b.roasted_weight_g, 0);
   const totalSellableG = batches.reduce((sum, b) => sum + b.sellable_g, 0);
-  const avgLossPercent = batches.length > 0
-    ? batches.reduce((sum, b) => sum + b.loss_percent, 0) / batches.length
-    : null;
-
-  // Calculate total roast time and toll cost
+  const avgLossPercent =
+    batches.length > 0 ? batches.reduce((sum, b) => sum + b.loss_percent, 0) / batches.length : null;
   const totalRoastMinutes = batches.reduce((sum, b) => sum + b.roast_minutes, 0);
   const totalSessionMinutes = session.setup_minutes + totalRoastMinutes + session.cleanup_minutes;
-  const billableMinutes = Math.ceil(totalSessionMinutes / session.billing_granularity_minutes) * session.billing_granularity_minutes;
+  const billableMinutes =
+    Math.ceil(totalSessionMinutes / session.billing_granularity_minutes) *
+    session.billing_granularity_minutes;
   const sessionTollCost =
     session.cost_mode === "co_roasting"
       ? batches.reduce((sum, b) => sum + (b.green_weight_g / 453.592) * Number(session.rate_per_lb || 0), 0)
       : session.cost_mode === "power_usage"
-      ? (billableMinutes / 60) *
-        (session.machine_energy_kwh_per_hour || 0) *
-        (session.kwh_rate || 0)
+      ? (billableMinutes / 60) * (session.machine_energy_kwh_per_hour || 0) * (session.kwh_rate || 0)
       : (billableMinutes / 60) * session.rate_per_hour;
 
-  // Handle coffee inventory selection
-  const handleCoffeeSelect = (coffeeId: string) => {
-    const coffee = coffeeInventory.find((c) => c.id === coffeeId);
-    if (coffee) {
-      setBatchData({
-        ...batchData,
-        coffeeInventoryId: coffeeId,
-        coffeeName: coffee.name,
-        lotCode: coffee.lot_code || "",
-        priceBasis: "per_lb",
-        priceValue: coffee.price_per_lb.toString(),
-      });
-    }
-  };
-
   const selectedCoffee = coffeeInventory.find((c) => c.id === batchData.coffeeInventoryId);
-  
-  // Helper to convert grams to lbs
-  const gramsToLbs = (g: number) => g / LBS_TO_GRAMS;
-
-  // Helper function for selecting a roast request
-  const handleRequestSelect = (requestId: string) => {
-    setSelectedRequestId(requestId);
-    const request = pendingRequests.find((r) => r.id === requestId);
-    if (request) {
-      // Find the matching coffee in inventory
-      const coffee = coffeeInventory.find((c) => c.id === request.green_coffee_id);
-      if (coffee) {
-        handleCoffeeSelect(coffee.id);
-      }
-    }
-  };
-
   const selectedRequest = pendingRequests.find((r) => r.id === selectedRequestId);
 
-  const batchFormFields = (
-    <div className="grid gap-4 py-4">
+  const batchFormBody = (
+    <div className="space-y-4">
       {/* Roast Request Selection */}
       {pendingRequests.length > 0 && !editingBatch && (
-        <div className="space-y-2">
-          <Label className="flex items-center gap-2">
-            <ClipboardList className="h-4 w-4" />
-            Fulfill a Roast Request (optional)
-          </Label>
-          <Select
-            value={selectedRequestId}
-            onValueChange={handleRequestSelect}
-          >
-            <SelectTrigger>
+        <div>
+          <FieldLabel>
+            <span className="flex items-center gap-1.5">
+              <ClipboardList size={11} />
+              Fulfill a Roast Request (optional)
+            </span>
+          </FieldLabel>
+          <Select value={selectedRequestId} onValueChange={handleRequestSelect}>
+            <SelectTrigger className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
               <SelectValue placeholder="Select a request to fulfill..." />
             </SelectTrigger>
             <SelectContent>
@@ -344,8 +373,7 @@ export function SessionDetailClient({
                       {request.priority === "high" && <Clock className="h-3 w-3 text-amber-500" />}
                       <span>{request.green_coffee_inventory?.name || "Unknown"}</span>
                       <span className="text-muted-foreground text-xs">
-                        - {remainingG.toLocaleString()} g needed
-                        {isOverdue && " (overdue)"}
+                        — {remainingG.toLocaleString()}g needed{isOverdue && " (overdue)"}
                       </span>
                     </div>
                   </SelectItem>
@@ -354,24 +382,21 @@ export function SessionDetailClient({
             </SelectContent>
           </Select>
           {selectedRequest && (
-            <p className="text-xs text-muted-foreground">
-              Request needs {(selectedRequest.requested_roasted_g - selectedRequest.fulfilled_roasted_g).toLocaleString()} g
+            <p className="text-[11px] text-espresso/50 font-medium mt-1.5">
+              Needs {(selectedRequest.requested_roasted_g - selectedRequest.fulfilled_roasted_g).toLocaleString()}g
               {selectedRequest.due_date && ` by ${new Date(selectedRequest.due_date).toLocaleDateString()}`}
-              {selectedRequest.notes && ` - ${selectedRequest.notes}`}
+              {selectedRequest.notes && ` — ${selectedRequest.notes}`}
             </p>
           )}
         </div>
       )}
 
-      {/* Coffee Inventory Selection */}
+      {/* Coffee Inventory Select */}
       {coffeeInventory.length > 0 && (
-        <div className="space-y-2">
-          <Label>Select from Inventory</Label>
-          <Select
-            value={batchData.coffeeInventoryId}
-            onValueChange={handleCoffeeSelect}
-          >
-            <SelectTrigger>
+        <div>
+          <FieldLabel>Select from Inventory</FieldLabel>
+          <Select value={batchData.coffeeInventoryId} onValueChange={handleCoffeeSelect}>
+            <SelectTrigger className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
               <SelectValue placeholder="Select coffee from inventory..." />
             </SelectTrigger>
             <SelectContent>
@@ -380,7 +405,7 @@ export function SessionDetailClient({
                   <div className="flex items-center justify-between gap-4">
                     <span>{coffee.name}</span>
                     <span className="text-muted-foreground text-xs">
-                      {gramsToLbs(coffee.current_green_quantity_g).toFixed(1)} lbs @ ${coffee.price_per_lb.toFixed(2)}/lb
+                      {(coffee.current_green_quantity_g / LBS_TO_GRAMS).toFixed(1)} lbs @ ${coffee.price_per_lb.toFixed(2)}/lb
                     </span>
                   </div>
                 </SelectItem>
@@ -388,50 +413,46 @@ export function SessionDetailClient({
             </SelectContent>
           </Select>
           {selectedCoffee && (
-            <p className="text-xs text-muted-foreground">
-              {selectedCoffee.origin} {selectedCoffee.supplier ? `- ${selectedCoffee.supplier}` : ""} 
+            <p className="text-[11px] text-espresso/50 font-medium mt-1.5">
+              {selectedCoffee.origin}{selectedCoffee.supplier ? ` — ${selectedCoffee.supplier}` : ""}
               {selectedCoffee.lot_code ? ` | Lot: ${selectedCoffee.lot_code}` : ""}
-              {" | "}Available: {gramsToLbs(selectedCoffee.current_green_quantity_g).toFixed(1)} lbs
+              {" | "}Available: {(selectedCoffee.current_green_quantity_g / LBS_TO_GRAMS).toFixed(1)} lbs
             </p>
           )}
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="coffeeName">Coffee Name *</Label>
-          <Input
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <FieldLabel>Coffee Name *</FieldLabel>
+          <MerninInput
             id="coffeeName"
             value={batchData.coffeeName}
-            onChange={(e) =>
-              setBatchData({ ...batchData, coffeeName: e.target.value })
-            }
+            onChange={(e) => setBatchData({ ...batchData, coffeeName: e.target.value })}
             placeholder="e.g., Ethiopia Yirgacheffe"
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="lotCode">Lot Code</Label>
-          <Input
+        <div>
+          <FieldLabel>Lot Code</FieldLabel>
+          <MerninInput
             id="lotCode"
             value={batchData.lotCode}
-            onChange={(e) =>
-              setBatchData({ ...batchData, lotCode: e.target.value })
-            }
+            onChange={(e) => setBatchData({ ...batchData, lotCode: e.target.value })}
             placeholder="e.g., LOT-2024-001"
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="priceBasis">Price Basis *</Label>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <FieldLabel>Price Basis *</FieldLabel>
           <Select
             value={batchData.priceBasis}
             onValueChange={(value: "per_lb" | "per_kg") =>
               setBatchData({ ...batchData, priceBasis: value })
             }
           >
-            <SelectTrigger>
+            <SelectTrigger className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -440,96 +461,82 @@ export function SessionDetailClient({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="priceValue">
-            Green Price (${batchData.priceBasis === "per_lb" ? "/lb" : "/kg"}) *
-          </Label>
-          <Input
+        <div>
+          <FieldLabel>Green Price (${batchData.priceBasis === "per_lb" ? "/lb" : "/kg"}) *</FieldLabel>
+          <MerninInput
             id="priceValue"
             type="number"
             step="0.01"
             value={batchData.priceValue}
-            onChange={(e) =>
-              setBatchData({ ...batchData, priceValue: e.target.value })
-            }
+            onChange={(e) => setBatchData({ ...batchData, priceValue: e.target.value })}
             placeholder="e.g., 5.50"
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="greenWeightG">Green Weight (g) *</Label>
-          <Input
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <FieldLabel>Green Weight (g) *</FieldLabel>
+          <MerninInput
             id="greenWeightG"
             type="number"
             value={batchData.greenWeightG}
-            onChange={(e) =>
-              setBatchData({ ...batchData, greenWeightG: e.target.value })
-            }
+            onChange={(e) => setBatchData({ ...batchData, greenWeightG: e.target.value })}
             placeholder="e.g., 5000"
           />
           {batchData.greenWeightG && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[10px] text-espresso/40 font-medium mt-1">
               {(parseFloat(batchData.greenWeightG) / LBS_TO_GRAMS).toFixed(2)} lbs
             </p>
           )}
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="roastedWeightG">Roasted Weight (g) *</Label>
-          <Input
+        <div>
+          <FieldLabel>Roasted Weight (g) *</FieldLabel>
+          <MerninInput
             id="roastedWeightG"
             type="number"
             value={batchData.roastedWeightG}
-            onChange={(e) =>
-              setBatchData({ ...batchData, roastedWeightG: e.target.value })
-            }
+            onChange={(e) => setBatchData({ ...batchData, roastedWeightG: e.target.value })}
             placeholder="e.g., 4250"
           />
           {batchData.roastedWeightG && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[10px] text-espresso/40 font-medium mt-1">
               {(parseFloat(batchData.roastedWeightG) / LBS_TO_GRAMS).toFixed(2)} lbs
             </p>
           )}
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="rejectsG">Rejects (g)</Label>
-          <Input
+        <div>
+          <FieldLabel>Rejects (g)</FieldLabel>
+          <MerninInput
             id="rejectsG"
             type="number"
             value={batchData.rejectsG}
-            onChange={(e) =>
-              setBatchData({ ...batchData, rejectsG: e.target.value })
-            }
+            onChange={(e) => setBatchData({ ...batchData, rejectsG: e.target.value })}
             placeholder="0"
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="roastMinutes">Roast Duration (min) *</Label>
-          <Input
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <FieldLabel>Roast Duration (min) *</FieldLabel>
+          <MerninInput
             id="roastMinutes"
             type="number"
             step="0.5"
             value={batchData.roastMinutes}
-            onChange={(e) =>
-              setBatchData({ ...batchData, roastMinutes: e.target.value })
-            }
+            onChange={(e) => setBatchData({ ...batchData, roastMinutes: e.target.value })}
             placeholder="e.g., 12"
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="energyKwh">Energy (kWh)</Label>
-          <Input
+        <div>
+          <FieldLabel>Energy (kWh)</FieldLabel>
+          <MerninInput
             id="energyKwh"
             type="number"
             step="0.01"
             value={batchData.energyKwh}
-            onChange={(e) =>
-              setBatchData({ ...batchData, energyKwh: e.target.value })
-            }
+            onChange={(e) => setBatchData({ ...batchData, energyKwh: e.target.value })}
             placeholder="Optional"
           />
         </div>
@@ -537,199 +544,117 @@ export function SessionDetailClient({
     </div>
   );
 
+  const sessionRateLabel =
+    session.cost_mode === "co_roasting"
+      ? `$${Number(session.rate_per_lb || 0).toFixed(2)}/lb (green)`
+      : session.cost_mode === "power_usage"
+      ? `${session.machine_energy_kwh_per_hour || 0} kWh/hr | $${(session.kwh_rate || 0).toFixed(4)}/kWh | ${session.billing_granularity_minutes}min billing`
+      : `$${session.rate_per_hour}/hr | ${session.billing_granularity_minutes}min billing`;
+
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Header - Stacked on mobile */}
+    <div className="p-6 space-y-6 bg-cream min-h-full">
+      {/* Page header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3 sm:gap-4">
-          <Button variant="ghost" size="icon" asChild className="shrink-0">
-            <Link href="/roasting">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/roasting"
+            className="flex h-8 w-8 items-center justify-center rounded-[8px] border-[2.5px] border-espresso bg-cream text-espresso hover:bg-fog/40 transition-all shadow-[2px_2px_0_#1C0F05]"
+          >
+            <ArrowLeft size={14} strokeWidth={2.2} />
+          </Link>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base sm:text-lg font-semibold">
+              <h1 className="font-extrabold text-[22px] uppercase tracking-[.04em] text-espresso leading-none">
                 {format(new Date(session.session_date), "MMM d, yyyy")}
-              </h2>
-              <Badge variant="outline" className="shrink-0">{session.vendor_name}</Badge>
+              </h1>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full border-[2px] border-espresso bg-fog/40 text-[10px] font-extrabold uppercase tracking-[.06em] text-espresso">
+                {session.vendor_name}
+              </span>
             </div>
-            <p className="text-xs sm:text-sm text-muted-foreground truncate">
-              {session.cost_mode === "co_roasting"
-                ? `$${Number(session.rate_per_lb || 0).toFixed(2)}/lb (green)`
-                : session.cost_mode === "power_usage"
-                ? `${session.machine_energy_kwh_per_hour || 0} kWh/hr | $${(
-                    session.kwh_rate || 0
-                  ).toFixed(4)}/kWh | ${session.billing_granularity_minutes} min billing`
-                : `$${session.rate_per_hour}/hr | ${session.billing_granularity_minutes} min billing`}
-            </p>
+            <p className="text-[12px] text-espresso/50 font-medium mt-1 truncate">{sessionRateLabel}</p>
           </div>
         </div>
-        <Dialog open={isAddBatchOpen} onOpenChange={setIsAddBatchOpen}>
-          <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Batch
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Add New Batch</DialogTitle>
-              <DialogDescription>
-                Record the details of your roasting batch
-              </DialogDescription>
-            </DialogHeader>
-            {batchFormFields}
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsAddBatchOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleAddBatch}
-                disabled={isSubmitting || !batchData.coffeeName || !batchData.greenWeightG || !batchData.roastedWeightG || (session.cost_mode !== "co_roasting" && !batchData.roastMinutes) || !batchData.priceValue}
-              >
-                {isSubmitting ? "Adding..." : "Add Batch"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Btn onClick={() => setIsAddBatchOpen(true)} className="self-start sm:self-auto">
+          <Plus size={12} strokeWidth={2.5} />
+          Add Batch
+        </Btn>
       </div>
 
-      {/* Summary Cards - Compact on mobile, full on desktop */}
-      {/* Mobile: Single card with key stats */}
-      <Card className="md:hidden">
-        <CardContent className="py-4">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <div className="text-2xl font-bold">{batches.length}</div>
-              <div className="text-xs text-muted-foreground">Batches</div>
+      {/* Stat cards — desktop 5-col, mobile 3-col compact */}
+      <div className="grid grid-cols-3 gap-3 md:grid-cols-5">
+        {[
+          { label: "Batches", value: batches.length.toString() },
+          { label: "Green", value: `${(totalGreenG / 1000).toFixed(2)} kg`, desktopOnly: false },
+          { label: "Sellable", value: `${(totalSellableG / 1000).toFixed(2)} kg` },
+          {
+            label: "Avg Loss",
+            value: avgLossPercent !== null ? `${avgLossPercent.toFixed(1)}%` : "—",
+            colored: avgLossPercent !== null ? lossColor(avgLossPercent) : "",
+          },
+          {
+            label: "Session Toll",
+            value: `$${sessionTollCost.toFixed(2)}`,
+            sub: session.cost_mode !== "co_roasting" ? `${billableMinutes}min billed` : undefined,
+          },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="bg-chalk border-[3px] border-espresso rounded-[12px] shadow-flat-sm px-4 py-3"
+          >
+            <p className="text-[9px] font-extrabold uppercase tracking-[.1em] text-espresso/40 mb-1">
+              {stat.label}
+            </p>
+            <p className={`text-[20px] font-extrabold leading-none ${stat.colored || "text-espresso"}`}>
+              {stat.value}
+            </p>
+            {stat.sub && (
+              <p className="text-[10px] text-espresso/40 font-medium mt-0.5">{stat.sub}</p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Pending Requests Banner */}
+      {pendingRequests.length > 0 && (
+        <div className="bg-sun/20 border-[3px] border-sun/60 rounded-[14px] px-5 py-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sun/30 border-[2px] border-sun/60 shrink-0">
+              <ClipboardList size={16} strokeWidth={2} className="text-espresso" />
             </div>
-            <div>
-              <div className="text-2xl font-bold">{(totalSellableG / 1000).toFixed(1)}<span className="text-sm">kg</span></div>
-              <div className="text-xs text-muted-foreground">Sellable</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold">${sessionTollCost.toFixed(0)}</div>
-              <div className="text-xs text-muted-foreground">Toll</div>
+            <div className="min-w-0">
+              <h3 className="text-[13px] font-extrabold text-espresso uppercase tracking-[.04em]">
+                {pendingRequests.length} Pending Request{pendingRequests.length !== 1 ? "s" : ""}
+              </h3>
+              <p className="text-[11px] text-espresso/60 font-medium truncate">
+                {pendingRequests.map((r) => r.green_coffee_inventory?.name || "Unknown").join(", ")}
+              </p>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Desktop: Full stats grid */}
-      <div className="hidden md:grid gap-4 md:grid-cols-5">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Batches
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{batches.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Green Weight
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{(totalGreenG / 1000).toFixed(2)} kg</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Sellable Weight
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{(totalSellableG / 1000).toFixed(2)} kg</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Avg Loss %
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {avgLossPercent !== null ? `${avgLossPercent.toFixed(1)}%` : "-"}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Session Toll
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${sessionTollCost.toFixed(2)}</div>
-            {session.cost_mode !== "co_roasting" && (
-              <p className="text-xs text-muted-foreground">{billableMinutes} min billed</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Pending Roast Requests Banner */}
-      {pendingRequests.length > 0 && (
-        <Card className="border-amber-500/50 bg-amber-500/5">
-          <CardContent className="py-3 sm:py-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="rounded-full bg-amber-500/10 p-2 shrink-0">
-                  <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold">
-                    {pendingRequests.length} Pending Request{pendingRequests.length !== 1 ? "s" : ""}
-                  </h3>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {pendingRequests.map((r) => r.green_coffee_inventory?.name || "Unknown").join(", ")}
-                  </p>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                onClick={() => setIsAddBatchOpen(true)}
-                className="w-full sm:w-auto shrink-0"
-              >
-                <Plus className="mr-1 h-4 w-4" />
-                Fulfill Request
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          <Btn onClick={() => setIsAddBatchOpen(true)} className="self-start sm:self-auto shrink-0">
+            <Plus size={12} strokeWidth={2.5} />
+            Fulfill Request
+          </Btn>
+        </div>
       )}
 
-      {/* Batch Grid */}
+      {/* Batch grid */}
       {batches.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12">
-            <div className="rounded-full bg-muted p-3 sm:p-4 mb-3 sm:mb-4">
-              <Package className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground" />
-            </div>
-            <h3 className="text-base sm:text-lg font-semibold mb-2">No Batches Yet</h3>
-            <p className="text-sm text-muted-foreground text-center mb-4 px-4">
-              Add your first batch to start tracking
-            </p>
-            <Button onClick={() => setIsAddBatchOpen(true)} className="w-full sm:w-auto">
-              <Plus className="mr-2 h-4 w-4" />
-              Add First Batch
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md flex flex-col items-center justify-center py-14 text-center px-6">
+          <Package size={36} strokeWidth={1.5} className="text-espresso/20 mb-3" />
+          <h3 className="font-extrabold text-[15px] uppercase tracking-[.04em] text-espresso mb-1">
+            No Batches Yet
+          </h3>
+          <p className="text-[12px] text-espresso/50 font-medium mb-4">
+            Add your first batch to start tracking
+          </p>
+          <Btn onClick={() => setIsAddBatchOpen(true)}>
+            <Plus size={12} strokeWidth={2.5} />
+            Add First Batch
+          </Btn>
+        </div>
       ) : (
-        <div className="space-y-3 sm:space-y-0 sm:grid sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {batches.map((batch) => {
-            // Compute per-batch cost breakdown
             const greenCostPerG = batch.green_cost_per_g;
             const totalGreenCost = greenCostPerG * batch.green_weight_g;
             let roastingCostPerG = 0;
@@ -743,8 +668,7 @@ export function SessionDetailClient({
               } else {
                 const batchCount = Math.max(batches.length, 1);
                 const batchEffectiveMinutes =
-                  batch.roast_minutes +
-                  (session.setup_minutes + session.cleanup_minutes) / batchCount;
+                  batch.roast_minutes + (session.setup_minutes + session.cleanup_minutes) / batchCount;
                 const batchAllocatedCost =
                   totalSessionMinutes > 0
                     ? sessionTollCost * (batchEffectiveMinutes / totalSessionMinutes)
@@ -755,139 +679,172 @@ export function SessionDetailClient({
             }
 
             return (
-            <Card key={batch.id}>
-              <CardHeader className="pb-2 px-4 sm:px-6">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <CardTitle className="text-base truncate">
+              <div
+                key={batch.id}
+                className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden"
+              >
+                {/* Card header */}
+                <div className="bg-cream border-b-[2px] border-espresso px-4 py-3 flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-[13px] font-extrabold text-espresso uppercase tracking-[.04em] truncate">
                       {batch.coffee_name}
-                    </CardTitle>
+                    </h3>
                     {batch.lot_code && (
-                      <p className="text-xs text-muted-foreground truncate">
+                      <p className="text-[10px] text-espresso/50 font-medium truncate">
                         Lot: {batch.lot_code}
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
                       onClick={() => openEditBatch(batch)}
+                      className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[1.5px] border-transparent text-espresso/40 hover:border-fog hover:text-espresso hover:bg-fog/30 transition-all"
                     >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      <Edit size={12} strokeWidth={2} />
+                    </button>
+                    <button
                       onClick={() => setDeleteBatchId(batch.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[1.5px] border-transparent text-espresso/30 hover:border-tomato/30 hover:text-tomato hover:bg-tomato/10 transition-all"
                     >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                      <Trash2 size={12} strokeWidth={2} />
+                    </button>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="px-4 sm:px-6 pb-4">
-                <div className="grid grid-cols-3 gap-x-2 gap-y-2 text-sm">
-                  <div>
-                    <span className="text-xs text-muted-foreground block">Green</span>
-                    <span className="font-medium">{batch.green_weight_g}g</span>
+
+                {/* Card body */}
+                <div className="px-4 py-3 space-y-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: "Green", value: `${batch.green_weight_g}g` },
+                      { label: "Roasted", value: `${batch.roasted_weight_g}g` },
+                      {
+                        label: "Loss",
+                        value: <span className={`font-extrabold ${lossColor(batch.loss_percent)}`}>{batch.loss_percent.toFixed(1)}%</span>,
+                      },
+                      { label: "Sellable", value: `${batch.sellable_g}g` },
+                      { label: "Time", value: `${batch.roast_minutes}min` },
+                      { label: "Price", value: `$${batch.price_value}/${batch.price_basis === "per_lb" ? "lb" : "kg"}` },
+                    ].map((stat) => (
+                      <div key={stat.label}>
+                        <span className="text-[9px] text-espresso/40 font-extrabold uppercase tracking-[.08em] block">
+                          {stat.label}
+                        </span>
+                        <span className="text-[12px] font-bold text-espresso">{stat.value}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground block">Roasted</span>
-                    <span className="font-medium">{batch.roasted_weight_g}g</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground block">Loss</span>
-                    <span
-                      className={`font-medium ${
-                        batch.loss_percent > 18
-                          ? "text-destructive"
-                          : batch.loss_percent < 12
-                            ? "text-amber-600"
-                            : "text-green-600"
-                      }`}
-                    >
-                      {batch.loss_percent.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground block">Sellable</span>
-                    <span className="font-medium">{batch.sellable_g}g</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground block">Time</span>
-                    <span className="font-medium">{batch.roast_minutes}min</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground block">Price</span>
-                    <span className="font-medium">
-                      ${batch.price_value}/{batch.price_basis === "per_lb" ? "lb" : "kg"}
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-3 pt-3 border-t">
-                  <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wide font-semibold">Cost / gram</p>
-                  <div className="grid grid-cols-3 gap-x-2 text-sm">
-                    <div>
-                      <span className="text-xs text-muted-foreground block">Green</span>
-                      <span className="font-medium">${greenCostPerG.toFixed(5)}</span>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted-foreground block">Roasting</span>
-                      <span className="font-medium">${roastingCostPerG.toFixed(5)}</span>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted-foreground block">Total</span>
-                      <span className="font-semibold">${totalCostPerG.toFixed(5)}</span>
+
+                  {/* Cost breakdown */}
+                  <div className="pt-2 border-t-[1.5px] border-dashed border-fog">
+                    <p className="text-[9px] font-extrabold uppercase tracking-[.1em] text-espresso/40 mb-1.5">
+                      Cost / gram
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: "Green", value: `$${greenCostPerG.toFixed(5)}` },
+                        { label: "Roasting", value: `$${roastingCostPerG.toFixed(5)}` },
+                        { label: "Total", value: `$${totalCostPerG.toFixed(5)}`, bold: true },
+                      ].map((cost) => (
+                        <div key={cost.label}>
+                          <span className="text-[9px] text-espresso/40 font-extrabold uppercase tracking-[.08em] block">
+                            {cost.label}
+                          </span>
+                          <span className={`text-[11px] ${cost.bold ? "font-extrabold text-espresso" : "font-bold text-espresso/70"}`}>
+                            {cost.value}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
             );
           })}
         </div>
       )}
 
+      {/* Add Batch Dialog */}
+      <Dialog open={isAddBatchOpen} onOpenChange={setIsAddBatchOpen}>
+        <DialogContent className="max-w-lg p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg max-h-[90vh]">
+          <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
+            <DialogHeader>
+              <DialogTitle className="font-extrabold text-[15px] uppercase tracking-[.08em] text-espresso">
+                Add New Batch
+              </DialogTitle>
+              <DialogDescription className="text-[12px] text-espresso/50 font-medium">
+                Record the details of your roasting batch
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="px-6 py-5 overflow-y-auto">
+            {batchFormBody}
+          </div>
+          <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
+            <Btn variant="outline" onClick={() => setIsAddBatchOpen(false)}>Cancel</Btn>
+            <Btn
+              onClick={handleAddBatch}
+              disabled={
+                isSubmitting ||
+                !batchData.coffeeName ||
+                !batchData.greenWeightG ||
+                !batchData.roastedWeightG ||
+                (session.cost_mode !== "co_roasting" && !batchData.roastMinutes) ||
+                !batchData.priceValue
+              }
+            >
+              {isSubmitting ? "Adding..." : "Add Batch"}
+            </Btn>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit Batch Dialog */}
       <Dialog open={!!editingBatch} onOpenChange={(open) => !open && setEditingBatch(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Edit Batch</DialogTitle>
-            <DialogDescription>Update the batch details</DialogDescription>
-          </DialogHeader>
-          {batchFormFields}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingBatch(null)}>
-              Cancel
-            </Button>
-            <Button onClick={handleUpdateBatch} disabled={isSubmitting}>
+        <DialogContent className="max-w-lg p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg max-h-[90vh]">
+          <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
+            <DialogHeader>
+              <DialogTitle className="font-extrabold text-[15px] uppercase tracking-[.08em] text-espresso">
+                Edit Batch
+              </DialogTitle>
+              <DialogDescription className="text-[12px] text-espresso/50 font-medium">
+                Update the batch details
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="px-6 py-5 overflow-y-auto">
+            {batchFormBody}
+          </div>
+          <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
+            <Btn variant="outline" onClick={() => setEditingBatch(null)}>Cancel</Btn>
+            <Btn onClick={handleUpdateBatch} disabled={isSubmitting}>
               {isSubmitting ? "Saving..." : "Save Changes"}
-            </Button>
-          </DialogFooter>
+            </Btn>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Delete Confirmation */}
-      <AlertDialog
-        open={!!deleteBatchId}
-        onOpenChange={(open) => !open && setDeleteBatchId(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Batch?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete this
-              batch record.
+      <AlertDialog open={!!deleteBatchId} onOpenChange={(open) => !open && setDeleteBatchId(null)}>
+        <AlertDialogContent className="p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg max-w-sm">
+          <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-extrabold text-[15px] uppercase tracking-[.06em] text-espresso">
+                Delete Batch?
+              </AlertDialogTitle>
+            </AlertDialogHeader>
+          </div>
+          <div className="px-6 py-5">
+            <AlertDialogDescription className="text-[13px] text-espresso/70 font-medium">
+              This action cannot be undone. This will permanently delete this batch record.
             </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          </div>
+          <AlertDialogFooter className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
+            <AlertDialogCancel className="inline-flex items-center px-3 py-1.5 rounded-[8px] border-[2.5px] border-espresso bg-transparent text-espresso font-extrabold text-[11px] uppercase tracking-[.08em] hover:bg-fog/40 transition-all">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteBatch}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="inline-flex items-center px-3 py-1.5 rounded-[8px] border-[2.5px] border-espresso bg-tomato text-cream font-extrabold text-[11px] uppercase tracking-[.08em] shadow-[3px_3px_0_#1C0F05] hover:-translate-x-px hover:-translate-y-px hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"
             >
               Delete
             </AlertDialogAction>

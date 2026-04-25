@@ -1,13 +1,13 @@
 import Link from "next/link";
 import {
+  Button,
   Card,
   CardContent,
   CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+} from "@merninos/ui";
 import { Coffee, AlertCircle } from "lucide-react";
 
 export default function AuthErrorPage() {

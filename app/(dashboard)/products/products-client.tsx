@@ -4,22 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { syncShopifyProducts, deleteProduct, createProduct } from "./actions";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -39,10 +23,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,9 +39,150 @@ import {
   ExternalLink,
   Loader2,
   Plus,
-  Percent,
   ChevronDown,
+  Settings,
 } from "lucide-react";
+
+// ─── Primitives ──────────────────────────────────────────────────────────────
+
+function Btn({
+  variant = "primary",
+  size = "md",
+  onClick,
+  disabled,
+  asChild,
+  href,
+  children,
+  type = "button",
+  className = "",
+}: {
+  variant?: "primary" | "outline" | "ghost" | "danger";
+  size?: "sm" | "md";
+  onClick?: () => void;
+  disabled?: boolean;
+  asChild?: boolean;
+  href?: string;
+  children: React.ReactNode;
+  type?: "button" | "submit";
+  className?: string;
+}) {
+  const base =
+    "inline-flex items-center gap-2 font-extrabold uppercase tracking-[.08em] rounded-full transition-all duration-100 cursor-pointer whitespace-nowrap select-none";
+  const sizes = { sm: "h-[30px] px-3.5 text-[11px]", md: "h-[38px] px-5 text-[12px]" };
+  const variants = {
+    primary:
+      "bg-tomato text-cream border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2.5px] active:translate-y-[2.5px] active:shadow-none disabled:opacity-50 disabled:pointer-events-none",
+    outline:
+      "bg-transparent text-espresso border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2.5px] active:translate-y-[2.5px] active:shadow-none disabled:opacity-50 disabled:pointer-events-none",
+    ghost:
+      "bg-transparent text-espresso border-[2.5px] border-transparent hover:bg-fog/50 disabled:opacity-50 disabled:pointer-events-none",
+    danger:
+      "bg-tomato text-cream border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] active:translate-x-[2.5px] active:translate-y-[2.5px] active:shadow-none disabled:opacity-50 disabled:pointer-events-none",
+  };
+  const cls = `${base} ${sizes[size]} ${variants[variant]} ${className}`;
+  if (href) {
+    return (
+      <Link href={href} className={cls}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <button type={type} onClick={onClick} disabled={disabled} className={cls}>
+      {children}
+    </button>
+  );
+}
+
+function Pill({
+  variant,
+  children,
+}: {
+  variant: "matcha" | "sun" | "tomato" | "sky" | "fog" | "espresso";
+  children: React.ReactNode;
+}) {
+  const styles: Record<string, string> = {
+    matcha: "bg-matcha text-cream",
+    sun: "bg-sun text-espresso",
+    tomato: "bg-tomato text-cream",
+    sky: "bg-sky text-espresso",
+    fog: "bg-fog text-espresso",
+    espresso: "bg-espresso text-cream",
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full border-2 border-espresso text-[10px] font-extrabold tracking-[.1em] uppercase ${styles[variant]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function MerninInput({
+  id,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  step,
+}: {
+  id?: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  type?: string;
+  step?: string;
+}) {
+  return (
+    <input
+      id={id}
+      type={type}
+      step={step}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      className="w-full bg-chalk border-[3px] border-espresso rounded-[10px] px-3.5 py-2.5 font-body text-[14px] text-espresso shadow-[3px_3px_0_#1C0F05] outline-none placeholder:text-muted-foreground focus:-translate-x-[1px] focus:-translate-y-[1px] focus:shadow-[4px_4px_0_#E8442A] focus:border-tomato transition-all duration-100"
+    />
+  );
+}
+
+function MerninTextarea({
+  id,
+  value,
+  onChange,
+  placeholder,
+  rows = 3,
+}: {
+  id?: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  placeholder?: string;
+  rows?: number;
+}) {
+  return (
+    <textarea
+      id={id}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      rows={rows}
+      className="w-full bg-chalk border-[3px] border-espresso rounded-[10px] px-3.5 py-2.5 font-body text-[14px] text-espresso shadow-[3px_3px_0_#1C0F05] outline-none placeholder:text-muted-foreground focus:-translate-x-[1px] focus:-translate-y-[1px] focus:shadow-[4px_4px_0_#E8442A] focus:border-tomato transition-all duration-100 resize-none"
+    />
+  );
+}
+
+function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className="block text-[10.5px] font-extrabold uppercase tracking-[.1em] text-espresso mb-1.5"
+    >
+      {children}
+    </label>
+  );
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ProductVariant {
   id: string;
@@ -86,119 +207,130 @@ interface Product {
   created_at: string;
 }
 
-interface ProductsClientProps {
-  initialProducts: Product[];
-  isShopifyConfigured: boolean;
-}
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ProductsClient({
   initialProducts,
   isShopifyConfigured,
-}: ProductsClientProps) {
+}: {
+  initialProducts: Product[];
+  isShopifyConfigured: boolean;
+}) {
   const [products, setProducts] = useState(initialProducts);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
+  const [syncMessage, setSyncMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [newProduct, setNewProduct] = useState({
-    title: "",
-    description: "",
-    sku: "",
-    price: "",
-  });
+  const [newProduct, setNewProduct] = useState({ title: "", description: "", sku: "", price: "" });
 
   const filteredProducts = products.filter(
-    (product) =>
-      product.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku?.toLowerCase().includes(searchQuery.toLowerCase())
+    (p) =>
+      p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.sku?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleSync = async () => {
     setIsSyncing(true);
     setSyncMessage(null);
-
     const result = await syncShopifyProducts();
-
     if (result.error) {
       setSyncMessage({ type: "error", text: result.error });
     } else {
-      setSyncMessage({
-        type: "success",
-        text: `Successfully synced ${result.count} products from Shopify`,
-      });
-      // Refresh the page to get updated products
+      setSyncMessage({ type: "success", text: `Synced ${result.count} products from Shopify.` });
       window.location.reload();
     }
-
     setIsSyncing(false);
   };
 
   const handleDelete = async () => {
     if (!deleteId) return;
-
     setIsDeleting(true);
     const result = await deleteProduct(deleteId);
-
     if (result.error) {
       setSyncMessage({ type: "error", text: result.error });
     } else {
       setProducts(products.filter((p) => p.id !== deleteId));
-      setSyncMessage({ type: "success", text: "Product deleted successfully" });
+      setSyncMessage({ type: "success", text: "Product deleted." });
     }
-
     setIsDeleting(false);
     setDeleteId(null);
   };
 
-  const calculateMargin = (price: number | null, cogs: number | null | undefined) => {
+  const handleCreateProduct = async () => {
+    if (!newProduct.title || !newProduct.price) {
+      setSyncMessage({ type: "error", text: "Title and price are required" });
+      return;
+    }
+    setIsCreating(true);
+    const result = await createProduct({
+      title: newProduct.title,
+      description: newProduct.description || undefined,
+      sku: newProduct.sku || undefined,
+      price: parseFloat(newProduct.price),
+    });
+    if (result.error) {
+      setSyncMessage({ type: "error", text: result.error });
+    } else {
+      setSyncMessage({ type: "success", text: "Product created." });
+      setNewProduct({ title: "", description: "", sku: "", price: "" });
+      setIsAddDialogOpen(false);
+      window.location.reload();
+    }
+    setIsCreating(false);
+  };
+
+  const calcMargin = (price: number | null, cogs: number | null | undefined) => {
     if (!price || !cogs) return null;
     return ((price - cogs) / price) * 100;
   };
 
+  const marginPill = (margin: number | null) => {
+    if (margin === null) return <span className="text-muted-foreground">—</span>;
+    const variant = margin >= 30 ? "matcha" : margin >= 15 ? "sun" : "tomato";
+    return <Pill variant={variant}>{margin.toFixed(1)}%</Pill>;
+  };
+
   const renderVariantDropdown = (product: Product) => {
     const variants = product.variants || [];
-    if (variants.length === 0) {
-      return <span className="text-xs text-muted-foreground">No variants</span>;
-    }
-
+    if (variants.length === 0)
+      return <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-wide">No variants</span>;
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-8">
-            {variants.length} variants
-            <ChevronDown className="ml-2 h-3.5 w-3.5" />
-          </Button>
+          <button className="inline-flex items-center gap-1.5 h-[28px] px-3 rounded-full border-[2px] border-espresso text-espresso text-[11px] font-extrabold uppercase tracking-[.08em] bg-transparent hover:bg-fog/40 transition-colors">
+            {variants.length} variant{variants.length !== 1 ? "s" : ""}
+            <ChevronDown size={12} strokeWidth={2.5} />
+          </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-80">
-          <DropdownMenuLabel>Variant COGS & Margin</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <div className="max-h-80 space-y-2 overflow-y-auto p-2">
+        <DropdownMenuContent align="end" className="w-80 border-[2px] border-espresso rounded-[12px] shadow-flat-md bg-chalk p-0 overflow-hidden">
+          <DropdownMenuLabel className="px-4 py-3 border-b-2 border-espresso font-extrabold text-[11px] uppercase tracking-[.1em] bg-cream">
+            Variant COGS & Margin
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator className="hidden" />
+          <div className="max-h-80 overflow-y-auto p-3 space-y-2">
             {variants.map((variant) => {
-              const margin = calculateMargin(variant.price, variant.total_cogs);
+              const margin = calcMargin(variant.price, variant.total_cogs);
               return (
-                <div key={variant.id} className="rounded-md border p-2">
-                  <p className="text-sm font-medium">{variant.title}</p>
-                  {variant.sku ? (
-                    <p className="font-mono text-[11px] text-muted-foreground">{variant.sku}</p>
-                  ) : null}
-                  <div className="mt-1 grid grid-cols-3 gap-1 text-xs">
+                <div key={variant.id} className="rounded-[10px] border-[2px] border-espresso bg-cream p-3">
+                  <p className="text-[13px] font-bold text-espresso">{variant.title}</p>
+                  {variant.sku && (
+                    <p className="font-mono text-[10px] text-muted-foreground mt-0.5">{variant.sku}</p>
+                  )}
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
                     <div>
-                      <p className="text-muted-foreground">Price</p>
-                      <p>{variant.price ? `$${variant.price.toFixed(2)}` : "-"}</p>
+                      <p className="text-muted-foreground font-bold uppercase tracking-wide text-[9px]">Price</p>
+                      <p className="font-bold text-espresso">{variant.price ? `$${variant.price.toFixed(2)}` : "—"}</p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">COGS</p>
-                      <p>{variant.total_cogs ? `$${variant.total_cogs.toFixed(2)}` : "-"}</p>
+                      <p className="text-muted-foreground font-bold uppercase tracking-wide text-[9px]">COGS</p>
+                      <p className="font-bold text-espresso">{variant.total_cogs ? `$${variant.total_cogs.toFixed(2)}` : "—"}</p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Margin</p>
-                      <p>{margin !== null ? `${margin.toFixed(1)}%` : "-"}</p>
+                      <p className="text-muted-foreground font-bold uppercase tracking-wide text-[9px]">Margin</p>
+                      <div className="mt-0.5">{marginPill(margin)}</div>
                     </div>
                   </div>
                 </div>
@@ -210,74 +342,53 @@ export function ProductsClient({
     );
   };
 
-  const handleCreateProduct = async () => {
-    if (!newProduct.title || !newProduct.price) {
-      setSyncMessage({ type: "error", text: "Title and price are required" });
-      return;
-    }
-
-    setIsCreating(true);
-    const result = await createProduct({
-      title: newProduct.title,
-      description: newProduct.description || undefined,
-      sku: newProduct.sku || undefined,
-      price: parseFloat(newProduct.price),
-    });
-
-    if (result.error) {
-      setSyncMessage({ type: "error", text: result.error });
-    } else {
-      setSyncMessage({ type: "success", text: "Product created successfully" });
-      setNewProduct({ title: "", description: "", sku: "", price: "" });
-      setIsAddDialogOpen(false);
-      window.location.reload();
-    }
-
-    setIsCreating(false);
-  };
-
-  // Calculate stats
-  const totalProducts = products.length;
-  const allVariantMargins = products.flatMap((product) =>
-    (product.variants || [])
-      .map((variant) => calculateMargin(variant.price, variant.total_cogs))
-      .filter((margin): margin is number => margin !== null)
+  // Stats
+  const allVariantMargins = products.flatMap((p) =>
+    (p.variants || [])
+      .map((v) => calcMargin(v.price, v.total_cogs))
+      .filter((m): m is number => m !== null)
   );
-  const avgMargin = allVariantMargins.length > 0
-    ? allVariantMargins.reduce((sum, margin) => sum + margin, 0) / allVariantMargins.length
-    : 0;
-  const variantCount = products.reduce((sum, product) => sum + (product.variants?.length || 0), 0);
-  const productsNeedingCogs = products.filter((p) => !p.total_cogs || p.total_cogs === 0).length;
+  const avgMargin =
+    allVariantMargins.length > 0
+      ? allVariantMargins.reduce((s, m) => s + m, 0) / allVariantMargins.length
+      : 0;
+  const variantCount = products.reduce((s, p) => s + (p.variants?.length || 0), 0);
+  const needingCogs = products.filter((p) => !p.total_cogs || p.total_cogs === 0).length;
 
   return (
-    <div className="space-y-6">
-     <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold tracking-tight md:text-3xl">Products</h1>
-          <p className="text-sm text-muted-foreground md:text-base">
-            Manage your product catalog and COGS calculations
+    <div className="flex flex-col gap-5 p-6">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[28px] md:text-[36px] font-extrabold uppercase tracking-tight leading-none text-espresso">
+            Products
+          </h1>
+          <p className="text-[13px] text-muted-foreground mt-1">
+            Manage your catalog and COGS calculations
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="md:size-default">
-                <Plus className="mr-1.5 h-3.5 w-3.5 md:mr-2 md:h-4 md:w-4" />
+              <Btn variant="outline" size="sm">
+                <Plus size={14} strokeWidth={2.5} />
                 <span className="hidden sm:inline">Add Product</span>
                 <span className="sm:hidden">Add</span>
-              </Button>
+              </Btn>
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Product</DialogTitle>
-                <DialogDescription>
+            <DialogContent className="border-[3px] border-espresso rounded-[20px] shadow-flat-lg bg-chalk p-0 overflow-hidden gap-0">
+              <DialogHeader className="px-6 py-5 border-b-[3px] border-espresso bg-cream">
+                <DialogTitle className="font-extrabold text-[18px] uppercase tracking-[.06em] text-espresso">
+                  Add New Product
+                </DialogTitle>
+                <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
                   Create a product manually without Shopify
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="title">Product Title *</Label>
-                  <Input
+              <div className="px-6 py-5 flex flex-col gap-4">
+                <div>
+                  <FieldLabel htmlFor="title">Product Title *</FieldLabel>
+                  <MerninInput
                     id="title"
                     value={newProduct.title}
                     onChange={(e) => setNewProduct({ ...newProduct, title: e.target.value })}
@@ -285,30 +396,30 @@ export function ProductsClient({
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="sku">SKU</Label>
-                    <Input
+                  <div>
+                    <FieldLabel htmlFor="sku">SKU</FieldLabel>
+                    <MerninInput
                       id="sku"
                       value={newProduct.sku}
                       onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })}
-                      placeholder="e.g., COFFEE-ETH-12"
+                      placeholder="COFFEE-ETH-12"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="price">Selling Price ($) *</Label>
-                    <Input
+                  <div>
+                    <FieldLabel htmlFor="price">Selling Price ($) *</FieldLabel>
+                    <MerninInput
                       id="price"
                       type="number"
                       step="0.01"
                       value={newProduct.price}
                       onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-                      placeholder="e.g., 18.00"
+                      placeholder="18.00"
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
+                <div>
+                  <FieldLabel htmlFor="description">Description</FieldLabel>
+                  <MerninTextarea
                     id="description"
                     value={newProduct.description}
                     onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
@@ -317,340 +428,334 @@ export function ProductsClient({
                   />
                 </div>
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+              <DialogFooter className="px-6 py-4 border-t-[3px] border-espresso bg-cream flex gap-2">
+                <Btn variant="outline" size="sm" onClick={() => setIsAddDialogOpen(false)}>
                   Cancel
-                </Button>
-                <Button onClick={handleCreateProduct} disabled={isCreating || !newProduct.title || !newProduct.price}>
-                  {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                </Btn>
+                <Btn
+                  size="sm"
+                  onClick={handleCreateProduct}
+                  disabled={isCreating || !newProduct.title || !newProduct.price}
+                >
+                  {isCreating && <Loader2 size={13} className="animate-spin" />}
                   Create Product
-                </Button>
+                </Btn>
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <Button onClick={handleSync} disabled={!isShopifyConfigured || isSyncing} size="sm" className="md:size-default">
+
+          <Btn
+            onClick={handleSync}
+            disabled={!isShopifyConfigured || isSyncing}
+            size="sm"
+          >
             {isSyncing ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin md:mr-2 md:h-4 md:w-4" />
+              <Loader2 size={13} className="animate-spin" />
             ) : (
-              <RefreshCw className="mr-1.5 h-3.5 w-3.5 md:mr-2 md:h-4 md:w-4" />
+              <RefreshCw size={13} strokeWidth={2.5} />
             )}
-            <span className="hidden sm:inline">Sync from Shopify</span>
+            <span className="hidden sm:inline">Sync Shopify</span>
             <span className="sm:hidden">Sync</span>
-          </Button>
+          </Btn>
         </div>
       </div>
 
+      {/* Toast */}
       {syncMessage && (
         <div
-          className={`flex items-center gap-2 rounded-md p-3 text-sm ${
+          className={`flex items-center gap-2.5 rounded-[12px] border-[2.5px] p-3 text-[13px] font-bold ${
             syncMessage.type === "error"
-              ? "bg-destructive/10 text-destructive"
-              : "bg-green-500/10 text-green-600"
+              ? "border-tomato bg-tomato/10 text-tomato"
+              : "border-matcha bg-matcha/10 text-matcha"
           }`}
         >
-          <AlertCircle className="h-4 w-4" />
+          <AlertCircle size={15} strokeWidth={2.5} />
           {syncMessage.text}
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 gap-2 md:gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 pb-1 pt-3 md:px-6 md:pb-2 md:pt-6">
-            <CardTitle className="text-xs font-medium md:text-sm">Total Products</CardTitle>
-            <Package className="hidden h-4 w-4 text-muted-foreground md:block" />
-          </CardHeader>
-          <CardContent className="px-3 pb-3 md:px-6 md:pb-6">
-            <div className="text-lg font-bold md:text-2xl">{totalProducts}</div>
-            <p className="text-[10px] text-muted-foreground md:text-xs">
-              {productsNeedingCogs} need COGS assigned
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 pb-1 pt-3 md:px-6 md:pb-2 md:pt-6">
-            <CardTitle className="text-xs font-medium md:text-sm">Avg Variant Margin</CardTitle>
-            <Percent className="hidden h-4 w-4 text-muted-foreground md:block" />
-          </CardHeader>
-          <CardContent className="px-3 pb-3 md:px-6 md:pb-6">
-            <div className="text-lg font-bold md:text-2xl">{avgMargin.toFixed(1)}%</div>
-            <p className="text-[10px] text-muted-foreground md:text-xs">
-              Across {variantCount} variants
-            </p>
-          </CardContent>
-        </Card>
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-chalk border-[3px] border-espresso rounded-[14px] p-4 shadow-flat-md">
+          <div className="text-[10.5px] font-extrabold tracking-[.12em] uppercase text-muted-foreground">
+            Total Products
+          </div>
+          <div className="font-extrabold text-[42px] leading-none mt-1.5 text-espresso">
+            {products.length}
+          </div>
+          <p className="text-[10.5px] text-muted-foreground mt-1.5">
+            {needingCogs} need COGS assigned
+          </p>
+        </div>
+        <div className="bg-chalk border-[3px] border-espresso rounded-[14px] p-4 shadow-flat-md">
+          <div className="text-[10.5px] font-extrabold tracking-[.12em] uppercase text-muted-foreground">
+            Avg Variant Margin
+          </div>
+          <div className="font-extrabold text-[42px] leading-none mt-1.5 text-espresso">
+            {avgMargin > 0 ? `${avgMargin.toFixed(1)}%` : "—"}
+          </div>
+          <p className="text-[10.5px] text-muted-foreground mt-1.5">
+            Across {variantCount} variants
+          </p>
+        </div>
       </div>
 
+      {/* Shopify not connected */}
       {!isShopifyConfigured && (
-        <Card className="border-amber-200 bg-amber-50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg text-amber-800">
+        <div className="bg-sun/20 border-[3px] border-espresso rounded-[16px] p-5 shadow-flat-md flex items-start gap-4">
+          <div className="w-10 h-10 bg-sun border-[2.5px] border-espresso rounded-[10px] flex items-center justify-center shrink-0">
+            <AlertCircle size={18} strokeWidth={2.5} className="text-espresso" />
+          </div>
+          <div className="flex-1">
+            <div className="font-extrabold text-[15px] uppercase tracking-[.06em] text-espresso">
               Shopify Not Connected
-            </CardTitle>
-            <CardDescription className="text-amber-700">
-              Connect your Shopify store to import products automatically.{" "}
-              <Link href="/settings" className="font-medium underline">
-                Go to Settings
-              </Link>
-            </CardDescription>
-          </CardHeader>
-        </Card>
+            </div>
+            <p className="text-[13px] text-muted-foreground mt-1">
+              Connect your Shopify store to import products automatically.
+            </p>
+          </div>
+          <Btn variant="outline" size="sm" href="/settings">
+            <Settings size={13} strokeWidth={2.5} />
+            Settings
+          </Btn>
+        </div>
       )}
 
-      <Card className="shadow-xl">
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Product Catalog</CardTitle>
-              <CardDescription>
-                {filteredProducts.length} product
-                {filteredProducts.length !== 1 ? "s" : ""} in your catalog
-              </CardDescription>
+      {/* Product catalog panel */}
+      <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden">
+        {/* Panel header */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b-2 border-espresso bg-cream">
+          <div>
+            <div className="font-extrabold text-sm uppercase tracking-[.08em] text-espresso">
+              Product Catalog
             </div>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search products..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              {filteredProducts.length} product{filteredProducts.length !== 1 ? "s" : ""}
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
-          {filteredProducts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Package className="mb-4 h-12 w-12 text-muted-foreground" />
-              <h3 className="text-lg font-medium">No products found</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {products.length === 0
-                  ? "Sync your products from Shopify to get started"
-                  : "Try adjusting your search query"}
-              </p>
+          <div className="relative w-full sm:w-56">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full h-[34px] bg-chalk border-[2.5px] border-espresso rounded-full pl-8 pr-3.5 text-[12px] font-bold text-espresso placeholder:text-muted-foreground outline-none focus:border-tomato transition-colors"
+            />
+          </div>
+        </div>
+
+        {/* Content */}
+        {filteredProducts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center px-6">
+            <div className="w-14 h-14 bg-fog border-[3px] border-espresso rounded-[16px] flex items-center justify-center mb-4">
+              <Package size={24} strokeWidth={2} className="text-muted-foreground" />
             </div>
-          ) : (
-            <>
-            {/* Mobile card layout */}
-            <div className="space-y-2 md:hidden">
+            <div className="font-extrabold text-[16px] uppercase tracking-[.06em] text-espresso">
+              No products found
+            </div>
+            <p className="text-[13px] text-muted-foreground mt-1.5 max-w-xs">
+              {products.length === 0
+                ? "Sync your products from Shopify to get started"
+                : "Try adjusting your search query"}
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Mobile cards */}
+            <div className="md:hidden divide-y-2 divide-fog">
               {filteredProducts.map((product) => {
-                const margin = product.average_margin ?? calculateMargin(product.price, product.total_cogs);
+                const margin = product.average_margin ?? calcMargin(product.price, product.total_cogs);
                 return (
-                  <div key={product.id} className="rounded-lg border p-3">
+                  <div key={product.id} className="p-4 flex flex-col gap-3">
                     <div className="flex items-start gap-3">
                       {product.image_url ? (
                         <Image
-                          src={product.image_url || "/placeholder.svg"}
+                          src={product.image_url}
                           alt={product.title}
-                          width={40}
-                          height={40}
-                          className="shrink-0 rounded-md object-cover"
+                          width={44}
+                          height={44}
+                          className="shrink-0 rounded-[10px] border-[2px] border-espresso object-cover"
                         />
                       ) : (
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
-                          <Package className="h-5 w-5 text-muted-foreground" />
+                        <div className="w-11 h-11 shrink-0 rounded-[10px] border-[2px] border-espresso bg-fog flex items-center justify-center">
+                          <Package size={18} className="text-muted-foreground" />
                         </div>
                       )}
-                      <div className="min-w-0 flex-1">
+                      <div className="flex-1 min-w-0">
                         <Link
                           href={`/products/${product.id}`}
-                          className="text-sm font-medium hover:underline leading-tight"
+                          className="font-bold text-[14px] text-espresso hover:text-tomato transition-colors leading-snug"
                         >
                           {product.title}
                         </Link>
                         {product.sku && (
-                          <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{product.sku}</p>
+                          <p className="font-mono text-[10px] text-muted-foreground mt-0.5">
+                            {product.sku}
+                          </p>
                         )}
                       </div>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
-                          <Link href={`/products/${product.id}`}>
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            <span className="sr-only">View product</span>
-                          </Link>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Btn variant="ghost" size="sm" href={`/products/${product.id}`} className="!px-2 !h-8">
+                          <ExternalLink size={14} strokeWidth={2} />
+                        </Btn>
+                        <button
                           onClick={() => setDeleteId(product.id)}
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-full border-[2px] border-transparent text-tomato hover:bg-tomato/10 transition-colors"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          <span className="sr-only">Delete product</span>
-                        </Button>
+                          <Trash2 size={14} strokeWidth={2} />
+                        </button>
                       </div>
                     </div>
-                    <div className="mt-2 grid grid-cols-3 gap-1 text-xs">
+                    <div className="grid grid-cols-3 gap-2 text-[12px]">
                       <div>
-                        <span className="text-muted-foreground">Min Price</span>
-                        <p className="font-medium">
-                          {product.min_selling_price !== null && product.min_selling_price !== undefined
+                        <span className="text-[9.5px] font-extrabold uppercase tracking-wide text-muted-foreground">
+                          Min Price
+                        </span>
+                        <p className="font-bold text-espresso mt-0.5">
+                          {product.min_selling_price != null
                             ? `$${product.min_selling_price.toFixed(2)}`
-                            : "-"}
+                            : "—"}
                         </p>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">COGS</span>
-                        <p className="font-medium">{product.total_cogs ? `$${product.total_cogs.toFixed(2)}` : "-"}</p>
+                        <span className="text-[9.5px] font-extrabold uppercase tracking-wide text-muted-foreground">
+                          COGS
+                        </span>
+                        <p className="font-bold text-espresso mt-0.5">
+                          {product.total_cogs ? `$${product.total_cogs.toFixed(2)}` : "—"}
+                        </p>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">Avg Margin</span>
-                        {margin !== null ? (
-                          <Badge
-                            variant="outline"
-                            className={`mt-0.5 text-[10px] px-1.5 ${
-                              margin >= 30
-                                ? "bg-green-500/10 text-green-600"
-                                : margin >= 15
-                                  ? "bg-amber-500/10 text-amber-600"
-                                  : "bg-red-500/10 text-red-600"
-                            }`}
-                          >
-                            {margin.toFixed(1)}%
-                          </Badge>
-                        ) : (
-                          <p className="font-medium">-</p>
-                        )}
+                        <span className="text-[9.5px] font-extrabold uppercase tracking-wide text-muted-foreground">
+                          Avg Margin
+                        </span>
+                        <div className="mt-0.5">{marginPill(margin)}</div>
                       </div>
                     </div>
-                    <div className="mt-2">
-                      {renderVariantDropdown(product)}
-                    </div>
+                    <div>{renderVariantDropdown(product)}</div>
                   </div>
                 );
               })}
             </div>
 
-            {/* Desktop table layout */}
+            {/* Desktop table */}
             <div className="hidden md:block overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead>SKU</TableHead>
-                    <TableHead className="text-right">Min Selling Price</TableHead>
-                    <TableHead className="text-right">COGS</TableHead>
-                    <TableHead className="text-right">Avg Margin</TableHead>
-                    <TableHead className="text-right">Variants</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredProducts.map((product) => {
-                    const margin = product.average_margin ?? calculateMargin(product.price, product.total_cogs);
-
+              <table className="w-full border-collapse text-[13px]">
+                <thead>
+                  <tr className="border-b-2 border-espresso bg-cream/60">
+                    {["Product", "SKU", "Min Price", "COGS", "Avg Margin", "Variants", ""].map(
+                      (h, i) => (
+                        <th
+                          key={i}
+                          className={`py-3 px-4 text-[9.5px] font-extrabold uppercase tracking-[.1em] text-muted-foreground ${
+                            i > 1 ? "text-right" : "text-left"
+                          } ${i === 6 ? "w-20" : ""}`}
+                        >
+                          {h}
+                        </th>
+                      )
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProducts.map((product, idx) => {
+                    const margin =
+                      product.average_margin ?? calcMargin(product.price, product.total_cogs);
                     return (
-                      <TableRow key={product.id}>
-                        <TableCell>
+                      <tr
+                        key={product.id}
+                        className={`border-b border-dashed border-fog last:border-0 hover:bg-cream/60 transition-colors ${
+                          idx % 2 === 0 ? "" : "bg-chalk/40"
+                        }`}
+                      >
+                        <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
                             {product.image_url ? (
                               <Image
-                                src={product.image_url || "/placeholder.svg"}
+                                src={product.image_url}
                                 alt={product.title}
-                                width={40}
-                                height={40}
-                                className="rounded-md object-cover"
+                                width={36}
+                                height={36}
+                                className="rounded-[8px] border-[2px] border-espresso object-cover shrink-0"
                               />
                             ) : (
-                              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted">
-                                <Package className="h-5 w-5 text-muted-foreground" />
+                              <div className="w-9 h-9 shrink-0 rounded-[8px] border-[2px] border-espresso bg-fog flex items-center justify-center">
+                                <Package size={15} className="text-muted-foreground" />
                               </div>
                             )}
-                            <div>
-                              <Link
-                                href={`/products/${product.id}`}
-                                className="font-medium hover:underline"
-                              >
-                                {product.title}
-                              </Link>
-                            </div>
+                            <Link
+                              href={`/products/${product.id}`}
+                              className="font-bold text-espresso hover:text-tomato transition-colors"
+                            >
+                              {product.title}
+                            </Link>
                           </div>
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {product.sku || "-"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {product.min_selling_price !== null && product.min_selling_price !== undefined
+                        </td>
+                        <td className="py-3 px-4 font-mono text-[12px] text-muted-foreground">
+                          {product.sku || "—"}
+                        </td>
+                        <td className="py-3 px-4 text-right font-bold text-espresso">
+                          {product.min_selling_price != null
                             ? `$${product.min_selling_price.toFixed(2)}`
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {product.total_cogs
-                            ? `$${product.total_cogs.toFixed(2)}`
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {margin !== null ? (
-                            <Badge
-                              variant={margin >= 30 ? "default" : "secondary"}
-                              className={
-                                margin >= 30
-                                  ? "bg-green-500/10 text-green-600 hover:bg-green-500/20"
-                                  : margin >= 15
-                                    ? "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20"
-                                    : "bg-red-500/10 text-red-600 hover:bg-red-500/20"
-                              }
-                            >
-                              {margin.toFixed(1)}%
-                            </Badge>
-                          ) : (
-                            "-"
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end">
-                            {renderVariantDropdown(product)}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button variant="ghost" size="sm" asChild>
-                              <Link href={`/products/${product.id}`}>
-                                <ExternalLink className="h-4 w-4" />
-                                <span className="sr-only">View product</span>
-                              </Link>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
+                            : "—"}
+                        </td>
+                        <td className="py-3 px-4 text-right font-bold text-espresso">
+                          {product.total_cogs ? `$${product.total_cogs.toFixed(2)}` : "—"}
+                        </td>
+                        <td className="py-3 px-4 text-right">{marginPill(margin)}</td>
+                        <td className="py-3 px-4 text-right">
+                          {renderVariantDropdown(product)}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <Btn variant="ghost" size="sm" href={`/products/${product.id}`} className="!px-2 !h-8">
+                              <ExternalLink size={14} strokeWidth={2} />
+                            </Btn>
+                            <button
                               onClick={() => setDeleteId(product.id)}
-                              className="text-destructive hover:text-destructive"
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-full border-[2px] border-transparent text-tomato hover:bg-tomato/10 transition-colors"
                             >
-                              <Trash2 className="h-4 w-4" />
-                              <span className="sr-only">Delete product</span>
-                            </Button>
+                              <Trash2 size={14} strokeWidth={2} />
+                            </button>
                           </div>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     );
                   })}
-                </TableBody>
-              </Table>
+                </tbody>
+              </table>
             </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+          </>
+        )}
+      </div>
 
+      {/* Delete confirm */}
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Product</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this product? This action cannot be
-              undone and will remove all associated COGS data.
+        <AlertDialogContent className="border-[3px] border-espresso rounded-[20px] shadow-flat-lg bg-chalk p-0 overflow-hidden gap-0">
+          <AlertDialogHeader className="px-6 py-5 border-b-[3px] border-espresso bg-cream">
+            <AlertDialogTitle className="font-extrabold text-[18px] uppercase tracking-[.06em] text-espresso">
+              Delete Product
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[13px] text-muted-foreground mt-0.5">
+              This can&apos;t be undone. All associated COGS data will be removed.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="px-6 py-4 border-t-[3px] border-espresso bg-cream flex gap-2">
+            <AlertDialogCancel
+              disabled={isDeleting}
+              className="inline-flex items-center gap-2 font-extrabold uppercase tracking-[.08em] rounded-full h-[30px] px-3.5 text-[11px] bg-transparent text-espresso border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] hover:shadow-[4px_4px_0_#1C0F05] transition-all duration-100"
+            >
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="inline-flex items-center gap-2 font-extrabold uppercase tracking-[.08em] rounded-full h-[30px] px-3.5 text-[11px] bg-tomato text-cream border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] active:translate-x-[2.5px] active:translate-y-[2.5px] active:shadow-none transition-all duration-100"
             >
-              {isDeleting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
+              {isDeleting && <Loader2 size={13} className="animate-spin" />}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

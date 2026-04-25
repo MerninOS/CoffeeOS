@@ -53,15 +53,19 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your account and integrations
-        </p>
+    <div className="flex flex-col min-h-full">
+      <div className="px-6 pt-6 space-y-4">
+        <div>
+          <h1 className="text-[28px] md:text-[36px] font-extrabold uppercase tracking-tight leading-none text-espresso">
+            Settings
+          </h1>
+          <p className="text-[13px] text-espresso/60 font-medium mt-1">
+            Manage your account and integrations
+          </p>
+        </div>
+        <div className="border-b-[2px] border-dashed border-fog" />
       </div>
 
-      {/* Pending invitation banner for invited users */}
       <InvitationBanner />
 
       <SettingsClient
@@ -75,9 +79,10 @@ export default async function SettingsPage() {
         shopifySettings={shopifySettings}
       />
 
-      {/* Team Management - visible to owners and admins */}
       {canManageTeam && (
-        <TeamManagement currentUserId={user.id} isOwner={isOwner} />
+        <div className="px-6 pb-6">
+          <TeamManagement currentUserId={user.id} isOwner={isOwner} />
+        </div>
       )}
     </div>
   );
