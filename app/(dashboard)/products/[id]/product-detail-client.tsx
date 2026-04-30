@@ -12,8 +12,6 @@ import {
   updateProductVariantComponents,
   updateWholesalePricing,
 } from "./actions";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -22,11 +20,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import {
   ArrowLeft,
   Plus,
@@ -35,13 +31,12 @@ import {
   Loader2,
   Save,
   DollarSign,
-  TrendingUp,
   AlertCircle,
   Store,
+  TrendingUp,
 } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
 
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Component {
   id: string;
@@ -88,32 +83,175 @@ interface WholesaleTier {
   price: number;
 }
 
-interface ProductDetailClientProps {
-  product: Product;
-  availableComponents: Component[];
-  productComponents: ProductComponent[];
-  productVariants: ProductVariant[];
-  productVariantComponents: ProductVariantComponent[];
-  wholesaleTiers: WholesaleTier[];
-}
-
 interface SelectedComponent {
   componentId: string;
   quantity: number;
 }
 
-const formatMoney = (n: number) => `$${n.toFixed(3)}`;
+// ─── Primitives ───────────────────────────────────────────────────────────────
 
-const chartColors = [
-  "#2563eb", // blue
-  "#16a34a", // green
-  "#f97316", // orange
-  "#a855f7", // purple
-  "#dc2626", // red
-  "#0ea5e9", // sky
-  "#eab308", // yellow
-  "#64748b", // slate
-];
+function Btn({
+  variant = "primary",
+  size = "md",
+  onClick,
+  disabled,
+  href,
+  children,
+  type = "button",
+  className = "",
+}: {
+  variant?: "primary" | "outline" | "ghost" | "icon-ghost";
+  size?: "sm" | "md" | "icon";
+  onClick?: () => void;
+  disabled?: boolean;
+  href?: string;
+  children: React.ReactNode;
+  type?: "button" | "submit";
+  className?: string;
+}) {
+  const base =
+    "inline-flex items-center justify-center gap-2 font-extrabold uppercase tracking-[.08em] rounded-full transition-all duration-100 cursor-pointer whitespace-nowrap select-none disabled:opacity-50 disabled:pointer-events-none";
+  const sizes = {
+    sm: "h-[30px] px-3.5 text-[11px]",
+    md: "h-[38px] px-5 text-[12px]",
+    icon: "h-[34px] w-[34px] p-0",
+  };
+  const variants = {
+    primary:
+      "bg-tomato text-cream border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2.5px] active:translate-y-[2.5px] active:shadow-none",
+    outline:
+      "bg-transparent text-espresso border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2.5px] active:translate-y-[2.5px] active:shadow-none",
+    ghost:
+      "bg-transparent text-espresso border-[2.5px] border-transparent hover:bg-fog/50",
+    "icon-ghost":
+      "bg-transparent text-tomato border-[2px] border-transparent hover:bg-tomato/10",
+  };
+  const cls = `${base} ${sizes[size]} ${variants[variant]} ${className}`;
+  if (href)
+    return (
+      <Link href={href} className={cls}>
+        {children}
+      </Link>
+    );
+  return (
+    <button type={type} onClick={onClick} disabled={disabled} className={cls}>
+      {children}
+    </button>
+  );
+}
+
+function Panel({
+  title,
+  subtitle,
+  action,
+  children,
+  className = "",
+}: {
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden ${className}`}
+    >
+      <div className="flex items-start justify-between gap-3 px-5 py-4 border-b-2 border-espresso bg-cream">
+        <div>
+          <div className="font-extrabold text-sm uppercase tracking-[.08em] text-espresso">
+            {title}
+          </div>
+          {subtitle && (
+            <div className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</div>
+          )}
+        </div>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className="block text-[10.5px] font-extrabold uppercase tracking-[.1em] text-espresso mb-1.5"
+    >
+      {children}
+    </label>
+  );
+}
+
+function MerninInput({
+  id,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  step,
+  min,
+  prefix,
+}: {
+  id?: string;
+  value: string | number;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  type?: string;
+  step?: string;
+  min?: string;
+  prefix?: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      {prefix && (
+        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
+          {prefix}
+        </div>
+      )}
+      <input
+        id={id}
+        type={type}
+        step={step}
+        min={min}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className={`w-full bg-chalk border-[3px] border-espresso rounded-[10px] ${prefix ? "pl-9" : "px-3.5"} py-2.5 pr-3.5 font-body text-[14px] text-espresso shadow-[3px_3px_0_#1C0F05] outline-none placeholder:text-muted-foreground focus:-translate-x-[1px] focus:-translate-y-[1px] focus:shadow-[4px_4px_0_#E8442A] focus:border-tomato transition-all duration-100`}
+      />
+    </div>
+  );
+}
+
+function Pill({
+  variant,
+  children,
+}: {
+  variant: "matcha" | "sun" | "tomato" | "sky" | "fog";
+  children: React.ReactNode;
+}) {
+  const styles: Record<string, string> = {
+    matcha: "bg-matcha text-cream",
+    sun: "bg-sun text-espresso",
+    tomato: "bg-tomato text-cream",
+    sky: "bg-sky text-espresso",
+    fog: "bg-fog text-espresso",
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full border-2 border-espresso text-[10px] font-extrabold tracking-[.1em] uppercase ${styles[variant]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+const fmt = (n: number) => `$${n.toFixed(3)}`;
+
+const CHART_COLORS = ["#E8442A", "#F5C842", "#E8913A", "#5BC8D5", "#5A7A3A", "#3B1F0A", "#D8D0B8"];
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ProductDetailClient({
   product,
@@ -122,25 +260,24 @@ export function ProductDetailClient({
   productVariants,
   productVariantComponents: initialVariantComponents,
   wholesaleTiers: initialWholesaleTiers,
-}: ProductDetailClientProps) {
+}: {
+  product: Product;
+  availableComponents: Component[];
+  productComponents: ProductComponent[];
+  productVariants: ProductVariant[];
+  productVariantComponents: ProductVariantComponent[];
+  wholesaleTiers: WholesaleTier[];
+}) {
   const [variants, setVariants] = useState<ProductVariant[]>(productVariants);
   const [defaultSelectedComponents, setDefaultSelectedComponents] = useState<SelectedComponent[]>(
-    initialProductComponents.map((pc) => ({
-      componentId: pc.component_id,
-      quantity: pc.quantity,
-    }))
+    initialProductComponents.map((pc) => ({ componentId: pc.component_id, quantity: pc.quantity }))
   );
   const [selectedVariantId, setSelectedVariantId] = useState<string>(productVariants[0]?.id || "");
   const [variantComponentMap, setVariantComponentMap] = useState<Record<string, SelectedComponent[]>>(() => {
     const grouped: Record<string, SelectedComponent[]> = {};
     for (const vc of initialVariantComponents) {
-      if (!grouped[vc.product_variant_id]) {
-        grouped[vc.product_variant_id] = [];
-      }
-      grouped[vc.product_variant_id].push({
-        componentId: vc.component_id,
-        quantity: vc.quantity,
-      });
+      if (!grouped[vc.product_variant_id]) grouped[vc.product_variant_id] = [];
+      grouped[vc.product_variant_id].push({ componentId: vc.component_id, quantity: vc.quantity });
     }
     return grouped;
   });
@@ -161,35 +298,9 @@ export function ProductDetailClient({
         ? `variant:${productVariants[0].id}`
         : "none"
   );
-  const [message, setMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const isVariantMode = variants.length > 0;
-  const selectedVariant = variants.find((variant) => variant.id === selectedVariantId) || null;
-
-  const selectedComponents = useMemo(() => {
-    if (!isVariantMode) return defaultSelectedComponents;
-    if (!selectedVariantId) return [];
-    return variantComponentMap[selectedVariantId] || [];
-  }, [isVariantMode, defaultSelectedComponents, selectedVariantId, variantComponentMap]);
-
-  const setSelectedComponents = (components: SelectedComponent[]) => {
-    if (!isVariantMode) {
-      setDefaultSelectedComponents(components);
-      return;
-    }
-
-    if (!selectedVariantId) return;
-
-    setVariantComponentMap((prev) => ({
-      ...prev,
-      [selectedVariantId]: components,
-    }));
-  };
-
-  // Wholesale state
+  // Wholesale
   const [wholesaleEnabled, setWholesaleEnabled] = useState(product.wholesale_enabled || false);
   const [wholesalePrice, setWholesalePrice] = useState(product.wholesale_price?.toString() || "");
   const [wholesaleMinQty, setWholesaleMinQty] = useState(product.wholesale_minimum_qty?.toString() || "1");
@@ -198,502 +309,272 @@ export function ProductDetailClient({
   );
   const [isWholesaleSaving, setIsWholesaleSaving] = useState(false);
 
+  const isVariantMode = variants.length > 0;
+  const selectedVariant = variants.find((v) => v.id === selectedVariantId) || null;
+
+  const selectedComponents = useMemo(() => {
+    if (!isVariantMode) return defaultSelectedComponents;
+    if (!selectedVariantId) return [];
+    return variantComponentMap[selectedVariantId] || [];
+  }, [isVariantMode, defaultSelectedComponents, selectedVariantId, variantComponentMap]);
+
+  const setSelectedComponents = (components: SelectedComponent[]) => {
+    if (!isVariantMode) { setDefaultSelectedComponents(components); return; }
+    if (!selectedVariantId) return;
+    setVariantComponentMap((prev) => ({ ...prev, [selectedVariantId]: components }));
+  };
+
   useEffect(() => {
-    if (isVariantMode) {
-      setSellingPrice(selectedVariant?.price?.toString() || "");
-      return;
-    }
+    if (isVariantMode) { setSellingPrice(selectedVariant?.price?.toString() || ""); return; }
     setSellingPrice(product.price?.toString() || "");
   }, [isVariantMode, product.price, selectedVariant?.id, selectedVariant?.price]);
 
-  const calculatedCogs = useMemo(() => {
-    return selectedComponents.reduce((sum, sc) => {
-      const component = availableComponents.find((c) => c.id === sc.componentId);
-      if (component) return sum + sc.quantity * component.cost_per_unit;
-      return sum;
-    }, 0);
-  }, [selectedComponents, availableComponents]);
+  const calculatedCogs = useMemo(() =>
+    selectedComponents.reduce((sum, sc) => {
+      const comp = availableComponents.find((c) => c.id === sc.componentId);
+      return comp ? sum + sc.quantity * comp.cost_per_unit : sum;
+    }, 0),
+    [selectedComponents, availableComponents]
+  );
 
   const priceValue = parseFloat(sellingPrice) || 0;
   const margin = priceValue > 0 ? ((priceValue - calculatedCogs) / priceValue) * 100 : 0;
   const profit = priceValue - calculatedCogs;
+  const wholesalePriceValue = parseFloat(wholesalePrice) || 0;
+  const wholesaleMargin = wholesalePriceValue > 0 ? ((wholesalePriceValue - calculatedCogs) / wholesalePriceValue) * 100 : 0;
 
   const cogsBreakdown = useMemo(() => {
     const map = new Map<string, { name: string; value: number }>();
-
     for (const sc of selectedComponents) {
-      const component = availableComponents.find((c) => c.id === sc.componentId);
-      if (!component) continue;
-
-      const value = sc.quantity * component.cost_per_unit;
+      const comp = availableComponents.find((c) => c.id === sc.componentId);
+      if (!comp) continue;
+      const value = sc.quantity * comp.cost_per_unit;
       if (value <= 0) continue;
-
-      const prev = map.get(component.id);
-      map.set(component.id, {
-        name: component.name,
-        value: (prev?.value ?? 0) + value,
-      });
+      const prev = map.get(comp.id);
+      map.set(comp.id, { name: comp.name, value: (prev?.value ?? 0) + value });
     }
-
     return Array.from(map.values()).sort((a, b) => b.value - a.value);
   }, [selectedComponents, availableComponents]);
 
   const addComponent = () => {
-    if (availableComponents.length === 0) return;
-
-    const unusedComponent = availableComponents.find(
-      (c) => !selectedComponents.some((sc) => sc.componentId === c.id)
-    );
-
-    if (unusedComponent) {
-      setSelectedComponents([...selectedComponents, { componentId: unusedComponent.id, quantity: 1 }]);
-    }
+    const unused = availableComponents.find((c) => !selectedComponents.some((sc) => sc.componentId === c.id));
+    if (unused) setSelectedComponents([...selectedComponents, { componentId: unused.id, quantity: 1 }]);
   };
 
-  const removeComponent = (index: number) => {
-    setSelectedComponents(selectedComponents.filter((_, i) => i !== index));
-  };
+  const removeComponent = (i: number) => setSelectedComponents(selectedComponents.filter((_, idx) => idx !== i));
 
-  const updateComponent = (index: number, field: keyof SelectedComponent, value: string | number) => {
+  const updateComponent = (i: number, field: keyof SelectedComponent, value: string | number) => {
     const updated = [...selectedComponents];
-    updated[index] = { ...updated[index], [field]: value };
+    updated[i] = { ...updated[i], [field]: value };
     setSelectedComponents(updated);
   };
 
   const handleSaveComponents = async () => {
-    if (isVariantMode && !selectedVariantId) {
-      setMessage({ type: "error", text: "Select a variant first" });
-      return;
-    }
-
-    setIsSaving(true);
-    setMessage(null);
-
+    if (isVariantMode && !selectedVariantId) { setMessage({ type: "error", text: "Select a variant first" }); return; }
+    setIsSaving(true); setMessage(null);
     const result = isVariantMode
       ? await updateProductVariantComponents(product.id, selectedVariantId, selectedComponents)
       : await updateProductComponents(product.id, selectedComponents);
-
-    if (result.error) {
-      setMessage({ type: "error", text: result.error });
-    } else {
-      setMessage({
-        type: "success",
-        text: isVariantMode ? "Variant COGS saved successfully" : "Components saved successfully",
-      });
-    }
-
+    setMessage(result.error ? { type: "error", text: result.error } : { type: "success", text: isVariantMode ? "Variant COGS saved." : "Components saved." });
     setIsSaving(false);
   };
 
   const handleAddVariant = async () => {
     const title = newVariantTitle.trim();
     const parsedPrice = newVariantPrice.trim() ? parseFloat(newVariantPrice) : null;
-
-    if (!title) {
-      setMessage({ type: "error", text: "Variant title is required" });
-      return;
-    }
-
+    if (!title) { setMessage({ type: "error", text: "Variant title is required" }); return; }
     if (newVariantPrice.trim() && (parsedPrice === null || Number.isNaN(parsedPrice) || parsedPrice < 0)) {
-      setMessage({ type: "error", text: "Please enter a valid variant price" });
-      return;
+      setMessage({ type: "error", text: "Please enter a valid variant price" }); return;
     }
-
-    setIsAddingVariant(true);
-    setMessage(null);
-
-    const copyFromVariantId = newVariantCopySource.startsWith("variant:")
-      ? newVariantCopySource.replace("variant:", "")
-      : null;
+    setIsAddingVariant(true); setMessage(null);
+    const copyFromVariantId = newVariantCopySource.startsWith("variant:") ? newVariantCopySource.replace("variant:", "") : null;
     const copyFromProductCogs = newVariantCopySource === "product";
-
-    const result = await createProductVariant(product.id, {
-      title,
-      sku: newVariantSku.trim() || null,
-      price: parsedPrice,
-    }, {
-      copyFromVariantId,
-      copyFromProductCogs,
-    });
-
-    if (result.error || !result.variant) {
-      setMessage({ type: "error", text: result.error || "Failed to add variant" });
-      setIsAddingVariant(false);
-      return;
-    }
-
+    const result = await createProductVariant(product.id, { title, sku: newVariantSku.trim() || null, price: parsedPrice }, { copyFromVariantId, copyFromProductCogs });
+    if (result.error || !result.variant) { setMessage({ type: "error", text: result.error || "Failed to add variant" }); setIsAddingVariant(false); return; }
     setVariants((prev) => [...prev, result.variant]);
-    const copiedComponents = copyFromProductCogs
-      ? defaultSelectedComponents
-      : copyFromVariantId
-        ? (variantComponentMap[copyFromVariantId] || [])
-        : [];
-
-    setVariantComponentMap((prev) => ({
-      ...prev,
-      [result.variant.id]: copiedComponents.map((item) => ({ ...item })),
-    }));
+    const copiedComponents = copyFromProductCogs ? defaultSelectedComponents : copyFromVariantId ? (variantComponentMap[copyFromVariantId] || []) : [];
+    setVariantComponentMap((prev) => ({ ...prev, [result.variant.id]: copiedComponents.map((item) => ({ ...item })) }));
     setSelectedVariantId(result.variant.id);
-    setNewVariantTitle("");
-    setNewVariantSku("");
-    setNewVariantPrice(result.variant.price?.toString() || "");
+    setNewVariantTitle(""); setNewVariantSku(""); setNewVariantPrice(result.variant.price?.toString() || "");
     setNewVariantCopySource(`variant:${result.variant.id}`);
-    setMessage({ type: "success", text: "Variant added successfully" });
-    setIsAddVariantDialogOpen(false);
-    setIsAddingVariant(false);
+    setMessage({ type: "success", text: "Variant added." }); setIsAddVariantDialogOpen(false); setIsAddingVariant(false);
   };
 
   const handleUpdatePrice = async () => {
     const price = parseFloat(sellingPrice);
-    if (isNaN(price) || price < 0) {
-      setMessage({ type: "error", text: "Please enter a valid price" });
-      return;
-    }
-
-    setIsPriceUpdating(true);
-    setMessage(null);
-
+    if (isNaN(price) || price < 0) { setMessage({ type: "error", text: "Please enter a valid price" }); return; }
+    setIsPriceUpdating(true); setMessage(null);
     const result = isVariantMode && selectedVariant
       ? await updateProductVariantPrice(product.id, selectedVariant.id, price)
       : await updateProductPrice(product.id, price);
-
-    if (result.error) {
-      setMessage({ type: "error", text: result.error });
-    } else {
-      if (isVariantMode && selectedVariant) {
-        setVariants((prev) =>
-          prev.map((variant) =>
-            variant.id === selectedVariant.id
-              ? { ...variant, price }
-              : variant
-          )
-        );
-      }
-      setMessage({
-        type: "success",
-        text: isVariantMode ? "Variant price updated successfully" : "Price updated successfully",
-      });
+    if (result.error) { setMessage({ type: "error", text: result.error }); }
+    else {
+      if (isVariantMode && selectedVariant) setVariants((prev) => prev.map((v) => v.id === selectedVariant.id ? { ...v, price } : v));
+      setMessage({ type: "success", text: isVariantMode ? "Variant price updated." : "Price updated." });
     }
-
     setIsPriceUpdating(false);
   };
 
   const handleRemoveVariant = async () => {
-    if (!selectedVariant) {
-      setMessage({ type: "error", text: "Select a variant to remove" });
-      return;
-    }
-
-    const shouldDelete = window.confirm(
-      `Remove variant "${selectedVariant.title}"? This will also delete its COGS assignments.`
-    );
-    if (!shouldDelete) return;
-
-    setIsRemovingVariant(true);
-    setMessage(null);
-
+    if (!selectedVariant) { setMessage({ type: "error", text: "Select a variant to remove" }); return; }
+    if (!window.confirm(`Remove variant "${selectedVariant.title}"? This will also delete its COGS assignments.`)) return;
+    setIsRemovingVariant(true); setMessage(null);
     const variantIdToDelete = selectedVariant.id;
     const result = await deleteProductVariant(product.id, variantIdToDelete);
-
-    if (result.error) {
-      setMessage({ type: "error", text: result.error });
-      setIsRemovingVariant(false);
-      return;
-    }
-
-    const updatedVariants = variants.filter((variant) => variant.id !== variantIdToDelete);
+    if (result.error) { setMessage({ type: "error", text: result.error }); setIsRemovingVariant(false); return; }
+    const updatedVariants = variants.filter((v) => v.id !== variantIdToDelete);
     setVariants(updatedVariants);
-    setVariantComponentMap((prev) => {
-      const next = { ...prev };
-      delete next[variantIdToDelete];
-      return next;
-    });
-
-    const nextSelectedId = updatedVariants[0]?.id || "";
-    setSelectedVariantId(nextSelectedId);
-
+    setVariantComponentMap((prev) => { const next = { ...prev }; delete next[variantIdToDelete]; return next; });
+    setSelectedVariantId(updatedVariants[0]?.id || "");
     if (newVariantCopySource === `variant:${variantIdToDelete}`) {
-      setNewVariantCopySource(
-        defaultSelectedComponents.length > 0
-          ? "product"
-          : updatedVariants[0]
-            ? `variant:${updatedVariants[0].id}`
-            : "none"
-      );
+      setNewVariantCopySource(defaultSelectedComponents.length > 0 ? "product" : updatedVariants[0] ? `variant:${updatedVariants[0].id}` : "none");
     }
-
-    setMessage({ type: "success", text: "Variant removed successfully" });
-    setIsRemovingVariant(false);
+    setMessage({ type: "success", text: "Variant removed." }); setIsRemovingVariant(false);
   };
 
   const addPriceTier = () => {
-    const lastTier = priceTiers[priceTiers.length - 1];
-    const newMinQty = lastTier ? lastTier.min_quantity + 10 : 10;
-    const newPrice = lastTier ? lastTier.price * 0.95 : parseFloat(wholesalePrice) || (priceValue * 0.8);
-    setPriceTiers([...priceTiers, { min_quantity: newMinQty, price: Math.round(newPrice * 100) / 100 }]);
-  };
-
-  const removePriceTier = (index: number) => {
-    setPriceTiers(priceTiers.filter((_, i) => i !== index));
-  };
-
-  const updatePriceTier = (index: number, field: "min_quantity" | "price", value: number) => {
-    const updated = [...priceTiers];
-    updated[index] = { ...updated[index], [field]: value };
-    setPriceTiers(updated);
+    const last = priceTiers[priceTiers.length - 1];
+    setPriceTiers([...priceTiers, { min_quantity: last ? last.min_quantity + 10 : 10, price: last ? Math.round(last.price * 0.95 * 100) / 100 : Math.round(priceValue * 0.8 * 100) / 100 }]);
   };
 
   const handleSaveWholesale = async () => {
-    setIsWholesaleSaving(true);
-    setMessage(null);
-
-    const result = await updateWholesalePricing(product.id, {
-      wholesale_enabled: wholesaleEnabled,
-      wholesale_price: wholesalePrice ? parseFloat(wholesalePrice) : null,
-      wholesale_minimum_qty: parseInt(wholesaleMinQty) || 1,
-      price_tiers: priceTiers,
-    });
-
-    if (result.error) {
-      setMessage({ type: "error", text: result.error });
-    } else {
-      setMessage({ type: "success", text: "Wholesale pricing saved successfully" });
-    }
-
+    setIsWholesaleSaving(true); setMessage(null);
+    const result = await updateWholesalePricing(product.id, { wholesale_enabled: wholesaleEnabled, wholesale_price: wholesalePrice ? parseFloat(wholesalePrice) : null, wholesale_minimum_qty: parseInt(wholesaleMinQty) || 1, price_tiers: priceTiers });
+    setMessage(result.error ? { type: "error", text: result.error } : { type: "success", text: "Wholesale pricing saved." });
     setIsWholesaleSaving(false);
   };
 
-  // Calculate wholesale margin
-  const wholesalePriceValue = parseFloat(wholesalePrice) || 0;
-  const wholesaleMargin = wholesalePriceValue > 0 ? ((wholesalePriceValue - calculatedCogs) / wholesalePriceValue) * 100 : 0;
+  const marginPill = (m: number) => {
+    const v = m >= 30 ? "matcha" : m >= 15 ? "sun" : "tomato";
+    return <Pill variant={v}>{m >= 30 ? "Healthy" : m >= 15 ? "Fair" : "Low"}</Pill>;
+  };
 
   return (
-    <div className="space-y-6 mb-40">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/products">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Products
-          </Link>
-        </Button>
+    <div className="flex flex-col gap-5 p-6 mb-20">
+      {/* Back + title */}
+      <div className="flex items-start gap-4">
+        <Btn variant="outline" size="sm" href="/products">
+          <ArrowLeft size={13} strokeWidth={2.5} />
+          Products
+        </Btn>
       </div>
 
+      <div>
+        <h1 className="text-[28px] md:text-[36px] font-extrabold uppercase tracking-tight leading-none text-espresso">
+          {product.title}
+        </h1>
+        {product.sku && (
+          <p className="font-mono text-[12px] text-muted-foreground mt-1">SKU: {product.sku}</p>
+        )}
+      </div>
+
+      {/* Toast */}
       {message && (
-        <div
-          className={`flex items-center gap-2 rounded-md p-3 text-sm ${
-            message.type === "error"
-              ? "bg-destructive/10 text-destructive"
-              : "bg-green-500/10 text-green-600"
-          }`}
-        >
-          <AlertCircle className="h-4 w-4" />
+        <div className={`flex items-center gap-2.5 rounded-[12px] border-[2.5px] p-3 text-[13px] font-bold ${message.type === "error" ? "border-tomato bg-tomato/10 text-tomato" : "border-matcha bg-matcha/10 text-matcha"}`}>
+          <AlertCircle size={15} strokeWidth={2.5} />
           {message.text}
         </div>
       )}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Variants</CardTitle>
-          <CardDescription>
-            Add variants here, then edit COGS per variant.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {variants.map((variant) => (
-              <Button
-                key={variant.id}
-                type="button"
-                variant={variant.id === selectedVariantId ? "default" : "outline"}
-                className="rounded-full px-4"
-                onClick={() => setSelectedVariantId(variant.id)}
-              >
-                {variant.title}
-              </Button>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-full px-4"
-              onClick={() => setIsAddVariantDialogOpen(true)}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Variant
-            </Button>
-          </div>
 
-          {isVariantMode ? (
-            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-              <div className="flex items-center justify-between gap-2">
-                <span>
-                  {selectedVariant?.sku
-                    ? `Selected SKU: ${selectedVariant.sku}`
-                    : "Select a variant pill to edit its COGS."}
-                </span>
-                <Button
+      {/* Variants */}
+      <Panel
+        title="Variants"
+        subtitle="Add variants, then edit COGS per variant."
+        action={
+          <Btn variant="outline" size="sm" onClick={() => setIsAddVariantDialogOpen(true)}>
+            <Plus size={13} strokeWidth={2.5} />
+            Add Variant
+          </Btn>
+        }
+      >
+        {variants.length === 0 ? (
+          <p className="text-[13px] text-muted-foreground">
+            No variants yet. Add one to get started.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
+              {variants.map((v) => (
+                <button
+                  key={v.id}
                   type="button"
-                  variant="outline"
+                  onClick={() => setSelectedVariantId(v.id)}
+                  className={`inline-flex items-center h-[30px] px-4 rounded-full border-[2.5px] text-[11px] font-extrabold uppercase tracking-[.08em] transition-all duration-100 ${
+                    v.id === selectedVariantId
+                      ? "bg-tomato text-cream border-espresso shadow-[3px_3px_0_#1C0F05]"
+                      : "bg-transparent text-espresso border-espresso hover:bg-fog/40"
+                  }`}
+                >
+                  {v.title}
+                </button>
+              ))}
+            </div>
+            {selectedVariant && (
+              <div className="flex items-center justify-between rounded-[10px] border-[2px] border-dashed border-fog bg-cream p-3">
+                <span className="text-[12px] text-muted-foreground font-bold">
+                  {selectedVariant.sku ? `SKU: ${selectedVariant.sku}` : "Select a variant to edit its COGS."}
+                </span>
+                <Btn
+                  variant="ghost"
                   size="sm"
                   onClick={handleRemoveVariant}
                   disabled={!selectedVariant || isRemovingVariant}
-                  className="text-destructive hover:text-destructive"
+                  className="text-tomato hover:bg-tomato/10 !border-transparent"
                 >
-                  {isRemovingVariant ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+                  {isRemovingVariant && <Loader2 size={12} className="animate-spin" />}
                   Remove Variant
-                </Button>
+                </Btn>
               </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No variants yet. Click the Add Variant pill to create your first one.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-      <Dialog open={isAddVariantDialogOpen} onOpenChange={setIsAddVariantDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Variant</DialogTitle>
-            <DialogDescription>
-              Create a new variant and optionally copy COGS from an existing source.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="new-variant-title">Variant title</Label>
-              <Input
-                id="new-variant-title"
-                placeholder="e.g. 12oz Bag"
-                value={newVariantTitle}
-                onChange={(e) => setNewVariantTitle(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="new-variant-sku">SKU (optional)</Label>
-              <Input
-                id="new-variant-sku"
-                placeholder="SKU"
-                value={newVariantSku}
-                onChange={(e) => setNewVariantSku(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="new-variant-price">Price (optional)</Label>
-              <Input
-                id="new-variant-price"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={newVariantPrice}
-                onChange={(e) => setNewVariantPrice(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Copy COGS from</Label>
-              <Select value={newVariantCopySource} onValueChange={setNewVariantCopySource}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Copy COGS from..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Do not copy COGS</SelectItem>
-                  {defaultSelectedComponents.length > 0 ? (
-                    <SelectItem value="product">Current product COGS</SelectItem>
-                  ) : null}
-                  {variants.map((variant) => (
-                    <SelectItem key={`copy-${variant.id}`} value={`variant:${variant.id}`}>
-                      {`Variant: ${variant.title}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            )}
           </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsAddVariantDialogOpen(false)}
-              disabled={isAddingVariant}
-            >
-              Cancel
-            </Button>
-            <Button type="button" onClick={handleAddVariant} disabled={isAddingVariant}>
-              {isAddingVariant ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Add Variant
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-        <Card>
-          <CardHeader className="md:pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {isVariantMode ? "Variant Price" : "Selling Price"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatMoney(priceValue)}</div>
-          </CardContent>
-        </Card>
+        )}
+      </Panel>
 
-        <Card>
-          <CardHeader className="md:pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total COGS</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatMoney(calculatedCogs)}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="md:pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Profit per Unit</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${profit >= 0 ? "text-green-600" : "text-destructive"}`}>
-              {formatMoney(profit)}
+      {/* Stats row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          {
+            label: isVariantMode ? "Variant Price" : "Selling Price",
+            value: fmt(priceValue),
+            sub: null as React.ReactNode,
+          },
+          { label: "Total COGS", value: fmt(calculatedCogs), sub: null },
+          {
+            label: "Profit / Unit",
+            value: fmt(profit),
+            sub: null,
+            color: profit >= 0 ? "text-matcha" : "text-tomato",
+          },
+          {
+            label: "Profit Margin",
+            value: `${margin.toFixed(1)}%`,
+            sub: marginPill(margin),
+          },
+        ].map(({ label, value, sub, color }) => (
+          <div
+            key={label}
+            className="bg-chalk border-[3px] border-espresso rounded-[14px] p-4 shadow-flat-md"
+          >
+            <div className="text-[10.5px] font-extrabold tracking-[.12em] uppercase text-muted-foreground">
+              {label}
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="md:pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Profit Margin</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <div className="text-2xl font-bold">{margin.toFixed(1)}%</div>
-              <Badge
-                variant="secondary"
-                className={
-                  margin >= 30
-                    ? "bg-green-500/10 text-green-600"
-                    : margin >= 15
-                      ? "bg-amber-500/10 text-amber-600"
-                      : "bg-red-500/10 text-red-600"
-                }
-              >
-                <TrendingUp className="mr-1 h-3 w-3" />
-                {margin >= 30 ? "Healthy" : margin >= 15 ? "Fair" : "Low"}
-              </Badge>
+            <div className={`font-extrabold text-[28px] leading-none mt-1.5 ${color || "text-espresso"}`}>
+              {value}
             </div>
-          </CardContent>
-        </Card>
+            {sub && <div className="mt-2">{sub}</div>}
+          </div>
+        ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Product Info */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle>Product Details</CardTitle>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            {/* Mobile-friendly: slightly shorter on small screens */}
-            <div className="relative w-full overflow-hidden rounded-lg bg-muted aspect-[4/3] sm:aspect-square">
+      {/* Product info + COGS chart */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* Product Details */}
+        <Panel title="Product Details">
+          <div className="flex flex-col gap-4">
+            <div className="relative w-full overflow-hidden rounded-[12px] border-[3px] border-espresso bg-fog aspect-[4/3] sm:aspect-square">
               {product.image_url ? (
                 <Image
-                  src={product.image_url || "/placeholder.svg"}
+                  src={product.image_url}
                   alt={product.title}
                   fill
                   sizes="(min-width: 1024px) 50vw, 100vw"
@@ -702,489 +583,390 @@ export function ProductDetailClient({
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
-                  <Package className="h-10 w-10 text-muted-foreground" />
+                  <Package size={36} strokeWidth={1.5} className="text-muted-foreground" />
                 </div>
               )}
             </div>
 
-            <div className="min-w-0">
-              <h2 className="truncate text-xl font-semibold">{product.title}</h2>
-              {isVariantMode ? (
-                selectedVariant?.sku ? (
-                  <p className="mt-1 font-mono text-sm text-muted-foreground">SKU: {selectedVariant.sku}</p>
-                ) : (
-                  <p className="mt-1 text-sm text-muted-foreground">{selectedVariant?.title || "No variant selected"}</p>
-                )
-              ) : product.sku ? (
-                <p className="mt-1 font-mono text-sm text-muted-foreground">SKU: {product.sku}</p>
-              ) : null}
-            </div>
-
-            <div className="space-y-3 pt-2">
-              <div>
-                <Label htmlFor="sellingPrice">Selling Price</Label>
-                <div className="mt-1 flex gap-2">
-                  <div className="relative flex-1">
-                    <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="sellingPrice"
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      min="0"
-                      value={sellingPrice}
-                      onChange={(e) => setSellingPrice(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                  <Button
-                    onClick={handleUpdatePrice}
-                    disabled={isPriceUpdating || (isVariantMode && !selectedVariant)}
-                    size="icon"
-                    variant="outline"
-                  >
-                    {isPriceUpdating ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Save className="h-4 w-4" />
-                    )}
-                  </Button>
+            {isVariantMode && selectedVariant && (
+              <div className="rounded-[10px] border-[2px] border-fog bg-cream p-3">
+                <div className="text-[10px] font-extrabold uppercase tracking-wide text-muted-foreground">
+                  Selected Variant
                 </div>
-                {isVariantMode ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Price updates apply to the currently selected variant.
-                  </p>
-                ) : null}
+                <div className="font-bold text-[14px] text-espresso mt-0.5">{selectedVariant.title}</div>
+                {selectedVariant.sku && (
+                  <div className="font-mono text-[11px] text-muted-foreground">{selectedVariant.sku}</div>
+                )}
               </div>
+            )}
+
+            <div>
+              <FieldLabel htmlFor="sellingPrice">
+                {isVariantMode ? "Variant Price" : "Selling Price"}
+              </FieldLabel>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <MerninInput
+                    id="sellingPrice"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={sellingPrice}
+                    onChange={(e) => setSellingPrice(e.target.value)}
+                    placeholder="0.00"
+                    prefix={<DollarSign size={15} strokeWidth={2} />}
+                  />
+                </div>
+                <Btn
+                  onClick={handleUpdatePrice}
+                  disabled={isPriceUpdating || (isVariantMode && !selectedVariant)}
+                  size="icon"
+                  variant="outline"
+                >
+                  {isPriceUpdating ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} strokeWidth={2} />}
+                </Btn>
+              </div>
+              {isVariantMode && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  Updates apply to the selected variant.
+                </p>
+              )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </Panel>
 
         {/* COGS Breakdown */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle>COGS Breakdown</CardTitle>
-              <span className="text-2xl font-bold">{formatMoney(calculatedCogs)}</span>
+        <Panel title="COGS Breakdown" subtitle={calculatedCogs > 0 ? fmt(calculatedCogs) : undefined}>
+          {calculatedCogs > 0 && cogsBreakdown.length > 0 ? (
+            <>
+              <div className="h-52 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={cogsBreakdown} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="80%" paddingAngle={2}>
+                      {cogsBreakdown.map((_, i) => (
+                        <Cell key={`cell-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v) => fmt(Number(v))} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-3 space-y-2">
+                {cogsBreakdown.map((d, i) => (
+                  <div key={d.name} className="flex items-center justify-between gap-3 text-[12px]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-[3px] shrink-0" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
+                      <span className="truncate font-medium text-espresso">{d.name}</span>
+                    </div>
+                    <div className="shrink-0 font-bold tabular-nums text-espresso">
+                      {fmt(d.value)}{" "}
+                      <span className="text-muted-foreground font-normal">
+                        ({((d.value / calculatedCogs) * 100).toFixed(0)}%)
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <TrendingUp size={32} strokeWidth={1.5} className="text-fog mb-3" />
+              <p className="text-[13px] text-muted-foreground">
+                Add components with costs to see the breakdown.
+              </p>
             </div>
-          </CardHeader>
+          )}
+        </Panel>
+      </div>
 
-          <CardContent className="space-y-4">
-            {calculatedCogs > 0 && cogsBreakdown.length > 0 ? (
-              <>
-                <div className="h-56 w-full sm:h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={cogsBreakdown}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius="55%"
-                        outerRadius="80%"
-                        paddingAngle={2}
-                      >
-                        {cogsBreakdown.map((_, i) => (
-                          <Cell key={`cell-${i}`} fill={chartColors[i % chartColors.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v) => formatMoney(Number(v))} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Custom legend list (mobile-friendly, wraps nicely) */}
-                <div className="mt-2 space-y-2">
-                  {cogsBreakdown.map((d, i) => (
-                    <div key={d.name} className="flex items-center justify-between gap-3 text-sm">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span
-                          className="h-2 w-2 shrink-0 rounded-sm"
-                          style={{ backgroundColor: chartColors[i % chartColors.length] }}
-                        />
-                        <span className="truncate">{d.name}</span>
+      {/* COGS Calculator */}
+      <Panel
+        title="COGS Calculator"
+        subtitle="Add cost components to calculate total COGS"
+        action={
+          <Btn
+            onClick={addComponent}
+            disabled={availableComponents.length === 0 || selectedComponents.length >= availableComponents.length}
+            size="sm"
+          >
+            <Plus size={13} strokeWidth={2.5} />
+            Add Component
+          </Btn>
+        }
+      >
+        {availableComponents.length === 0 ? (
+          <div className="flex flex-col items-center py-10 text-center">
+            <Package size={32} strokeWidth={1.5} className="text-fog mb-3" />
+            <p className="font-extrabold uppercase text-[13px] tracking-wide text-espresso">No components available</p>
+            <p className="text-[12px] text-muted-foreground mt-1">
+              <Link href="/components" className="text-tomato underline font-bold">Create components first</Link> to calculate COGS.
+            </p>
+          </div>
+        ) : selectedComponents.length === 0 ? (
+          <div className="flex flex-col items-center py-10 text-center">
+            <Package size={32} strokeWidth={1.5} className="text-fog mb-3" />
+            <p className="font-extrabold uppercase text-[13px] tracking-wide text-espresso">No components added</p>
+            <p className="text-[12px] text-muted-foreground mt-1">Click &quot;Add Component&quot; to start building your COGS.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {/* Mobile: stacked cards */}
+            <div className="flex flex-col gap-3 sm:hidden">
+              {selectedComponents.map((sc, idx) => {
+                const comp = availableComponents.find((c) => c.id === sc.componentId);
+                const lineTotal = comp ? sc.quantity * comp.cost_per_unit : 0;
+                return (
+                  <div key={idx} className="rounded-[12px] border-[2.5px] border-espresso bg-cream p-3">
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="flex-1">
+                        <FieldLabel>Component</FieldLabel>
+                        <Select value={sc.componentId} onValueChange={(v) => updateComponent(idx, "componentId", v)}>
+                          <SelectTrigger className="border-[2px] border-espresso rounded-[8px] h-9 text-[12px] font-bold">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableComponents.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>{c.name} ({c.unit})</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                      <div className="shrink-0 tabular-nums">
-                        {formatMoney(d.value)}{" "}
-                        <span className="text-muted-foreground">
-                          ({((d.value / calculatedCogs) * 100).toFixed(0)}%)
-                        </span>
+                      <button onClick={() => removeComponent(idx)} className="w-8 h-8 mt-5 inline-flex items-center justify-center rounded-full text-tomato hover:bg-tomato/10 transition-colors">
+                        <Trash2 size={14} strokeWidth={2} />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <FieldLabel>Quantity</FieldLabel>
+                        <MerninInput type="number" min="0" step="0.01" value={sc.quantity} onChange={(e) => updateComponent(idx, "quantity", parseFloat(e.target.value) || 0)} />
+                      </div>
+                      <div className="rounded-[10px] bg-fog/50 border-[2px] border-fog p-3">
+                        <div className="text-[9.5px] font-extrabold uppercase tracking-wide text-muted-foreground">Line total</div>
+                        <div className="font-extrabold text-[15px] text-espresso mt-0.5 tabular-nums">{fmt(lineTotal)}</div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">{comp ? `${fmt(comp.cost_per_unit)}/${comp.unit}` : "—"}</div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Add quantities (and make sure your components have costs) to see the breakdown.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* COGS Calculator */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle>COGS Calculator</CardTitle>
-                <CardDescription>Add cost components to calculate total COGS</CardDescription>
-              </div>
-              <Button
-                onClick={addComponent}
-                disabled={
-                  availableComponents.length === 0 ||
-                  selectedComponents.length >= availableComponents.length
-                }
-                size="sm"
-                className="w-full sm:w-auto"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add Component
-              </Button>
+                  </div>
+                );
+              })}
             </div>
-          </CardHeader>
 
-          <CardContent>
-            {availableComponents.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <Package className="mb-4 h-12 w-12 text-muted-foreground" />
-                <h3 className="text-lg font-medium">No components available</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Create components first to calculate COGS.{" "}
-                  <Link href="/components" className="text-primary underline">
-                    Go to Components
-                  </Link>
-                </p>
-              </div>
-            ) : selectedComponents.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <Package className="mb-4 h-12 w-12 text-muted-foreground" />
-                <h3 className="text-lg font-medium">No components added</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Click &quot;Add Component&quot; to start building your COGS
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Mobile layout: stacked rows (no horizontal scroll) */}
-                <div className="space-y-3 sm:hidden">
-                  {selectedComponents.map((sc, index) => {
-                    const component = availableComponents.find((c) => c.id === sc.componentId);
-                    const lineTotal = component ? sc.quantity * component.cost_per_unit : 0;
-          
+            {/* Desktop: table */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full border-collapse text-[13px]">
+                <thead>
+                  <tr className="border-b-2 border-espresso">
+                    {["Component", "Quantity", "Unit Cost", "Total", ""].map((h, i) => (
+                      <th key={i} className={`py-2.5 text-[9.5px] font-extrabold uppercase tracking-[.1em] text-muted-foreground ${i > 0 ? "text-right" : "text-left"} ${i === 4 ? "w-10" : ""}`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedComponents.map((sc, idx) => {
+                    const comp = availableComponents.find((c) => c.id === sc.componentId);
+                    const lineTotal = comp ? sc.quantity * comp.cost_per_unit : 0;
                     return (
-                      <div key={index} className="rounded-lg border p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <Label className="text-xs text-muted-foreground">Component</Label>
-                            <div className="mt-1">
-                              <Select
-                                value={sc.componentId}
-                                onValueChange={(value) => updateComponent(index, "componentId", value)}
-                              >
-                                <SelectTrigger className="w-full max-w-60">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {availableComponents.map((c) => (
-                                    <SelectItem key={c.id} value={c.id}>
-                                      {c.name} ({c.unit})
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-          
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeComponent(index)}
-                            className="shrink-0 text-destructive hover:text-destructive"
-                            aria-label="Remove component"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-          
-                        <div className="mt-3 grid grid-cols-2 gap-3">
+                      <tr key={idx} className="border-b border-dashed border-fog last:border-0">
+                        <td className="py-3 pr-4">
+                          <Select value={sc.componentId} onValueChange={(v) => updateComponent(idx, "componentId", v)}>
+                            <SelectTrigger className="border-[2px] border-espresso rounded-[8px] h-9 text-[12px] font-bold">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableComponents.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>{c.name} ({c.unit})</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <input
+                            type="number" min="0" step="0.01" value={sc.quantity}
+                            onChange={(e) => updateComponent(idx, "quantity", parseFloat(e.target.value) || 0)}
+                            className="w-24 bg-chalk border-[2px] border-espresso rounded-[8px] px-3 py-2 text-[13px] font-bold text-espresso outline-none focus:border-tomato text-right tabular-nums"
+                          />
+                        </td>
+                        <td className="py-3 text-right font-mono text-[12px] text-muted-foreground">
+                          {comp ? `${fmt(comp.cost_per_unit)}/${comp.unit}` : "—"}
+                        </td>
+                        <td className="py-3 text-right font-bold text-espresso tabular-nums">{fmt(lineTotal)}</td>
+                        <td className="py-3 pl-3">
+                          <button onClick={() => removeComponent(idx)} className="w-7 h-7 inline-flex items-center justify-center rounded-full text-tomato hover:bg-tomato/10 transition-colors">
+                            <Trash2 size={13} strokeWidth={2} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t-2 border-fog">
+              <Btn onClick={handleSaveComponents} disabled={isSaving || (isVariantMode && !selectedVariantId)}>
+                {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} strokeWidth={2} />}
+                {isVariantMode ? "Save Variant COGS" : "Save Components"}
+              </Btn>
+            </div>
+          </div>
+        )}
+      </Panel>
+
+      {/* Wholesale Pricing */}
+      <Panel
+        title="Wholesale Pricing"
+        subtitle="Set up volume discounts for wholesale customers"
+        action={
+          <div className="flex items-center gap-2">
+            <label htmlFor="wholesale-enabled" className="text-[10.5px] font-extrabold uppercase tracking-[.1em] text-espresso cursor-pointer">
+              Enable
+            </label>
+            <Switch id="wholesale-enabled" checked={wholesaleEnabled} onCheckedChange={setWholesaleEnabled} />
+          </div>
+        }
+      >
+        {!wholesaleEnabled ? (
+          <div className="flex flex-col items-center py-10 text-center">
+            <Store size={32} strokeWidth={1.5} className="text-fog mb-3" />
+            <p className="font-extrabold uppercase text-[13px] tracking-wide text-espresso">Wholesale Disabled</p>
+            <p className="text-[12px] text-muted-foreground mt-1">Enable the toggle to set up volume discounts.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <FieldLabel htmlFor="wholesale-price">Base Wholesale Price</FieldLabel>
+                <MerninInput
+                  id="wholesale-price"
+                  type="number" step="0.01" min="0"
+                  value={wholesalePrice}
+                  onChange={(e) => setWholesalePrice(e.target.value)}
+                  placeholder="12.00"
+                  prefix={<DollarSign size={15} strokeWidth={2} />}
+                />
+                {wholesalePriceValue > 0 && (
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    Margin: {wholesaleMargin.toFixed(1)}% · Profit: ${(wholesalePriceValue - calculatedCogs).toFixed(2)}
+                  </p>
+                )}
+              </div>
+              <div>
+                <FieldLabel htmlFor="wholesale-min-qty">Min Order Quantity</FieldLabel>
+                <MerninInput
+                  id="wholesale-min-qty"
+                  type="number" min="1"
+                  value={wholesaleMinQty}
+                  onChange={(e) => setWholesaleMinQty(e.target.value)}
+                  placeholder="12"
+                />
+              </div>
+            </div>
+
+            {/* Price tiers */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="text-[10.5px] font-extrabold uppercase tracking-[.1em] text-espresso">
+                  Volume Price Tiers
+                </div>
+                <Btn variant="outline" size="sm" onClick={addPriceTier}>
+                  <Plus size={12} strokeWidth={2.5} />
+                  Add Tier
+                </Btn>
+              </div>
+
+              {priceTiers.length === 0 ? (
+                <p className="text-[12px] text-muted-foreground text-center py-4 border-2 border-dashed border-fog rounded-[10px]">
+                  No price tiers configured.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {priceTiers.map((tier, idx) => {
+                    const tierMargin = tier.price > 0 ? ((tier.price - calculatedCogs) / tier.price) * 100 : 0;
+                    return (
+                      <div key={idx} className="flex items-center gap-3 rounded-[12px] border-[2.5px] border-espresso bg-cream p-3">
+                        <div className="flex-1 grid grid-cols-2 gap-3">
                           <div>
-                            <Label className="text-xs text-muted-foreground">Quantity</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={sc.quantity}
-                              onChange={(e) =>
-                                updateComponent(index, "quantity", parseFloat(e.target.value) || 0)
-                              }
-                              className="mt-1"
-                            />
+                            <FieldLabel>Min Qty</FieldLabel>
+                            <MerninInput type="number" min="1" value={tier.min_quantity} onChange={(e) => { const u = [...priceTiers]; u[idx] = { ...u[idx], min_quantity: parseInt(e.target.value) || 1 }; setPriceTiers(u); }} />
                           </div>
-          
-                          <div className="rounded-md bg-muted/40 p-2">
-                            <div className="text-xs text-muted-foreground">Line total</div>
-                            <div className="mt-0.5 font-medium tabular-nums">
-                              {formatMoney(lineTotal)}
-                            </div>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {component
-                                ? `${formatMoney(component.cost_per_unit)}/${component.unit}`
-                                : "-"}
-                            </div>
+                          <div>
+                            <FieldLabel>Price / Unit</FieldLabel>
+                            <MerninInput type="number" step="0.01" min="0" value={tier.price} onChange={(e) => { const u = [...priceTiers]; u[idx] = { ...u[idx], price: parseFloat(e.target.value) || 0 }; setPriceTiers(u); }} prefix={<DollarSign size={15} strokeWidth={2} />} />
                           </div>
                         </div>
+                        <div className="text-right min-w-[64px]">
+                          <div className="text-[9.5px] font-extrabold uppercase tracking-wide text-muted-foreground">Margin</div>
+                          <div className={`text-[13px] font-extrabold mt-0.5 ${tierMargin >= 20 ? "text-matcha" : tierMargin >= 10 ? "text-honey" : "text-tomato"}`}>
+                            {tierMargin.toFixed(1)}%
+                          </div>
+                        </div>
+                        <button onClick={() => setPriceTiers(priceTiers.filter((_, i) => i !== idx))} className="w-8 h-8 inline-flex items-center justify-center rounded-full text-tomato hover:bg-tomato/10 transition-colors shrink-0">
+                          <Trash2 size={14} strokeWidth={2} />
+                        </button>
                       </div>
                     );
                   })}
                 </div>
-          
-                {/* Desktop layout: table (unchanged) */}
-                <div className="hidden sm:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Component</TableHead>
-                        <TableHead className="w-24">Quantity</TableHead>
-                        <TableHead className="text-right">Unit Cost</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead className="w-12" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedComponents.map((sc, index) => {
-                        const component = availableComponents.find((c) => c.id === sc.componentId);
-                        const lineTotal = component ? sc.quantity * component.cost_per_unit : 0;
-          
-                        return (
-                          <TableRow key={index}>
-                            <TableCell>
-                              <Select
-                                value={sc.componentId}
-                                onValueChange={(value) => updateComponent(index, "componentId", value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {availableComponents.map((c) => (
-                                    <SelectItem key={c.id} value={c.id}>
-                                      {c.name} ({c.unit})
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-          
-                            <TableCell>
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={sc.quantity}
-                                onChange={(e) =>
-                                  updateComponent(index, "quantity", parseFloat(e.target.value) || 0)
-                                }
-                              />
-                            </TableCell>
-          
-                            <TableCell className="text-right">
-                              {component ? `${formatMoney(component.cost_per_unit)}/${component.unit}` : "-"}
-                            </TableCell>
-          
-                            <TableCell className="text-right font-medium">
-                              {formatMoney(lineTotal)}
-                            </TableCell>
-          
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeComponent(index)}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-          
-                <div className="flex justify-end">
-                  <Button
-                    onClick={handleSaveComponents}
-                    disabled={isSaving || (isVariantMode && !selectedVariantId)}
-                    className="w-full sm:w-auto"
-                  >
-                    {isSaving ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Save className="mr-2 h-4 w-4" />
-                    )}
-                    {isVariantMode ? "Save Variant COGS" : "Save Components"}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              )}
+            </div>
 
-      {/* Wholesale Pricing Section */}
-      <div className="lg:col-span-2">
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <Store className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <CardTitle>Wholesale Pricing</CardTitle>
-                  <CardDescription>Set up volume discounts for wholesale customers</CardDescription>
-                </div>
+            <div className="flex justify-end pt-2 border-t-2 border-fog">
+              <Btn onClick={handleSaveWholesale} disabled={isWholesaleSaving}>
+                {isWholesaleSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} strokeWidth={2} />}
+                Save Wholesale Pricing
+              </Btn>
+            </div>
+          </div>
+        )}
+      </Panel>
+
+      {/* Add variant dialog */}
+      <Dialog open={isAddVariantDialogOpen} onOpenChange={setIsAddVariantDialogOpen}>
+        <DialogContent className="border-[3px] border-espresso rounded-[20px] shadow-flat-lg bg-chalk p-0 overflow-hidden gap-0">
+          <DialogHeader className="px-6 py-5 border-b-[3px] border-espresso bg-cream">
+            <DialogTitle className="font-extrabold text-[18px] uppercase tracking-[.06em] text-espresso">Add Variant</DialogTitle>
+            <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
+              Create a new variant and optionally copy COGS from an existing source.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-6 py-5 flex flex-col gap-4">
+            <div>
+              <FieldLabel htmlFor="new-variant-title">Variant Title *</FieldLabel>
+              <MerninInput id="new-variant-title" placeholder="e.g. 12oz Bag" value={newVariantTitle} onChange={(e) => setNewVariantTitle(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <FieldLabel htmlFor="new-variant-sku">SKU (optional)</FieldLabel>
+                <MerninInput id="new-variant-sku" placeholder="SKU" value={newVariantSku} onChange={(e) => setNewVariantSku(e.target.value)} />
               </div>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="wholesale-enabled" className="text-sm">Enable Wholesale</Label>
-                <Switch
-                  id="wholesale-enabled"
-                  checked={wholesaleEnabled}
-                  onCheckedChange={setWholesaleEnabled}
-                />
+              <div>
+                <FieldLabel htmlFor="new-variant-price">Price (optional)</FieldLabel>
+                <MerninInput id="new-variant-price" type="number" step="0.01" min="0" placeholder="0.00" value={newVariantPrice} onChange={(e) => setNewVariantPrice(e.target.value)} prefix={<DollarSign size={15} strokeWidth={2} />} />
               </div>
             </div>
-          </CardHeader>
-
-          <CardContent>
-            {!wholesaleEnabled ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Store className="mb-4 h-12 w-12 text-muted-foreground" />
-                <h3 className="text-lg font-medium">Wholesale pricing disabled</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Enable wholesale pricing to set up volume discounts
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Base wholesale price */}
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="wholesale-price">Base Wholesale Price</Label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        id="wholesale-price"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={wholesalePrice}
-                        onChange={(e) => setWholesalePrice(e.target.value)}
-                        className="pl-9"
-                        placeholder="e.g., 12.00"
-                      />
-                    </div>
-                    {wholesalePriceValue > 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        Margin: {wholesaleMargin.toFixed(1)}% | Profit: ${(wholesalePriceValue - calculatedCogs).toFixed(2)}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="wholesale-min-qty">Minimum Order Quantity</Label>
-                    <Input
-                      id="wholesale-min-qty"
-                      type="number"
-                      min="1"
-                      value={wholesaleMinQty}
-                      onChange={(e) => setWholesaleMinQty(e.target.value)}
-                      placeholder="e.g., 12"
-                    />
-                  </div>
-                </div>
-
-                {/* Price tiers */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label>Volume Price Tiers</Label>
-                    <Button variant="outline" size="sm" onClick={addPriceTier}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Tier
-                    </Button>
-                  </div>
-
-                  {priceTiers.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">
-                      No price tiers configured. Add tiers for volume discounts.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {priceTiers.map((tier, index) => {
-                        const tierMargin = tier.price > 0 ? ((tier.price - calculatedCogs) / tier.price) * 100 : 0;
-                        return (
-                          <div key={index} className="flex items-center gap-3 rounded-lg border p-3">
-                            <div className="flex-1 grid grid-cols-2 gap-3">
-                              <div>
-                                <Label className="text-xs text-muted-foreground">Min Quantity</Label>
-                                <Input
-                                  type="number"
-                                  min="1"
-                                  value={tier.min_quantity}
-                                  onChange={(e) => updatePriceTier(index, "min_quantity", parseInt(e.target.value) || 1)}
-                                  className="mt-1"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs text-muted-foreground">Price per Unit</Label>
-                                <div className="relative mt-1">
-                                  <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={tier.price}
-                                    onChange={(e) => updatePriceTier(index, "price", parseFloat(e.target.value) || 0)}
-                                    className="pl-9"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right min-w-[80px]">
-                              <div className="text-xs text-muted-foreground">Margin</div>
-                              <div className={`text-sm font-medium ${tierMargin >= 20 ? "text-green-600" : tierMargin >= 10 ? "text-amber-600" : "text-red-600"}`}>
-                                {tierMargin.toFixed(1)}%
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removePriceTier(index)}
-                              className="text-destructive hover:text-destructive shrink-0"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex justify-end pt-2">
-                  <Button onClick={handleSaveWholesale} disabled={isWholesaleSaving}>
-                    {isWholesaleSaving ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Save className="mr-2 h-4 w-4" />
-                    )}
-                    Save Wholesale Pricing
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            <div>
+              <FieldLabel>Copy COGS From</FieldLabel>
+              <Select value={newVariantCopySource} onValueChange={setNewVariantCopySource}>
+                <SelectTrigger className="border-[2.5px] border-espresso rounded-[10px] h-10 text-[13px] font-bold shadow-[3px_3px_0_#1C0F05]">
+                  <SelectValue placeholder="Copy COGS from..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Don&apos;t copy COGS</SelectItem>
+                  {defaultSelectedComponents.length > 0 && <SelectItem value="product">Current product COGS</SelectItem>}
+                  {variants.map((v) => <SelectItem key={`copy-${v.id}`} value={`variant:${v.id}`}>Variant: {v.title}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="px-6 py-4 border-t-[3px] border-espresso bg-cream flex gap-2">
+            <Btn variant="outline" size="sm" onClick={() => setIsAddVariantDialogOpen(false)} disabled={isAddingVariant}>Cancel</Btn>
+            <Btn size="sm" onClick={handleAddVariant} disabled={isAddingVariant}>
+              {isAddingVariant && <Loader2 size={13} className="animate-spin" />}
+              Add Variant
+            </Btn>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

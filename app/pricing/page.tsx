@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@merninos/ui";
 
 export const metadata: Metadata = {
   title: "Pricing | CoffeeOS",
