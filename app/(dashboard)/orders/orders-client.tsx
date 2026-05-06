@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import {
   RefreshCw,
@@ -705,7 +706,8 @@ export function OrdersClient({
   coffeeInventory,
   isAdminConfigured,
 }: OrdersClientProps) {
-  const [orders] = useState(initialOrders);
+  const router = useRouter();
+  const [orders, setOrders] = useState(initialOrders);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
@@ -724,6 +726,10 @@ export function OrdersClient({
   });
   const [isCreatingRoastRequest, setIsCreatingRoastRequest] = useState(false);
 
+  useEffect(() => {
+    setOrders(initialOrders);
+  }, [initialOrders]);
+
   const filteredOrders = orders.filter(
     (order) =>
       order.order_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -737,7 +743,7 @@ export function OrdersClient({
     const result = await syncShopifyOrders();
     setIsSyncing(false);
     if (result.error) { alert(result.error); return; }
-    if (result.success) window.location.reload();
+    if (result.success) router.refresh();
   };
 
   const toggleOrderExpanded = (orderId: string) => {
@@ -771,16 +777,16 @@ export function OrdersClient({
       setAddingComponentTo(null);
       setSelectedComponentId("");
       setComponentQuantity(1);
-      window.location.reload();
+      router.refresh();
     }
   };
   const handleUpdateQuantity = async (orderComponentId: string, newQuantity: number) => {
     const result = await updateOrderComponentQuantity(orderComponentId, newQuantity);
-    if (result.error) alert(result.error); else window.location.reload();
+    if (result.error) alert(result.error); else router.refresh();
   };
   const handleRemoveComponent = async (orderComponentId: string) => {
     const result = await removeOrderComponent(orderComponentId);
-    if (result.error) alert(result.error); else window.location.reload();
+    if (result.error) alert(result.error); else router.refresh();
   };
   const handleAddCustomCost = async (orderId: string) => {
     const amount = parseFloat(customCostAmount);
@@ -790,12 +796,12 @@ export function OrdersClient({
       setAddingCustomCostTo(null);
       setCustomCostDescription("");
       setCustomCostAmount("");
-      window.location.reload();
+      router.refresh();
     }
   };
   const handleRemoveCustomCost = async (customCostId: string) => {
     const result = await removeOrderCustomCost(customCostId);
-    if (result.error) alert(result.error); else window.location.reload();
+    if (result.error) alert(result.error); else router.refresh();
   };
 
   const handleCreateRoastRequest = async () => {
