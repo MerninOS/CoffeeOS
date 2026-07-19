@@ -146,6 +146,150 @@
   --shadow-flat-cream:  5px 5px 0px var(--mernin-cream,    #F5F0D8);
 }
 
+/* ============================================================
+   SKY EDITION — dashboard skin
+   Scoped to [data-product="sky"] (the authenticated dashboard
+   subtree ONLY). A deliberate departure from the loud Mernin'
+   brand: airy sky gradient, frosted glass, ONE lime accent,
+   Archivo type, soft (non-flat) shadows. This intentionally
+   breaks the core no-gradient / no-blur / flat-shadow rules.
+   Because the dashboard's Tailwind utilities (bg-cream,
+   border-espresso, shadow-flat-*, font-display, bg-primary…)
+   all resolve through the --mernin-* / shadcn / --shadow-flat-*
+   vars below, remapping them here reskins every dashboard
+   surface by cascade. The .lp-* landing page lives outside this
+   scope and is untouched.
+   ============================================================ */
+[data-product="sky"] {
+  /* ---- Sky palette ---- */
+  --sky-lime:       #DDF23C;
+  --sky-lime-hover: #CBE22A;
+  --sky-ink:        #0E1622;
+  --sky-ink-2:      #17222F;
+  --sky-slate:      #46566A;
+  --sky-mute:       #8493A3;
+  --sky-good:       #35C46B;
+  --sky-line:       rgba(14, 22, 34, 0.08);
+  --sky-glass:      rgba(255, 255, 255, 0.66);
+  --sky-glass-soft: rgba(255, 255, 255, 0.42);
+  --sky-1:          #EAF3FC;
+  --sky-2:          #C9E4FB;
+  --sky-3:          #A9D2F4;
+
+  /* ---- Remap the Mernin brand palette → Sky ----
+     Every bg-tomato / bg-cream / border-espresso / text-espresso
+     utility in the ~27 dashboard files re-resolves through these. */
+  --mernin-tomato:   var(--sky-lime);
+  --mernin-cream:    var(--sky-glass);
+  --mernin-chalk:    var(--sky-glass);
+  --mernin-espresso: var(--sky-ink);
+  --mernin-sun:      var(--sky-lime);
+  --mernin-sky:      var(--sky-3);
+  --mernin-honey:    var(--sky-lime-hover);
+  --mernin-matcha:   var(--sky-good);
+  --mernin-roast:    var(--sky-ink-2);
+  --mernin-fog:      var(--sky-line);
+
+  /* ---- shadcn semantic tokens → Sky ---- */
+  --background:            transparent;              /* the scope paints the gradient */
+  --foreground:            var(--sky-ink);
+  --card:                  var(--sky-glass);
+  --card-foreground:       var(--sky-ink);
+  --popover:               #ffffff;
+  --popover-foreground:    var(--sky-ink);
+  --primary:               var(--sky-lime);
+  --primary-foreground:    var(--sky-ink);
+  --secondary:             rgba(255, 255, 255, 0.82);
+  --secondary-foreground:  var(--sky-ink);
+  --muted:                 rgba(14, 22, 34, 0.06);
+  --muted-foreground:      var(--sky-slate);
+  --accent:                var(--sky-lime);
+  --accent-foreground:     var(--sky-ink);
+  --destructive:           #E5484D;
+  --destructive-foreground: #ffffff;
+  --border:                var(--sky-line);
+  --input:                 rgba(14, 22, 34, 0.14);
+  --ring:                  var(--sky-lime);
+  --radius:                1rem;
+
+  /* ---- sidebar → navy rail ---- */
+  --sidebar:                    var(--sky-ink);
+  --sidebar-foreground:         rgba(255, 255, 255, 0.82);
+  --sidebar-primary:            var(--sky-lime);
+  --sidebar-primary-foreground: var(--sky-ink);
+  --sidebar-accent:             rgba(255, 255, 255, 0.08);
+  --sidebar-accent-foreground:  #ffffff;
+  --sidebar-border:             rgba(255, 255, 255, 0.12);
+  --sidebar-ring:               var(--sky-lime);
+
+  /* ---- type: one grotesque ---- */
+  --font-sans:     'Archivo', var(--font-archivo), system-ui, sans-serif;
+  --font-body:     'Archivo', var(--font-archivo), system-ui, sans-serif;
+  --font-display:  'Archivo', var(--font-archivo), system-ui, sans-serif;
+  --font-headline: 'Archivo', var(--font-archivo), system-ui, sans-serif;
+
+  /* ---- shadows: flat → soft/airy ---- */
+  --shadow-flat-sm:     0 4px 14px rgba(20, 40, 70, 0.10);
+  --shadow-flat-md:     0 10px 30px rgba(20, 40, 70, 0.14);
+  --shadow-flat-lg:     0 22px 50px rgba(20, 40, 70, 0.18);
+  --shadow-flat-tomato: 0 10px 30px color-mix(in srgb, var(--sky-lime) 40%, transparent);
+  --shadow-flat-cream:  0 10px 30px rgba(20, 40, 70, 0.10);
+
+  /* ---- the sky itself ---- */
+  font-family: 'Archivo', var(--font-archivo), system-ui, sans-serif;
+  color: var(--sky-ink);
+  background: linear-gradient(180deg, #EAF3FC 0%, #CFE6FB 42%, #A9D2F4 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+/* Frosted-glass treatment for card-like surfaces inside the Sky scope.
+   Applies to shadcn Cards and the .sky-glass helper. backdrop-filter
+   can't be expressed as a token, so it is applied structurally here. */
+[data-product="sky"] [data-slot="card"],
+[data-product="sky"] .sky-glass {
+  background: var(--sky-glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--sky-line);
+  box-shadow: var(--shadow-flat-md);
+}
+
+/* Because globals.css uses `@theme inline`, the shadow-flat-* and font-display
+   utilities bake their literal offset / font family in at build time — so runtime
+   token overrides don't reach them. Re-point those utilities (and the chunky 3-5px
+   brand borders) to Sky at the class level, scoped to the dashboard. */
+[data-product="sky"] .font-display,
+[data-product="sky"] .font-headline {
+  font-family: 'Archivo', var(--font-archivo), system-ui, sans-serif;
+  letter-spacing: 0;
+}
+/* shadow-flat-* utilities AND arbitrary flat shadows baked into classNames
+   (e.g. shadow-[3px_3px_0_#1C0F05], shadow-[4px_4px_0_#E8442A]) all become the
+   airy Sky shadow. This catches the ~140 hand-written flat shadows across the
+   dashboard pages without editing each file. */
+[data-product="sky"] [class*="shadow-flat"],
+[data-product="sky"] [class*="shadow-["] {
+  box-shadow: var(--shadow-flat-md);
+}
+/* Thin the loud 3-5px brand borders down to a Sky hairline. */
+[data-product="sky"] [class~="border-[3px]"],
+[data-product="sky"] [class~="border-[4px]"],
+[data-product="sky"] [class~="border-[5px]"],
+[data-product="sky"] [class~="border-[2.5px]"],
+[data-product="sky"] [class~="border-b-[3px]"],
+[data-product="sky"] [class~="border-t-[3px]"] {
+  border-width: 1px;
+}
+[data-product="sky"] [class~="border-b-[3px]"] { border-bottom-width: 1px; }
+
+/* Dark mode is dropped on the dashboard — Sky is light-only.
+   Neutralize any .dark override that lands inside the scope. */
+[data-product="sky"].dark,
+[data-product="sky"] .dark {
+  color-scheme: light;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -108,11 +108,11 @@ export function AppSidebar({ user }: AppSidebarProps) {
       className="border-r-0"
       style={
         {
-          "--sidebar": "#1C0F05",
-          "--sidebar-foreground": "#F5F0D8",
-          "--sidebar-border": "#1C0F05",
-          "--sidebar-accent": "#2a1508",
-          "--sidebar-accent-foreground": "#F5F0D8",
+          "--sidebar": "#0E1622",
+          "--sidebar-foreground": "rgba(255,255,255,0.82)",
+          "--sidebar-border": "rgba(255,255,255,0.12)",
+          "--sidebar-accent": "rgba(255,255,255,0.08)",
+          "--sidebar-accent-foreground": "#ffffff",
         } as React.CSSProperties
       }
     >
@@ -164,9 +164,10 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   style={
                     active
                       ? {
-                          background: "#E8442A",
-                          border: "2.5px solid #F5F0D8",
-                          boxShadow: "3px 3px 0 #F5F0D8",
+                          background: "var(--sky-lime, #DDF23C)",
+                          color: "#0E1622",
+                          border: "1px solid transparent",
+                          boxShadow: "0 6px 18px color-mix(in srgb, #DDF23C 45%, transparent)",
                           fontWeight: 800,
                           fontSize: "12.5px",
                           letterSpacing: ".08em",
@@ -174,7 +175,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
                         }
                       : {
                           background: "transparent",
-                          border: "2.5px solid transparent",
+                          color: "rgba(255,255,255,0.82)",
+                          border: "1px solid transparent",
                           fontWeight: 800,
                           fontSize: "12.5px",
                           letterSpacing: ".08em",
@@ -210,9 +212,10 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   style={
                     pathname === "/settings" || pathname.startsWith("/settings/")
                       ? {
-                          background: "#E8442A",
-                          border: "2.5px solid #F5F0D8",
-                          boxShadow: "3px 3px 0 #F5F0D8",
+                          background: "var(--sky-lime, #DDF23C)",
+                          color: "#0E1622",
+                          border: "1px solid transparent",
+                          boxShadow: "0 6px 18px color-mix(in srgb, #DDF23C 45%, transparent)",
                           fontWeight: 800,
                           fontSize: "12.5px",
                           letterSpacing: ".08em",
@@ -220,7 +223,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
                         }
                       : {
                           background: "transparent",
-                          border: "2.5px solid transparent",
+                          color: "rgba(255,255,255,0.82)",
+                          border: "1px solid transparent",
                           fontWeight: 800,
                           fontSize: "12.5px",
                           letterSpacing: ".08em",
@@ -256,7 +260,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
                     className="flex items-center gap-3 px-3 py-2.5 rounded-[12px] transition-all duration-[120ms] text-cream"
                     style={{
                       background: "transparent",
-                      border: "2.5px solid transparent",
+                      color: "rgba(255,255,255,0.82)",
+                      border: "1px solid transparent",
                       fontWeight: 800,
                       fontSize: "12.5px",
                       letterSpacing: ".08em",
@@ -279,13 +284,13 @@ export function AppSidebar({ user }: AppSidebarProps) {
         <div
           className="rounded-[12px] p-3 text-[11px] leading-relaxed"
           style={{
-            background: "#3B1F0A",
-            border: "2px solid #E8442A",
+            background: "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.12)",
           }}
         >
           <div
             className="font-display text-[14px] uppercase mb-1"
-            style={{ color: "#F5C842" }}
+            style={{ color: "var(--sky-lime, #DDF23C)" }}
           >
             Shopify Connected
           </div>
@@ -300,12 +305,12 @@ export function AppSidebar({ user }: AppSidebarProps) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[12px] border-[2.5px] border-roast hover:border-cream/30 transition-all duration-100 text-left"
-                  style={{ background: "#2a1508" }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[12px] border border-[rgba(255,255,255,0.12)] hover:border-cream/30 transition-all duration-100 text-left"
+                  style={{ background: "rgba(255,255,255,0.06)" }}
                 >
                   <div
-                    className="w-8 h-8 rounded-[8px] border-2 border-roast flex items-center justify-center shrink-0 text-[12px] font-extrabold text-cream"
-                    style={{ background: "#E8442A" }}
+                    className="w-8 h-8 rounded-[8px] flex items-center justify-center shrink-0 text-[12px] font-extrabold"
+                    style={{ background: "var(--sky-lime, #DDF23C)", color: "#0E1622" }}
                   >
                     {initials}
                   </div>

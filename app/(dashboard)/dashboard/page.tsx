@@ -265,7 +265,7 @@ export default async function DashboardPage() {
                       className="w-full border-[2.5px] border-espresso rounded-t-[8px] shadow-[2px_2px_0_#1C0F05] relative"
                       style={{
                         height: `${Math.max(heightPct, day.lbs > 0 ? 8 : 4)}%`,
-                        background: isPeak ? "#E8442A" : "#3B1F0A",
+                        background: isPeak ? "var(--sky-lime, #DDF23C)" : "var(--sky-3, #A9D2F4)",
                         minHeight: day.lbs > 0 ? 8 : 4,
                       }}
                     >
@@ -317,10 +317,10 @@ export default async function DashboardPage() {
                       style={{
                         background:
                           bgColor === "tomato"
-                            ? "#E8442A"
+                            ? "var(--sky-lime, #DDF23C)"
                             : bgColor === "sun"
-                            ? "#F5C842"
-                            : "#E8913A",
+                            ? "var(--sky-3, #A9D2F4)"
+                            : "var(--sky-good, #35C46B)",
                       }}
                     >
                       <svg
@@ -328,7 +328,7 @@ export default async function DashboardPage() {
                         height="18"
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke={bgColor === "sun" ? "#1C0F05" : "#FDFAF0"}
+                        stroke="#0E1622"
                         strokeWidth="2.2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -487,7 +487,7 @@ export default async function DashboardPage() {
                     height="18"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#FDFAF0"
+                    stroke="#0E1622"
                     strokeWidth="2.2"
                     strokeLinecap="round"
                     strokeLinejoin="round"

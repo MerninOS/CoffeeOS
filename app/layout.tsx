@@ -1,6 +1,6 @@
 import React from "react"
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono, Inter } from 'next/font/google'
+import { Geist, Geist_Mono, Inter, Archivo } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
@@ -21,6 +21,14 @@ const inter = Inter({
 const geist = Geist({
   subsets: ["latin"],
   variable: "--font-sans",
+});
+
+// Archivo — the one grotesque for the Sky Edition dashboard skin
+const archivo = Archivo({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800', '900'],
+  variable: '--font-archivo',
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -48,7 +56,7 @@ export default function RootLayout({
         )}
         <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js" />
       </head>
-      <body className={`${geist.variable} ${geistMono.variable} ${inter.variable} font-sans antialiased`}>
+      <body className={`${geist.variable} ${geistMono.variable} ${inter.variable} ${archivo.variable} font-sans antialiased`}>
         {children}
         <Analytics />
       </body>

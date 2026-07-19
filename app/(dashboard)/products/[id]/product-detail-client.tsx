@@ -249,7 +249,8 @@ function Pill({
 
 const fmt = (n: number) => `$${n.toFixed(3)}`;
 
-const CHART_COLORS = ["#E8442A", "#F5C842", "#E8913A", "#5BC8D5", "#5A7A3A", "#3B1F0A", "#D8D0B8"];
+// Sky Edition data palette — distinguishable series that stay in the sky/lime family.
+const CHART_COLORS = ["#DDF23C", "#6FC8DE", "#35C46B", "#A9D2F4", "#46566A", "#0E1622", "#8493A3"];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
