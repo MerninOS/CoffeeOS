@@ -104,27 +104,16 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const isOwnerOrAdmin = user.role === "owner" || user.role === "admin";
 
   return (
-    <Sidebar
-      className="border-r-0"
-      style={
-        {
-          "--sidebar": "#1C0F05",
-          "--sidebar-foreground": "#F5F0D8",
-          "--sidebar-border": "#1C0F05",
-          "--sidebar-accent": "#2a1508",
-          "--sidebar-accent-foreground": "#F5F0D8",
-        } as React.CSSProperties
-      }
-    >
+    <Sidebar className="border-r border-sidebar-border">
       {/* Header */}
       <SidebarHeader className="px-3.5 pt-5 pb-0">
         <Link
           href="/dashboard"
           onClick={closeMobile}
-          className="flex items-center gap-2.5 px-2 pb-4 border-b-2 border-roast mb-3.5"
+          className="flex items-center gap-2.5 px-2 pb-4 border-b border-sidebar-border mb-3.5"
         >
           {/* Icon */}
-          <div className="w-[34px] h-[34px] rounded-[8px] border-2 border-cream overflow-hidden shrink-0 bg-roast flex items-center justify-center">
+          <div className="w-[34px] h-[34px] rounded-[9px] border border-border overflow-hidden shrink-0 bg-secondary flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/icon.png"
@@ -138,13 +127,10 @@ export function AppSidebar({ user }: AppSidebarProps) {
             />
           </div>
           <div>
-            <div className="font-display text-[20px] leading-none uppercase text-cream">
+            <div className="font-display text-[18px] leading-none font-semibold text-foreground">
               CoffeeOS
             </div>
-            <div
-              className="text-[9.5px] font-bold tracking-[.12em] uppercase text-cream mt-0.5"
-              style={{ opacity: 0.6 }}
-            >
+            <div className="text-[9.5px] font-medium tracking-[.12em] uppercase text-muted-foreground mt-0.5">
               Roaster Admin
             </div>
           </div>
@@ -160,25 +146,22 @@ export function AppSidebar({ user }: AppSidebarProps) {
                 <Link
                   href={item.href}
                   onClick={closeMobile}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-[12px] transition-all duration-[120ms] text-cream"
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-[10px] transition-all duration-[120ms]"
                   style={
                     active
                       ? {
-                          background: "#E8442A",
-                          border: "2.5px solid #F5F0D8",
-                          boxShadow: "3px 3px 0 #F5F0D8",
-                          fontWeight: 800,
-                          fontSize: "12.5px",
-                          letterSpacing: ".08em",
-                          textTransform: "uppercase",
+                          background: "var(--u-accent-subtle)",
+                          color: "var(--u-accent)",
+                          border: "1px solid transparent",
+                          fontWeight: 500,
+                          fontSize: "13px",
                         }
                       : {
                           background: "transparent",
-                          border: "2.5px solid transparent",
-                          fontWeight: 800,
-                          fontSize: "12.5px",
-                          letterSpacing: ".08em",
-                          textTransform: "uppercase",
+                          color: "var(--u-text-muted)",
+                          border: "1px solid transparent",
+                          fontWeight: 500,
+                          fontSize: "13px",
                         }
                   }
                 >
@@ -196,8 +179,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
         {isOwnerOrAdmin && (
           <>
             <div
-              className="text-[9.5px] font-extrabold tracking-[.12em] uppercase px-2 mb-1.5"
-              style={{ color: "rgba(245,240,216,0.45)" }}
+              className="text-[9.5px] font-semibold tracking-[.12em] uppercase px-2 mb-1.5"
+              style={{ color: "var(--u-text-faint)" }}
             >
               Admin
             </div>
@@ -206,25 +189,22 @@ export function AppSidebar({ user }: AppSidebarProps) {
                 <Link
                   href="/settings"
                   onClick={closeMobile}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-[12px] transition-all duration-[120ms] text-cream"
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-[10px] transition-all duration-[120ms]"
                   style={
                     pathname === "/settings" || pathname.startsWith("/settings/")
                       ? {
-                          background: "#E8442A",
-                          border: "2.5px solid #F5F0D8",
-                          boxShadow: "3px 3px 0 #F5F0D8",
-                          fontWeight: 800,
-                          fontSize: "12.5px",
-                          letterSpacing: ".08em",
-                          textTransform: "uppercase",
+                          background: "var(--u-accent-subtle)",
+                          color: "var(--u-accent)",
+                          border: "1px solid transparent",
+                          fontWeight: 500,
+                          fontSize: "13px",
                         }
                       : {
                           background: "transparent",
-                          border: "2.5px solid transparent",
-                          fontWeight: 800,
-                          fontSize: "12.5px",
-                          letterSpacing: ".08em",
-                          textTransform: "uppercase",
+                          color: "var(--u-text-muted)",
+                          border: "1px solid transparent",
+                          fontWeight: 500,
+                          fontSize: "13px",
                         }
                   }
                 >
@@ -240,8 +220,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
         {isOwnerOrAdmin && (
           <>
             <div
-              className="text-[9.5px] font-extrabold tracking-[.12em] uppercase px-2 mb-1.5"
-              style={{ color: "rgba(245,240,216,0.45)" }}
+              className="text-[9.5px] font-semibold tracking-[.12em] uppercase px-2 mb-1.5"
+              style={{ color: "var(--u-text-faint)" }}
             >
               Apps
             </div>
@@ -253,14 +233,13 @@ export function AppSidebar({ user }: AppSidebarProps) {
                     onClick={closeMobile}
                     target={app.external ? "_blank" : undefined}
                     rel={app.external ? "noopener noreferrer" : undefined}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-[12px] transition-all duration-[120ms] text-cream"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-[10px] transition-all duration-[120ms]"
                     style={{
                       background: "transparent",
-                      border: "2.5px solid transparent",
-                      fontWeight: 800,
-                      fontSize: "12.5px",
-                      letterSpacing: ".08em",
-                      textTransform: "uppercase",
+                      color: "var(--u-text-muted)",
+                      border: "1px solid transparent",
+                      fontWeight: 500,
+                      fontSize: "13px",
                     }}
                   >
                     <app.icon size={16} strokeWidth={2.2} />
@@ -277,19 +256,20 @@ export function AppSidebar({ user }: AppSidebarProps) {
       <SidebarFooter className="px-3.5 pb-4 gap-3">
         {/* Shopify Connected widget */}
         <div
-          className="rounded-[12px] p-3 text-[11px] leading-relaxed"
+          className="rounded-[10px] p-3 text-[11px] leading-relaxed"
           style={{
-            background: "#3B1F0A",
-            border: "2px solid #E8442A",
+            background: "var(--u-surface-2)",
+            border: "1px solid var(--u-border)",
           }}
         >
-          <div
-            className="font-display text-[14px] uppercase mb-1"
-            style={{ color: "#F5C842" }}
-          >
-            Shopify Connected
+          <div className="flex items-center gap-2 text-[12px] font-medium text-foreground mb-1">
+            <span
+              className="w-[7px] h-[7px] rounded-full shrink-0"
+              style={{ background: "var(--u-success)" }}
+            />
+            Shopify connected
           </div>
-          <div className="text-cream" style={{ opacity: 0.75 }}>
+          <div className="font-mono text-[11px] text-muted-foreground">
             {user.email.split("@")[0]}.myshopify.com
           </div>
         </div>
@@ -300,27 +280,22 @@ export function AppSidebar({ user }: AppSidebarProps) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[12px] border-[2.5px] border-roast hover:border-cream/30 transition-all duration-100 text-left"
-                  style={{ background: "#2a1508" }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] border border-border bg-transparent hover:bg-secondary transition-colors duration-100 text-left"
                 >
                   <div
-                    className="w-8 h-8 rounded-[8px] border-2 border-roast flex items-center justify-center shrink-0 text-[12px] font-extrabold text-cream"
-                    style={{ background: "#E8442A" }}
+                    className="w-8 h-8 rounded-full border border-border bg-secondary flex items-center justify-center shrink-0 text-[12px] font-semibold text-muted-foreground"
                   >
                     {initials}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[12.5px] font-bold text-cream truncate">
+                    <div className="text-[13px] font-medium text-foreground truncate">
                       {displayName}
                     </div>
-                    <div
-                      className="text-[10px] tracking-[.08em] uppercase font-bold capitalize"
-                      style={{ color: "rgba(245,240,216,0.6)" }}
-                    >
+                    <div className="text-[11px] capitalize text-muted-foreground">
                       {user.role}
                     </div>
                   </div>
-                  <ChevronUp size={14} strokeWidth={2.2} className="text-cream/40 shrink-0" />
+                  <ChevronUp size={14} strokeWidth={2} className="text-muted-foreground shrink-0" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" className="w-[--radix-dropdown-menu-trigger-width]">

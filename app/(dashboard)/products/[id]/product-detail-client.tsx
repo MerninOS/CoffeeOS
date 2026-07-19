@@ -249,7 +249,16 @@ function Pill({
 
 const fmt = (n: number) => `$${n.toFixed(3)}`;
 
-const CHART_COLORS = ["#E8442A", "#F5C842", "#E8913A", "#5BC8D5", "#5A7A3A", "#3B1F0A", "#D8D0B8"];
+// Universal Design System data palette — theme-aware, stays in the amber/neutral family.
+const CHART_COLORS = [
+  "var(--u-accent)",
+  "var(--u-info)",
+  "var(--u-success)",
+  "var(--u-warning)",
+  "var(--u-danger)",
+  "var(--u-text-muted)",
+  "var(--u-text-faint)",
+];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 

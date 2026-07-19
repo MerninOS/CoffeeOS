@@ -265,7 +265,7 @@ export default async function DashboardPage() {
                       className="w-full border-[2.5px] border-espresso rounded-t-[8px] shadow-[2px_2px_0_#1C0F05] relative"
                       style={{
                         height: `${Math.max(heightPct, day.lbs > 0 ? 8 : 4)}%`,
-                        background: isPeak ? "#E8442A" : "#3B1F0A",
+                        background: isPeak ? "var(--u-accent)" : "var(--u-text-faint)",
                         minHeight: day.lbs > 0 ? 8 : 4,
                       }}
                     >
@@ -315,12 +315,7 @@ export default async function DashboardPage() {
                     <div
                       className="w-9 h-9 border-[2.5px] border-espresso rounded-[10px] flex items-center justify-center shrink-0"
                       style={{
-                        background:
-                          bgColor === "tomato"
-                            ? "#E8442A"
-                            : bgColor === "sun"
-                            ? "#F5C842"
-                            : "#E8913A",
+                        background: "var(--u-accent-subtle)",
                       }}
                     >
                       <svg
@@ -328,7 +323,7 @@ export default async function DashboardPage() {
                         height="18"
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke={bgColor === "sun" ? "#1C0F05" : "#FDFAF0"}
+                        stroke="var(--u-accent)"
                         strokeWidth="2.2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -487,7 +482,7 @@ export default async function DashboardPage() {
                     height="18"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#FDFAF0"
+                    stroke="var(--u-on-accent)"
                     strokeWidth="2.2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -504,13 +499,13 @@ export default async function DashboardPage() {
                 href="/inventory"
                 className="flex items-center gap-3 p-3 border-[2.5px] border-espresso rounded-[12px] bg-cream hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[4px_4px_0_#1C0F05] transition-all duration-100"
               >
-                <div className="w-9 h-9 bg-espresso border-[2.5px] border-espresso rounded-[10px] flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 bg-secondary border border-border rounded-[10px] flex items-center justify-center shrink-0">
                   <svg
                     width="18"
                     height="18"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#FDFAF0"
+                    stroke="var(--u-text-muted)"
                     strokeWidth="2.2"
                     strokeLinecap="round"
                     strokeLinejoin="round"

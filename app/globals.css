@@ -146,6 +146,144 @@
   --shadow-flat-cream:  5px 5px 0px var(--mernin-cream,    #F5F0D8);
 }
 
+/* ============================================================
+   UNIVERSAL DESIGN SYSTEM — CoffeeOS admin skin
+   Scoped to [data-product="coffeeos"] (the authenticated dashboard
+   subtree only). A clean, neutral, professional admin look with an
+   amber-copper accent and FULL light + dark (toggled via the .dark
+   class on <html>). Replaces the loud Mernin' brand on the dashboard.
+   The dashboard's Tailwind utilities (bg-cream, border-espresso,
+   shadow-flat-*, font-display, bg-primary…) resolve through the
+   --mernin-* / shadcn / --shadow-flat-* vars below, so remapping them
+   here reskins every dashboard surface by cascade. The .lp landing
+   page lives outside this scope and is untouched.
+   ============================================================ */
+[data-product="coffeeos"] {
+  /* ---- Universal neutrals + accent (light) ---- */
+  --u-accent:        oklch(58% 0.15 55);   /* amber-600 */
+  --u-accent-hover:  color-mix(in oklch, var(--u-accent), black 8%);
+  --u-accent-subtle: color-mix(in oklch, var(--u-accent), var(--u-bg) 90%);
+  --u-on-accent:     #ffffff;
+  --u-bg:            oklch(98.5% 0.003 90);
+  --u-surface:       oklch(100% 0 0);
+  --u-surface-2:     oklch(96.5% 0.004 90);
+  --u-border:        oklch(90% 0.005 90);
+  --u-text:          oklch(21% 0.01 90);
+  --u-text-muted:    oklch(48% 0.01 90);
+  --u-text-faint:    oklch(65% 0.008 90);
+  --u-success:       oklch(58% 0.14 150);
+  --u-warning:       oklch(70% 0.15 75);
+  --u-danger:        oklch(55% 0.19 25);
+  --u-info:          oklch(58% 0.12 240);
+
+  /* ---- shadcn semantic tokens → Universal ---- */
+  --background: var(--u-bg);
+  --foreground: var(--u-text);
+  --card: var(--u-surface);
+  --card-foreground: var(--u-text);
+  --popover: var(--u-surface);
+  --popover-foreground: var(--u-text);
+  --primary: var(--u-accent);
+  --primary-foreground: var(--u-on-accent);
+  --secondary: var(--u-surface-2);
+  --secondary-foreground: var(--u-text);
+  --muted: var(--u-surface-2);
+  --muted-foreground: var(--u-text-muted);
+  --accent: var(--u-surface-2);
+  --accent-foreground: var(--u-text);
+  --destructive: var(--u-danger);
+  --destructive-foreground: #ffffff;
+  --border: var(--u-border);
+  --input: var(--u-border);
+  --ring: var(--u-accent);
+  --radius: 10px;
+
+  /* ---- sidebar → light surface rail (themes with the app) ---- */
+  --sidebar: var(--u-surface);
+  --sidebar-foreground: var(--u-text);
+  --sidebar-primary: var(--u-accent);
+  --sidebar-primary-foreground: var(--u-on-accent);
+  --sidebar-accent: var(--u-surface-2);
+  --sidebar-accent-foreground: var(--u-text);
+  --sidebar-border: var(--u-border);
+  --sidebar-ring: var(--u-accent);
+
+  /* ---- Mernin brand palette → Universal (utilities re-resolve) ---- */
+  --mernin-tomato:   var(--u-accent);
+  --mernin-cream:    var(--u-surface);
+  --mernin-chalk:    var(--u-surface);
+  --mernin-espresso: var(--u-text);
+  --mernin-sun:      var(--u-warning);
+  --mernin-sky:      var(--u-info);
+  --mernin-honey:    var(--u-accent-hover);
+  --mernin-matcha:   var(--u-success);
+  --mernin-roast:    var(--u-surface-2);
+  --mernin-fog:      var(--u-border);
+
+  /* ---- type: Space Grotesk (display) / Geist (body) / JetBrains (mono) ---- */
+  --font-sans:     var(--font-sans), system-ui, sans-serif;
+  --font-body:     var(--font-sans), system-ui, sans-serif;
+  --font-display:  var(--font-space-grotesk), 'Space Grotesk', system-ui, sans-serif;
+  --font-headline: var(--font-space-grotesk), 'Space Grotesk', system-ui, sans-serif;
+  --font-mono:     var(--font-jetbrains), 'JetBrains Mono', ui-monospace, monospace;
+
+  /* ---- shadows: flat → subtle elevation ---- */
+  --shadow-flat-sm:     0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-flat-md:     0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-flat-lg:     0 4px 12px rgb(0 0 0 / 0.08);
+  --shadow-flat-tomato: 0 4px 12px rgb(0 0 0 / 0.08);
+  --shadow-flat-cream:  0 1px 2px rgb(0 0 0 / 0.05);
+
+  /* ---- the app surface ---- */
+  font-family: var(--font-sans), system-ui, sans-serif;
+  background: var(--u-bg);
+  color: var(--u-text);
+  min-height: 100vh;
+}
+
+/* ---- Dark theme (next-themes toggles .dark on <html>) ---- */
+.dark [data-product="coffeeos"],
+[data-product="coffeeos"].dark {
+  --u-accent:        oklch(72% 0.14 60);   /* amber-500, brighter for dark */
+  --u-accent-hover:  color-mix(in oklch, var(--u-accent), white 8%);
+  --u-accent-subtle: color-mix(in oklch, var(--u-accent), var(--u-bg) 82%);
+  --u-bg:            oklch(17% 0.008 260);
+  --u-surface:       oklch(21% 0.009 260);
+  --u-surface-2:     oklch(25% 0.010 260);
+  --u-border:        oklch(31% 0.010 260);
+  --u-text:          oklch(93% 0.005 260);
+  --u-text-muted:    oklch(70% 0.008 260);
+  --u-text-faint:    oklch(55% 0.008 260);
+  --shadow-flat-sm:  0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-flat-md:  0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-flat-lg:  0 4px 12px rgb(0 0 0 / 0.45);
+}
+
+/* @theme inline bakes literal offsets/families into utilities, so runtime token
+   overrides can't reach shadow-flat-* / font-display / the chunky brand borders.
+   Re-point those at the class level, scoped to the dashboard. */
+[data-product="coffeeos"] .font-display,
+[data-product="coffeeos"] .font-headline {
+  font-family: var(--font-space-grotesk), 'Space Grotesk', system-ui, sans-serif;
+  letter-spacing: var(--tracking-tight, -0.01em);
+}
+[data-product="coffeeos"] [class*="shadow-flat"],
+[data-product="coffeeos"] [class*="shadow-["] {
+  box-shadow: var(--shadow-flat-md);
+}
+/* Heavy espresso brand borders → subtle 1px Universal hairline. */
+[data-product="coffeeos"] [class~="border-espresso"] { border-color: var(--u-border); }
+[data-product="coffeeos"] [class~="border-[3px]"],
+[data-product="coffeeos"] [class~="border-[4px]"],
+[data-product="coffeeos"] [class~="border-[5px]"],
+[data-product="coffeeos"] [class~="border-[2.5px]"],
+[data-product="coffeeos"] [class~="border-2"],
+[data-product="coffeeos"] [class~="border-b-2"],
+[data-product="coffeeos"] [class~="border-b-[3px]"],
+[data-product="coffeeos"] [class~="border-t-[3px]"] {
+  border-width: 1px;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

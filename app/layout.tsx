@@ -1,12 +1,28 @@
 import React from "react"
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono, Inter } from 'next/font/google'
+import { Geist, Geist_Mono, Inter, Space_Grotesk, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
 const geistMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
+});
+
+// Universal Design System type roles: Space Grotesk (display) + JetBrains Mono (numbers)
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-space-grotesk',
+  display: 'swap',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '700'],
+  variable: '--font-jetbrains',
+  display: 'swap',
 });
 
 // Inter as the Cal Sans stand-in — clean, modern, legible
@@ -41,16 +57,18 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         {process.env.SHOPIFY_CLIENT_ID && (
           <meta name="shopify-api-key" content={process.env.SHOPIFY_CLIENT_ID} />
         )}
         <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js" />
       </head>
-      <body className={`${geist.variable} ${geistMono.variable} ${inter.variable} font-sans antialiased`}>
-        {children}
-        <Analytics />
+      <body className={`${geist.variable} ${geistMono.variable} ${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
+          {children}
+          <Analytics />
+        </ThemeProvider>
       </body>
     </html>
   )

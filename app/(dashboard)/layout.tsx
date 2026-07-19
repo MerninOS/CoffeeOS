@@ -6,6 +6,7 @@ import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/s
 import { AppSidebar } from "@/components/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import { OnboardingTourWidget } from "@/components/onboarding-tour-widget";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function DashboardLayout({
   children,
@@ -100,14 +101,17 @@ export default async function DashboardLayout({
   };
 
   return (
-    <SidebarProvider>
+    <SidebarProvider data-product="coffeeos">
       <AppSidebar user={userData} />
       <SidebarInset>
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b-[3px] border-espresso bg-cream px-4">
-          <SidebarTrigger className="-ml-1 text-espresso hover:bg-fog/50" />
-          <Separator orientation="vertical" className="mr-2 h-4 bg-fog" />
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/80 backdrop-blur px-4 sticky top-0 z-10">
+          <SidebarTrigger className="-ml-1 text-muted-foreground hover:bg-secondary hover:text-foreground" />
+          <Separator orientation="vertical" className="mr-2 h-4 bg-border" />
+          <div className="ml-auto">
+            <ThemeToggle />
+          </div>
         </header>
-        <main className="flex-1 overflow-auto bg-cream">{children}</main>
+        <main className="flex-1 overflow-auto bg-transparent">{children}</main>
         {onboardingStatus ? (
           <OnboardingTourWidget userId={user.id} initialStatus={onboardingStatus} />
         ) : null}
