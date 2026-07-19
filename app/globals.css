@@ -234,10 +234,16 @@
   --shadow-flat-tomato: 0 4px 12px rgb(0 0 0 / 0.08);
   --shadow-flat-cream:  0 1px 2px rgb(0 0 0 / 0.05);
 
-  /* ---- the app surface ---- */
+  /* ---- text defaults (safe to inherit into portaled modals too) ---- */
   font-family: var(--font-sans), system-ui, sans-serif;
-  background: var(--u-bg);
   color: var(--u-text);
+}
+
+/* App-surface properties apply ONLY to the dashboard wrapper — never to the
+   portaled modals / menus that also carry data-product="coffeeos" (those have a
+   data-slot). Otherwise the modal inherits min-height:100vh and its grid stretches. */
+[data-product="coffeeos"]:not([data-slot]) {
+  background: var(--u-bg);
   min-height: 100vh;
 }
 
