@@ -52,7 +52,7 @@ import {
   getTotalAdditionalCosts as cogsAdditional,
   getOrderCogs as cogsOrder,
 } from "@/lib/orders/cogs";
-import { type PeriodValue } from "@/lib/orders/constants";
+import { PERIODS, type PeriodValue } from "@/lib/orders/constants";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -181,17 +181,23 @@ function StatCard({
   label,
   value,
   valueClassName = "",
+  valueTestId,
 }: {
   label: string;
   value: string;
   valueClassName?: string;
+  /** Test hook, not styling — survives the CoffeeOS#65 visual rebuild. */
+  valueTestId?: string;
 }) {
   return (
     <div className="bg-chalk border-[3px] border-espresso rounded-[14px] shadow-flat-sm px-4 py-3 flex flex-col gap-1">
       <div className="text-[10px] font-extrabold uppercase tracking-[.1em] text-espresso/60">
         {label}
       </div>
-      <div className={`text-[22px] font-extrabold text-espresso leading-none ${valueClassName}`}>
+      <div
+        data-testid={valueTestId}
+        className={`text-[22px] font-extrabold text-espresso leading-none ${valueClassName}`}
+      >
         {value}
       </div>
     </div>
@@ -726,6 +732,7 @@ export function OrdersClient({
   allComponents,
   coffeeInventory,
   isAdminConfigured,
+  period,
   totals,
 }: OrdersClientProps) {
   const router = useRouter();
@@ -853,6 +860,9 @@ export function OrdersClient({
   const totalProfit = totals.profit;
   const avgMargin = totals.margin;
 
+  // "1 year" reads badly inside "the last …", so say it the way a person would.
+  const periodPhrase = period === "365" ? "Year" : `${period} Days`;
+
   if (!isAdminConfigured) {
     return (
       <div className="p-6 space-y-6">
@@ -897,20 +907,45 @@ export function OrdersClient({
             Track revenue, COGS, and profit per order
           </p>
         </div>
-        <Btn onClick={handleSync} disabled={isSyncing}>
-          <RefreshCw
-            size={13}
-            strokeWidth={2.2}
-            className={`mr-1.5 ${isSyncing ? "animate-spin" : ""}`}
-          />
-          <span className="hidden sm:inline">{isSyncing ? "Syncing..." : "Sync Orders"}</span>
-          <span className="sm:hidden">{isSyncing ? "..." : "Sync"}</span>
-        </Btn>
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          {/*
+            PROVISIONAL period control. Deliberately built from the local `Btn`
+            in its current loud-Mernin' styling: this ticket changes where the
+            numbers come from, not how the page looks. CoffeeOS#65 replaces this
+            with the instrument SegmentedControl — PERIODS is capped at four
+            options for exactly that.
+          */}
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            {PERIODS.map((p) => (
+              <Btn
+                key={p.value}
+                size="sm"
+                variant={p.value === period ? "primary" : "outline"}
+                onClick={() => router.push(`/orders?period=${p.value}`)}
+              >
+                {p.label}
+              </Btn>
+            ))}
+          </div>
+          <Btn onClick={handleSync} disabled={isSyncing}>
+            <RefreshCw
+              size={13}
+              strokeWidth={2.2}
+              className={`mr-1.5 ${isSyncing ? "animate-spin" : ""}`}
+            />
+            <span className="hidden sm:inline">{isSyncing ? "Syncing..." : "Sync Orders"}</span>
+            <span className="sm:hidden">{isSyncing ? "..." : "Sync"}</span>
+          </Btn>
+        </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Total Revenue" value={`$${totalRevenue.toFixed(2)}`} />
+        <StatCard
+          label="Total Revenue"
+          value={`$${totalRevenue.toFixed(2)}`}
+          valueTestId="stat-revenue"
+        />
         <StatCard label="Total COGS" value={`$${totalCogs.toFixed(2)}`} />
         <StatCard
           label="Gross Profit"
@@ -940,11 +975,20 @@ export function OrdersClient({
       {orders.length === 0 ? (
         <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md flex flex-col items-center justify-center py-14 text-center px-6">
           <ShoppingCart size={32} strokeWidth={1.5} className="text-espresso/30 mb-3" />
+          {/*
+            The list is period-scoped now, so "No Orders Yet" would be a lie in
+            the common case: the orders may exist, just outside this window.
+            Nothing here distinguishes "no orders at all" from "none in range",
+            so name the period and point at the way out. Search is scoped the
+            same way, which is why this has to be said rather than implied.
+          */}
           <h3 className="font-extrabold text-[15px] uppercase tracking-[.06em] text-espresso mb-1">
-            No Orders Yet
+            Nothing In The Last {periodPhrase}
           </h3>
           <p className="text-[13px] text-espresso/50 font-medium">
-            Click &quot;Sync Orders&quot; to import from Shopify
+            {period === "365"
+              ? "Nothing synced this year. Hit “Sync Orders” to pull from Shopify."
+              : "Try a longer period, or hit “Sync Orders” to pull from Shopify."}
           </p>
         </div>
       ) : (
@@ -1080,6 +1124,7 @@ export function OrdersClient({
                   return (
                     <React.Fragment key={order.id}>
                       <tr
+                        data-testid="order-row"
                         className="border-b border-dashed border-fog/70 cursor-pointer hover:bg-cream/60 transition-colors"
                         onClick={() => toggleOrderExpanded(order.id)}
                       >
@@ -1105,7 +1150,7 @@ export function OrdersClient({
                             : <span className="text-espresso/30">—</span>
                           }
                         </td>
-                        <td className="px-3 py-3 text-right font-bold text-espresso">${revenue.toFixed(2)}</td>
+                        <td data-testid="row-revenue" className="px-3 py-3 text-right font-bold text-espresso">${revenue.toFixed(2)}</td>
                         <td className="px-3 py-3 text-right font-bold text-espresso">${cogs.toFixed(2)}</td>
                         <td className={`px-3 py-3 text-right font-bold ${profit >= 0 ? "text-matcha" : "text-tomato"}`}>${profit.toFixed(2)}</td>
                         <td className="px-3 py-3 text-right"><MarginPill margin={margin} /></td>
