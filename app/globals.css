@@ -1,6 +1,15 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+/* ============================================================
+   INSTRUMENT DESIGN SYSTEM — operator surfaces only
+   Every token is scoped to [data-surface="app"], so nothing here reaches the
+   landing page, /pricing, or /auth/*. Those keep the loud Mernin' brand and
+   resolve through the :root + @theme blocks further down.
+   The scope attribute is set by <AppShell>, not here.
+   ============================================================ */
+@import '@merninos/ui/instrument/styles.css';
+
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================
@@ -47,36 +56,6 @@
   --sidebar-accent: #2a1508;
   --sidebar-accent-foreground: #F5F0D8;
   --sidebar-border: #1C0F05;
-  --sidebar-ring: #E8442A;
-}
-
-.dark {
-  --background: #1C0F05;
-  --foreground: #F5F0D8;
-  --card: #3B1F0A;
-  --card-foreground: #F5F0D8;
-  --popover: #3B1F0A;
-  --popover-foreground: #F5F0D8;
-  --primary: #E8442A;
-  --primary-foreground: #F5F0D8;
-  --secondary: #3B1F0A;
-  --secondary-foreground: #F5F0D8;
-  --muted: #3B1F0A;
-  --muted-foreground: #D8D0B8;
-  --accent: #F5C842;
-  --accent-foreground: #1C0F05;
-  --destructive: #E8442A;
-  --destructive-foreground: #F5F0D8;
-  --border: #3B1F0A;
-  --input: #3B1F0A;
-  --ring: #E8442A;
-  --sidebar: #1C0F05;
-  --sidebar-foreground: #F5F0D8;
-  --sidebar-primary: #E8442A;
-  --sidebar-primary-foreground: #F5F0D8;
-  --sidebar-accent: #3B1F0A;
-  --sidebar-accent-foreground: #F5F0D8;
-  --sidebar-border: #3B1F0A;
   --sidebar-ring: #E8442A;
 }
 

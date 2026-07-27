@@ -1,0 +1,8 @@
+# pnpm 11 settings file. NOT a workspace definition — there is no `packages:` key.
+#
+# pnpm blocks dependency build scripts by default and treats the unresolved case
+# as a hard error, which makes `next dev` fail before it starts (Next runs a pnpm
+# deps-status check on boot). sharp is Next's own image-optimization dependency
+# and needs its native build step.
+allowBuilds:
+  sharp: true
