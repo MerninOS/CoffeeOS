@@ -1,20 +1,19 @@
 "use client";
 
 import React from "react";
-import { Btn } from "./primitives";
+import { SegmentedControl } from "@merninos/ui/instrument";
 import { PERIODS, type PeriodValue } from "@/lib/orders/constants";
 
 /**
  * The period presets for /orders.
  *
- * PROVISIONAL control, moved verbatim out of orders-client.tsx during the
- * CoffeeOS#65 Stage A extraction. It is still built from the local `Btn` in its
- * current loud-Mernin' styling on purpose: Stage A relocates this markup, it
- * does not restyle it. Stage B replaces it with the instrument
- * SegmentedControl — PERIODS is capped at four options for exactly that.
+ * Now the instrument SegmentedControl, which is what PERIODS was capped at four
+ * options for. Navigation still lives in the parent and is passed in, so the
+ * `router.push` call site is unchanged.
  *
- * Navigation stays in the parent and is passed in, so the `router.push` call
- * site is unchanged from before the extraction.
+ * `onChange` hands back a plain string, so it is narrowed here rather than at
+ * the call site — PERIODS is the only source of the values, so the cast is safe
+ * and the parent keeps a `PeriodValue` callback.
  */
 
 export function PeriodControl({
@@ -25,17 +24,11 @@ export function PeriodControl({
   onSelect: (value: PeriodValue) => void;
 }) {
   return (
-    <div className="flex items-center gap-1.5 flex-wrap justify-end">
-      {PERIODS.map((p) => (
-        <Btn
-          key={p.value}
-          size="sm"
-          variant={p.value === period ? "primary" : "outline"}
-          onClick={() => onSelect(p.value)}
-        >
-          {p.label}
-        </Btn>
-      ))}
-    </div>
+    <SegmentedControl
+      size="sm"
+      value={period}
+      onChange={(value) => onSelect(value as PeriodValue)}
+      options={PERIODS.map((p) => ({ value: p.value, label: p.label }))}
+    />
   );
 }
