@@ -223,8 +223,12 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function StatusPill({ status, type }: { status: string; type: "financial" | "fulfillment" }) {
-  const s = status.toLowerCase();
+function StatusPill({ status, type }: { status: string | null; type: "financial" | "fulfillment" }) {
+  // Shopify leaves fulfillment_status null for an unfulfilled order, so this is
+  // reached with null for real data — it threw "Cannot read properties of null"
+  // and took the whole page down.
+  const label = status ?? (type === "fulfillment" ? "unfulfilled" : "unknown");
+  const s = label.toLowerCase();
   let bg = "bg-fog text-espresso border-fog";
   if (type === "financial") {
     if (s === "paid") bg = "bg-matcha/20 text-matcha border-matcha";
@@ -237,7 +241,7 @@ function StatusPill({ status, type }: { status: string; type: "financial" | "ful
   }
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full border-[2px] ${bg} text-[10px] font-extrabold uppercase tracking-[.06em]`}>
-      {status}
+      {label}
     </span>
   );
 }
