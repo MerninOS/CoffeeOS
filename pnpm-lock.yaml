@@ -12,8 +12,8 @@ importers:
         specifier: ^3.10.0
         version: 3.10.0(react-hook-form@7.71.1(react@19.2.0))
       '@merninos/ui':
-        specifier: ^0.5.0
-        version: 0.5.0(@types/react-dom@19.2.3(@types/react@19.2.9))(@types/react@19.2.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(tailwindcss@4.1.18)
+        specifier: ^0.6.0
+        version: 0.6.0(@types/react-dom@19.2.3(@types/react@19.2.9))(@types/react@19.2.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(tailwindcss@4.1.18)
       '@radix-ui/react-accordion':
         specifier: 1.2.2
         version: 1.2.2(@types/react-dom@19.2.3(@types/react@19.2.9))(@types/react@19.2.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -401,8 +401,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@merninos/ui@0.5.0':
-    resolution: {integrity: sha512-g84DYy5vgYuBXLnfMsFZg5+ESKi9vmNZuLZe8srkqOj9y0kDh5NQCR07DwsVRcSvVAwhoNGftzTWCoGIns4Dzg==, tarball: https://npm.pkg.github.com/download/@merninos/ui/0.5.0/b0c734a213b215990e60f398d5b3b9e82766e24e}
+  '@merninos/ui@0.6.0':
+    resolution: {integrity: sha512-VhYS4EPNJGlsbD1l31bcB3HSrx7YM5+6FMLWfk/ooTLsjj0BfCR00QOhoQyvdsaIVSRfcHQKy4uWKpZjvQPQFQ==, tarball: https://npm.pkg.github.com/download/@merninos/ui/0.6.0/7874f75bdc679cc53009ed5b94c404449cad360b}
     peerDependencies:
       react: ^18 || ^19
       react-dom: ^18 || ^19
@@ -2164,7 +2164,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@merninos/ui@0.5.0(@types/react-dom@19.2.3(@types/react@19.2.9))(@types/react@19.2.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(tailwindcss@4.1.18)':
+  '@merninos/ui@0.6.0(@types/react-dom@19.2.3(@types/react@19.2.9))(@types/react@19.2.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(tailwindcss@4.1.18)':
     dependencies:
       '@radix-ui/react-dialog': 1.1.23(@types/react-dom@19.2.3(@types/react@19.2.9))(@types/react@19.2.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@radix-ui/react-slot': 1.1.1(@types/react@19.2.9)(react@19.2.0)
