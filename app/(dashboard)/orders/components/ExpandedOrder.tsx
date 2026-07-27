@@ -222,12 +222,33 @@ export function ExpandedOrder({
             </span>
             <span className="flex flex-col gap-0.5 min-[900px]:block min-[900px]:text-right">
               <span style={overline} className="min-[900px]:hidden">Unit COGS</span>
-              {item.product_id ? (
-                <span style={mono}>{money(productCogsMap[item.product_id] || 0)}</span>
+              {/*
+                `not set` when there is no cost to show, NOT merely when the line
+                item has no product_id.
+
+                The earlier condition tested `item.product_id`, which only catches
+                an unlinked line item. A linked product with no recipe still has a
+                map entry — page.tsx assigns every product a total, so an uncosted
+                one is 0, not undefined — so it rendered "$0.00". That reads as
+                "this costs nothing", which is a claim about the product. The truth
+                is that nobody has told CoffeeOS what it is made of, and only the
+                roaster can. Printing a confident zero for missing data is how a
+                94.9% margin looks credible.
+
+                Same rule as the COGS column in OrdersWorksheetTable: no cost at
+                all → "not set"; a real figure → the figure.
+              */}
+              {item.product_id && (productCogsMap[item.product_id] || 0) > 0 ? (
+                <span style={mono} data-testid="line-item-cogs">
+                  {money(productCogsMap[item.product_id])}
+                </span>
               ) : (
-                // Red marks what needs the operator, and this is the root cause
-                // of an uncosted order — the product has no components attached.
-                <span style={{ ...mono, color: "var(--danger)" }}>not set</span>
+                <span
+                  style={{ ...mono, color: "var(--danger)" }}
+                  data-testid="line-item-cogs"
+                >
+                  not set
+                </span>
               )}
             </span>
           </div>
