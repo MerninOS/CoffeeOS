@@ -45,6 +45,14 @@ import {
   removeOrderCustomCost,
   createRoastRequestForOrder,
 } from "./actions";
+import {
+  getLineItemCogs as cogsLineItem,
+  getOrderComponentsCogs as cogsOrderComponents,
+  getOrderCustomCostsTotal as cogsCustomCosts,
+  getTotalAdditionalCosts as cogsAdditional,
+  getOrderCogs as cogsOrder,
+} from "@/lib/orders/cogs";
+import { PERIODS, type PeriodValue } from "@/lib/orders/constants";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -111,6 +119,15 @@ interface OrdersClientProps {
   allComponents: ComponentData[];
   coffeeInventory: CoffeeInventory[];
   isAdminConfigured: boolean;
+  /** Active window. The list below is only the orders inside it. */
+  period: PeriodValue;
+  /**
+   * Aggregates over the WHOLE period, computed server-side. Not derived from
+   * `initialOrders` — that array is one page, and summing it would under-report
+   * as soon as a period exceeds the page limit.
+   */
+  totals: { revenue: number; cogs: number; profit: number; margin: number };
+  missingCogsCount: number;
 }
 
 // ── Primitives ──────────────────────────────────────────────────────────────
@@ -164,17 +181,23 @@ function StatCard({
   label,
   value,
   valueClassName = "",
+  valueTestId,
 }: {
   label: string;
   value: string;
   valueClassName?: string;
+  /** Test hook, not styling — survives the CoffeeOS#65 visual rebuild. */
+  valueTestId?: string;
 }) {
   return (
     <div className="bg-chalk border-[3px] border-espresso rounded-[14px] shadow-flat-sm px-4 py-3 flex flex-col gap-1">
       <div className="text-[10px] font-extrabold uppercase tracking-[.1em] text-espresso/60">
         {label}
       </div>
-      <div className={`text-[22px] font-extrabold text-espresso leading-none ${valueClassName}`}>
+      <div
+        data-testid={valueTestId}
+        className={`text-[22px] font-extrabold text-espresso leading-none ${valueClassName}`}
+      >
         {value}
       </div>
     </div>
@@ -709,6 +732,8 @@ export function OrdersClient({
   allComponents,
   coffeeInventory,
   isAdminConfigured,
+  period,
+  totals,
 }: OrdersClientProps) {
   const router = useRouter();
   const [orders, setOrders] = useState(initialOrders);
@@ -756,23 +781,15 @@ export function OrdersClient({
     setExpandedOrders(next);
   };
 
-  const getLineItemCogs = (item: OrderLineItem) => {
-    if (!item.product_id) return 0;
-    return (productCogsMap[item.product_id] || 0) * item.quantity;
-  };
-  const getOrderComponentsCogs = (order: Order) =>
-    (order.order_components || []).reduce(
-      (sum, oc) => sum + (oc.components?.cost_per_unit || 0) * oc.quantity,
-      0
-    );
-  const getOrderCustomCostsTotal = (order: Order) =>
-    (order.order_custom_costs || []).reduce((sum, cc) => sum + cc.amount, 0);
-  const getTotalAdditionalCosts = (order: Order) =>
-    getOrderComponentsCogs(order) + getOrderCustomCostsTotal(order);
-  const getOrderCogs = (order: Order) => {
-    const lineItemsCogs = order.order_line_items.reduce((sum, item) => sum + getLineItemCogs(item), 0);
-    return lineItemsCogs + getTotalAdditionalCosts(order);
-  };
+  // The costing math now lives in @/lib/orders/cogs so the per-row figures and
+  // the server-side range aggregate cannot drift apart. These adapters only bind
+  // `productCogsMap`, which the module takes explicitly instead of closing over —
+  // so every call site below, and OrderExpandedContent's props, stay unchanged.
+  const getLineItemCogs = (item: OrderLineItem) => cogsLineItem(item, productCogsMap);
+  const getOrderComponentsCogs = (order: Order) => cogsOrderComponents(order);
+  const getOrderCustomCostsTotal = (order: Order) => cogsCustomCosts(order);
+  const getTotalAdditionalCosts = (order: Order) => cogsAdditional(order);
+  const getOrderCogs = (order: Order) => cogsOrder(order, productCogsMap);
 
   const handleAddComponent = async (orderId: string) => {
     if (!selectedComponentId || componentQuantity <= 0) return;
@@ -835,10 +852,16 @@ export function OrdersClient({
     }
   };
 
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
-  const totalCogs = orders.reduce((sum, o) => sum + getOrderCogs(o), 0);
-  const totalProfit = totalRevenue - totalCogs;
-  const avgMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+  // From the server, over the whole period. These used to be reduced over
+  // `orders`, which was correct only while that fetch was unbounded — now that
+  // it is limited, summing it would report a page under a period's label.
+  const totalRevenue = totals.revenue;
+  const totalCogs = totals.cogs;
+  const totalProfit = totals.profit;
+  const avgMargin = totals.margin;
+
+  // "1 year" reads badly inside "the last …", so say it the way a person would.
+  const periodPhrase = period === "365" ? "Year" : `${period} Days`;
 
   if (!isAdminConfigured) {
     return (
@@ -884,20 +907,45 @@ export function OrdersClient({
             Track revenue, COGS, and profit per order
           </p>
         </div>
-        <Btn onClick={handleSync} disabled={isSyncing}>
-          <RefreshCw
-            size={13}
-            strokeWidth={2.2}
-            className={`mr-1.5 ${isSyncing ? "animate-spin" : ""}`}
-          />
-          <span className="hidden sm:inline">{isSyncing ? "Syncing..." : "Sync Orders"}</span>
-          <span className="sm:hidden">{isSyncing ? "..." : "Sync"}</span>
-        </Btn>
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          {/*
+            PROVISIONAL period control. Deliberately built from the local `Btn`
+            in its current loud-Mernin' styling: this ticket changes where the
+            numbers come from, not how the page looks. CoffeeOS#65 replaces this
+            with the instrument SegmentedControl — PERIODS is capped at four
+            options for exactly that.
+          */}
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            {PERIODS.map((p) => (
+              <Btn
+                key={p.value}
+                size="sm"
+                variant={p.value === period ? "primary" : "outline"}
+                onClick={() => router.push(`/orders?period=${p.value}`)}
+              >
+                {p.label}
+              </Btn>
+            ))}
+          </div>
+          <Btn onClick={handleSync} disabled={isSyncing}>
+            <RefreshCw
+              size={13}
+              strokeWidth={2.2}
+              className={`mr-1.5 ${isSyncing ? "animate-spin" : ""}`}
+            />
+            <span className="hidden sm:inline">{isSyncing ? "Syncing..." : "Sync Orders"}</span>
+            <span className="sm:hidden">{isSyncing ? "..." : "Sync"}</span>
+          </Btn>
+        </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Total Revenue" value={`$${totalRevenue.toFixed(2)}`} />
+        <StatCard
+          label="Total Revenue"
+          value={`$${totalRevenue.toFixed(2)}`}
+          valueTestId="stat-revenue"
+        />
         <StatCard label="Total COGS" value={`$${totalCogs.toFixed(2)}`} />
         <StatCard
           label="Gross Profit"
@@ -927,11 +975,20 @@ export function OrdersClient({
       {orders.length === 0 ? (
         <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md flex flex-col items-center justify-center py-14 text-center px-6">
           <ShoppingCart size={32} strokeWidth={1.5} className="text-espresso/30 mb-3" />
+          {/*
+            The list is period-scoped now, so "No Orders Yet" would be a lie in
+            the common case: the orders may exist, just outside this window.
+            Nothing here distinguishes "no orders at all" from "none in range",
+            so name the period and point at the way out. Search is scoped the
+            same way, which is why this has to be said rather than implied.
+          */}
           <h3 className="font-extrabold text-[15px] uppercase tracking-[.06em] text-espresso mb-1">
-            No Orders Yet
+            Nothing In The Last {periodPhrase}
           </h3>
           <p className="text-[13px] text-espresso/50 font-medium">
-            Click &quot;Sync Orders&quot; to import from Shopify
+            {period === "365"
+              ? "Nothing synced this year. Hit “Sync Orders” to pull from Shopify."
+              : "Try a longer period, or hit “Sync Orders” to pull from Shopify."}
           </p>
         </div>
       ) : (
@@ -1067,6 +1124,7 @@ export function OrdersClient({
                   return (
                     <React.Fragment key={order.id}>
                       <tr
+                        data-testid="order-row"
                         className="border-b border-dashed border-fog/70 cursor-pointer hover:bg-cream/60 transition-colors"
                         onClick={() => toggleOrderExpanded(order.id)}
                       >
@@ -1092,7 +1150,7 @@ export function OrdersClient({
                             : <span className="text-espresso/30">—</span>
                           }
                         </td>
-                        <td className="px-3 py-3 text-right font-bold text-espresso">${revenue.toFixed(2)}</td>
+                        <td data-testid="row-revenue" className="px-3 py-3 text-right font-bold text-espresso">${revenue.toFixed(2)}</td>
                         <td className="px-3 py-3 text-right font-bold text-espresso">${cogs.toFixed(2)}</td>
                         <td className={`px-3 py-3 text-right font-bold ${profit >= 0 ? "text-matcha" : "text-tomato"}`}>${profit.toFixed(2)}</td>
                         <td className="px-3 py-3 text-right"><MarginPill margin={margin} /></td>

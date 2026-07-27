@@ -37,5 +37,17 @@ export default defineConfig({
     url: 'http://localhost:3000/auth/login',
     reuseExistingServer: true,
     timeout: 180_000,
+    env: {
+      // Criterion 5 can only detect its bug when the page limit is BINDING —
+      // i.e. there are more orders in range than one page returns. At the
+      // production default (100) against the demo seed the page and the range
+      // are the same set, so a broken implementation returns identical numbers
+      // to a correct one and the test would pass while proving nothing.
+      //
+      // Setting it low here is far cheaper than seeding 101 orders, and means
+      // the suite is meaningful by default rather than red by default — a test
+      // that always fails is a test people delete.
+      ORDERS_PAGE_LIMIT: '3',
+    },
   },
 })
