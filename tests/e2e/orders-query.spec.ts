@@ -11,7 +11,18 @@ import { test, expect } from '@playwright/test'
  * plausible smaller number.
  */
 
-const LIMIT = Number(process.env.ORDERS_PAGE_LIMIT ?? 100)
+// Desktop only. These assert QUERY behaviour, not layout — and the page still
+// ships a duplicate `md:hidden` mobile rendering, so the `order-row` testid sits
+// on the desktop rows only. On mobile they are present in the DOM but CSS-hidden:
+// .count() works while .toBeVisible() does not. Running both projects would be
+// asserting against a hidden tree for no added coverage. CoffeeOS#65 deletes the
+// duplicate rendering; this scoping can go with it.
+test.describe.configure({ mode: 'default' })
+test.skip(({ isMobile }) => !!isMobile, 'query behaviour — desktop project only')
+
+// Must match playwright.config.ts's webServer env, which sets this low so the
+// limit is binding (see the comment there).
+const LIMIT = Number(process.env.ORDERS_PAGE_LIMIT ?? 3)
 const money = (s: string) => Number(s.replace(/[^0-9.-]/g, ''))
 
 const rows = (page: import('@playwright/test').Page) =>
