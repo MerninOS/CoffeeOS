@@ -47,6 +47,21 @@ export default function OrdersLoading() {
         <SkeletonBar className="h-[14px]" width={260} />
       </div>
 
+      {/* Period control. Sits between the header and the hero on the real page,
+          so it has to sit there here too — omitting it shifted everything below
+          it upward by the strip's height plus a gap the moment data arrived,
+          which is exactly the jump this skeleton exists to prevent. */}
+      <div
+        className="flex flex-wrap items-center gap-3"
+        style={{
+          paddingBottom: "var(--space-4)",
+          borderBottom: "1px solid var(--hairline)",
+        }}
+      >
+        <SkeletonBar className="h-[11px]" width={52} />
+        <SkeletonBar className="h-[30px]" width={260} />
+      </div>
+
       {/* Hero + strip */}
       <div className="flex flex-col gap-6 min-[1400px]:flex-row min-[1400px]:items-end">
         <div className="min-[1400px]:flex-[0_1_340px]">

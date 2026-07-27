@@ -26,13 +26,11 @@ import path from 'node:path'
  * miss the aggregate silently drifting from the rows.
  */
 
-// Desktop only — same reasoning as orders-query.spec.ts. The page still ships a
-// duplicate `md:hidden` mobile rendering, so `order-row`/`row-cogs` exist only
-// on the desktop table and the expanded panel is rendered TWICE (the mobile copy
-// first in DOM order). Everything below scopes to `:visible` for that reason.
-// Stage B deletes the duplicate rendering; this scoping can go with it.
+// Runs on BOTH projects — same reasoning as orders-query.spec.ts. Stage B
+// deleted the duplicate `md:hidden` rendering, so `order-row`/`row-cogs` and the
+// expanded panel each exist exactly ONCE in the DOM and restack below 1180px.
+// The mobile project therefore exercises the stacked worksheet for real.
 test.describe.configure({ mode: 'default' })
-test.skip(({ isMobile }) => !!isMobile, 'editing capabilities — desktop project only')
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -55,7 +53,26 @@ const COMPONENT = /^Roastery Labor/
  */
 const ROAST_COFFEE = /^Ethiopia Yirgacheffe/
 
-const money = (s: string) => Number(s.replace(/[^0-9.-]/g, ''))
+/**
+ * Strict money parser. It THROWS on a non-numeric string rather than coercing.
+ *
+ * `Number("not set".replace(/[^0-9.-]/g,''))` is `Number("")`, which is 0 — so
+ * the lenient version silently read the worksheet's `not set` sentinel as a real
+ * $0.00 figure. That is invisible while the seeded first order happens to be
+ * costed, and turns into a confident "removing a component broke COGS" failure
+ * the day the seed changes. Fail loudly at the parse instead.
+ */
+const money = (s: string) => {
+  if (!/\d/.test(s)) throw new Error(`expected a money figure, got ${JSON.stringify(s)}`)
+  return Number(s.replace(/[^0-9.-]/g, ''))
+}
+
+/** The worksheet prints this instead of `$0.00` when an order has NO cost at
+ *  all (OrdersWorksheetTable: `missing && cogs === 0`). It is a rendering of
+ *  zero, not a figure — so zero has two legitimate spellings in `row-cogs`. */
+const COGS_UNSET = 'not set'
+const cogsValue = (text: string) => (text.trim() === COGS_UNSET ? 0 : money(text))
+
 const usd = (n: number) => `$${n.toFixed(2)}`
 
 // ── Cleanup safety net ──────────────────────────────────────────────────────
@@ -124,11 +141,9 @@ test.afterAll(async () => {
 
 // ── Page helpers ────────────────────────────────────────────────────────────
 
-/** The expanded panel of the DESKTOP table. `:visible` is load-bearing: the
- *  mobile copy of this panel is earlier in the DOM and merely CSS-hidden, so
- *  `.first()` alone would drive a hidden tree and every click would fail. */
-const panelOf = (page: Page) =>
-  page.locator('[data-testid="order-expanded"]:visible').first()
+/** The expanded panel. One rendering now, at every width — the `:visible`
+ *  qualifier this used to carry was working around the deleted mobile copy. */
+const panelOf = (page: Page) => page.getByTestId('order-expanded').first()
 
 const rowCogsOf = (page: Page) => page.getByTestId('row-cogs').first()
 const statCogsOf = (page: Page) => page.getByTestId('stat-cogs')
@@ -164,22 +179,40 @@ async function openFirstOrder(page: Page) {
   return panel
 }
 
-/** Reads the two COGS figures currently on screen. */
+/** Reads the two COGS figures currently on screen. `row-cogs` may legitimately
+ *  read `not set`; `stat-cogs` is an aggregate and is always a figure. */
 async function readCogs(page: Page) {
   return {
-    row: money(await rowCogsOf(page).innerText()),
+    row: cogsValue(await rowCogsOf(page).innerText()),
     stat: money(await statCogsOf(page).innerText()),
   }
 }
 
-/** Asserts BOTH figures settled on `before + delta` after `router.refresh()`. */
+/**
+ * Asserts BOTH figures settled on `before + delta` after `router.refresh()`.
+ *
+ * The expected-zero case accepts EITHER spelling, because an order that started
+ * uncosted renders `not set` again once its mutation is undone — asserting
+ * `$0.00` there would fail on a correct implementation. `expect.poll` replaces
+ * `toHaveText` in that branch only, to keep the same retry-until-refresh-settles
+ * behaviour that made `toHaveText` the right choice everywhere else.
+ */
 async function expectCogsDelta(
   page: Page,
   before: { row: number; stat: number },
   delta: number
 ) {
-  await expect(rowCogsOf(page), 'order COGS did not move by the expected amount')
-    .toHaveText(usd(before.row + delta))
+  const expectedRow = before.row + delta
+  if (expectedRow === 0) {
+    await expect
+      .poll(async () => cogsValue(await rowCogsOf(page).innerText()), {
+        message: `order COGS did not settle back to zero ("${usd(0)}" or "${COGS_UNSET}")`,
+      })
+      .toBe(0)
+  } else {
+    await expect(rowCogsOf(page), 'order COGS did not move by the expected amount')
+      .toHaveText(usd(expectedRow))
+  }
   await expect(statCogsOf(page), 'period COGS aggregate did not move with the row')
     .toHaveText(usd(before.stat + delta))
 }

@@ -136,6 +136,11 @@ export default async function OrdersPage({
     .eq("user_id", ownerId)
     .gte("created_at_shopify", since);
 
+  // `rangeRows.length` is the honest denominator for anything the UI phrases as
+  // "in the last N days". `orders` above is capped at ORDERS_PAGE_LIMIT, so the
+  // client cannot derive this — and a footer that counts the page while naming
+  // the period is the same class of defect Criterion 5 guards the aggregate
+  // against, just in copy instead of arithmetic.
   const rangeRows: CostableOrder[] = aggregateRows || [];
   const totals = aggregate(rangeRows, productCogsMap);
 
@@ -155,6 +160,7 @@ export default async function OrdersPage({
       period={period}
       totals={totals}
       missingCogsCount={missingCogsCount}
+      rangeCount={rangeRows.length}
     />
   );
 }

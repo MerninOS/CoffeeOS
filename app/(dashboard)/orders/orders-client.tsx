@@ -95,6 +95,12 @@ interface OrdersClientProps {
   totals: { revenue: number; cogs: number; profit: number; margin: number };
   /** Also over the whole period, for the same reason. */
   missingCogsCount: number;
+  /**
+   * How many orders the period actually holds. `initialOrders` is one page of
+   * at most ORDERS_PAGE_LIMIT, so it is NOT a period count and must never be
+   * rendered as one — see the footer and the missing-COGS banner below.
+   */
+  rangeCount: number;
 }
 
 /** The costed/uncosted filter. Not a period — this one is purely a view of the
@@ -150,6 +156,7 @@ export function OrdersClient({
   period,
   totals,
   missingCogsCount,
+  rangeCount,
 }: OrdersClientProps) {
   const router = useRouter();
   const [orders, setOrders] = useState(initialOrders);
@@ -189,6 +196,26 @@ export function OrdersClient({
       const uncosted = needsCogs(order, productCogsMap);
       return cogsFilter === "missing" ? uncosted : !uncosted;
     });
+
+  /**
+   * PAGE vs PERIOD.
+   *
+   * `orders` is one page, capped at ORDERS_PAGE_LIMIT; `rangeCount` and
+   * `missingCogsCount` cover the whole period. Every sentence below that names
+   * the period has to read the second pair, and every control that acts on the
+   * list has to read the first — mixing them is how "100 of 100 orders shown ·
+   * last 30 days" ends up asserting a period figure it cannot support, and how a
+   * banner counting 37 uncosted orders ends up with an action that reveals none
+   * of them (the list is newest-first and an uncosted backlog skews old).
+   */
+  const pageCoversRange = orders.length >= rangeCount;
+
+  /** Uncosted orders reachable by the client-side filter — the page, not the
+   *  period. This is what the banner's action can actually produce. */
+  const missingCogsOnPage = orders.filter((order) =>
+    needsCogs(order, productCogsMap)
+  ).length;
+  const missingCogsOffPage = missingCogsCount - missingCogsOnPage;
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -442,19 +469,55 @@ export function OrdersClient({
         above is overstated until it clears.
       */}
       {missingCogsCount > 0 && (
-        <InlineBanner
-          tone="danger"
-          title={`${missingCogsCount} ${missingCogsCount === 1 ? "order has" : "orders have"} no product COGS`}
-          action={
-            <Button size="sm" variant="secondary" onClick={() => setCogsFilter("missing")}>
-              {missingCogsCount === 1 ? "Show it" : "Show them"}
-            </Button>
-          }
-        >
-          Average margin reads {avgMargin.toFixed(1)}% because{" "}
-          {missingCogsCount === 1 ? "that order counts" : "those orders count"} as pure
-          profit. Assign components to their products to cost them.
-        </InlineBanner>
+        <div data-testid="missing-cogs-banner">
+          <InlineBanner
+            tone="danger"
+            title={`${missingCogsCount} ${missingCogsCount === 1 ? "order has" : "orders have"} no product COGS`}
+            /*
+              The COUNT is range-true — it is the honest number and the reason
+              the banner exists. The ACTION is not: `setCogsFilter` filters
+              `orders`, which is one page. So the action only appears when the
+              page actually holds one of these orders, and says how many it can
+              reach; otherwise it would hand the operator a button that lands
+              them on "No orders match" with this banner still overhead.
+            */
+            action={
+              missingCogsOnPage > 0 ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  data-testid="missing-cogs-show"
+                  onClick={() => setCogsFilter("missing")}
+                >
+                  {missingCogsOffPage === 0
+                    ? missingCogsCount === 1
+                      ? "Show it"
+                      : "Show them"
+                    : `Show the ${missingCogsOnPage} on this page`}
+                </Button>
+              ) : undefined
+            }
+          >
+            Average margin reads {avgMargin.toFixed(1)}% because{" "}
+            {missingCogsCount === 1 ? "that order counts" : "those orders count"} as pure
+            profit. Assign components to their products to cost them.
+            {/*
+              Say it plainly rather than suggesting a way through: the list is
+              the NEWEST page of the period, so neither a wider nor a narrower
+              preset surfaces an older uncosted order. Nothing on this screen
+              reaches them today, and pretending otherwise sends the operator
+              round in circles.
+            */}
+            {missingCogsOffPage > 0 && (
+              <>
+                {" "}
+                {missingCogsOffPage === missingCogsCount
+                  ? `None of them are among the ${orders.length} most recent orders listed below.`
+                  : `${missingCogsOffPage} of them are older than the ${orders.length} most recent orders listed below.`}
+              </>
+            )}
+          </InlineBanner>
+        </div>
       )}
 
       {/* Filter bar — the one place a bordered container is allowed here. Both
@@ -508,10 +571,16 @@ export function OrdersClient({
           }
         />
       ) : filteredOrders.length === 0 ? (
+        /*
+          Third instance of the page-vs-period hazard: the search and the COGS
+          filter both run over `orders`, which is a page. "Nothing in this
+          period matches" would be a claim about the range that this filter
+          never examined.
+        */
         <EmptyState
           icon={<Search />}
           title="No orders match"
-          description="Nothing in this period matches the search and filter."
+          description="None of the orders listed match the search and filter."
           action={
             <Button
               variant="secondary"
@@ -538,9 +607,19 @@ export function OrdersClient({
         className="flex flex-wrap justify-between gap-4"
         style={{ ...mono, fontSize: "var(--fs-caption)", color: "var(--ink-muted)" }}
       >
-        <span>
-          {filteredOrders.length} of {orders.length} orders shown · last{" "}
-          {periodPhrase.toLowerCase()}
+        {/*
+          The sentence names the period, so any figure in it has to BE a period
+          figure. `orders.length` is a page, and at a saturated page "100 of 100
+          orders shown · last 30 days" asserts the period holds 100 when it may
+          hold 137. When the page covers the range the two are the same set and
+          the plain phrasing is true; when it does not, say which is which.
+        */}
+        <span data-testid="orders-footer-count">
+          {pageCoversRange
+            ? `${filteredOrders.length} of ${orders.length} orders shown · last ${periodPhrase.toLowerCase()}`
+            : filteredOrders.length === orders.length
+              ? `newest ${orders.length} of ${rangeCount} orders · last ${periodPhrase.toLowerCase()}`
+              : `${filteredOrders.length} of the newest ${orders.length} shown · ${rangeCount} orders in the last ${periodPhrase.toLowerCase()}`}
         </span>
       </div>
 

@@ -11,14 +11,12 @@ import { test, expect } from '@playwright/test'
  * plausible smaller number.
  */
 
-// Desktop only. These assert QUERY behaviour, not layout — and the page still
-// ships a duplicate `md:hidden` mobile rendering, so the `order-row` testid sits
-// on the desktop rows only. On mobile they are present in the DOM but CSS-hidden:
-// .count() works while .toBeVisible() does not. Running both projects would be
-// asserting against a hidden tree for no added coverage. CoffeeOS#65 deletes the
-// duplicate rendering; this scoping can go with it.
+// Runs on BOTH projects. The duplicate `md:hidden` mobile rendering these tests
+// used to skip around is gone (CoffeeOS#65): OrdersWorksheetTable is one DOM
+// that restacks at 1180px, so `order-row` is genuinely visible on mobile rather
+// than present-but-CSS-hidden, and the mobile project now covers the stacked
+// worksheet for free.
 test.describe.configure({ mode: 'default' })
-test.skip(({ isMobile }) => !!isMobile, 'query behaviour — desktop project only')
 
 // Must match playwright.config.ts's webServer env, which sets this low so the
 // limit is binding (see the comment there).
@@ -108,6 +106,93 @@ test.describe('Criterion 5 — aggregates cover the range, not the page', () => 
       return money(await page.locator('[data-testid="stat-revenue"]').first().innerText())
     }
     expect(await revenueFor('365')).toBeGreaterThan(await revenueFor('7'))
+  })
+})
+
+/**
+ * The same defect as Criterion 5, one layer up: copy and controls that SPEAK
+ * about the period while READING the page.
+ *
+ * Both tests below need the page limit to be binding, which is why they run at
+ * ?period=365 with ORDERS_PAGE_LIMIT=3 — the range holds more orders than the
+ * page returns, so page-derived and range-derived figures actually differ. With
+ * a non-binding limit they are the same set and a broken implementation reads
+ * identically to a correct one.
+ */
+test.describe('page-scoped UI must not claim period scope', () => {
+  /** Asserts the limit is binding, then returns the visible row count. */
+  async function loadSaturatedPage(page: import('@playwright/test').Page) {
+    await page.goto('/orders?period=365')
+    await page.waitForLoadState('networkidle')
+    // The onboarding tour widget is `fixed bottom-4 right-4 z-50`. On the mobile
+    // viewport it lands on top of the banner's action and swallows the click —
+    // same interception orders-capabilities.spec.ts hides it for, and hidden the
+    // same way (injected CSS, not its own X, which persists to localStorage and
+    // would then change the /orders baseline screenshot).
+    await page.addStyleTag({
+      content: 'div.fixed.bottom-4.right-4.z-50 { display: none !important; }',
+    })
+
+    const rowCount = await rows(page).count()
+    expect(
+      rowCount,
+      `the page limit (${LIMIT}) must be binding for this test to detect the bug — ` +
+        `got ${rowCount} rows, so the fixture fits in one page. Re-run with ORDERS_PAGE_LIMIT=3`
+    ).toBe(LIMIT)
+    return rowCount
+  }
+
+  test('the footer does not report the page as the period total', async ({ page }) => {
+    const rowCount = await loadSaturatedPage(page)
+
+    const footer = await page.getByTestId('orders-footer-count').innerText()
+
+    // The sentence names the period ("last year"), so the largest figure in it
+    // must be a period figure. The defect reads "3 of 3 orders shown · last
+    // year" — every number equals the page size, which asserts the period holds
+    // only what this page happens to have fetched.
+    //
+    // "year" is used rather than a numeric preset precisely so the period label
+    // contributes no digits of its own.
+    const figures = [...footer.matchAll(/\d+/g)].map((m) => Number(m[0]))
+    expect(
+      Math.max(...figures),
+      `"${footer}" names the period but its largest figure is the page size (${rowCount}) — ` +
+        `it is reporting a page count as a period count`
+    ).toBeGreaterThan(rowCount)
+  })
+
+  test('the missing-COGS banner cannot contradict its own action', async ({ page }) => {
+    await loadSaturatedPage(page)
+
+    const banner = page.getByTestId('missing-cogs-banner')
+    await expect(
+      banner,
+      'the seed must leave uncosted orders in range or this proves nothing'
+    ).toBeVisible()
+
+    const bannerText = await banner.innerText()
+    const action = banner.getByTestId('missing-cogs-show')
+
+    // No action is a legitimate outcome: when none of the uncosted orders are on
+    // this page there is nothing a page-scoped filter could reveal, and offering
+    // the button would land the operator on "No orders match" with this banner
+    // still overhead.
+    if ((await action.count()) === 0) return
+
+    await action.click()
+
+    const shown = await rows(page).count()
+    expect(shown, 'the banner action emptied the table while the banner is showing').toBeGreaterThan(0)
+
+    // The banner counts the RANGE; the action filters the PAGE. It may only
+    // offer the action if it has also told the operator how many it can
+    // actually reach — otherwise a banner reading "3 orders have no product
+    // COGS" hands back 1 row and explains nothing.
+    expect(
+      [...bannerText.matchAll(/\d+/g)].map((m) => Number(m[0])),
+      `the banner never states the ${shown} uncosted order(s) its action can reach: "${bannerText}"`
+    ).toContain(shown)
   })
 })
 
