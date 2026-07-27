@@ -1,8 +1,36 @@
 import React from "react"
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono, Inter } from 'next/font/google'
+import { Geist, Geist_Mono, Inter, Martian_Mono, Instrument_Sans } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
+
+/* ── Instrument design system fonts (operator surfaces) ──────────────────────
+   `axes: ['wdth']` is REQUIRED and omitting it fails SILENTLY. Without it,
+   Google serves a different .woff2 whose font-stretch is 100% instead of
+   75% 112.5%; the font still loads and renders, but every
+   font-variation-settings:'wdth' in the design system becomes inert and the
+   whole type hierarchy flattens to one width.
+
+   `weight` must stay omitted. Setting it throws "Axes can only be defined for
+   variable fonts when the weight property is nonexistent or set to `variable`"
+   — and the tempting fix for THAT error is deleting `axes`, which lands you
+   right back in the silent failure above.
+
+   Verified by: [...document.fonts].find(f => f.family.includes('Martian')).stretch
+   === '75% 112.5%'  (tests/e2e/criteria.spec.ts). */
+const martianMono = Martian_Mono({
+  subsets: ['latin'],
+  axes: ['wdth'],
+  display: 'swap',
+  variable: '--font-martian-mono',
+})
+
+const instrumentSans = Instrument_Sans({
+  subsets: ['latin'],
+  axes: ['wdth'],
+  display: 'swap',
+  variable: '--font-instrument-sans',
+})
 
 const geistMono = Geist_Mono({
   subsets: ["latin"],
@@ -48,7 +76,19 @@ export default function RootLayout({
         )}
         <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js" />
       </head>
-      <body className={`${geist.variable} ${geistMono.variable} ${inter.variable} font-sans antialiased`}>
+      <body
+        className={`${geist.variable} ${geistMono.variable} ${inter.variable} ${martianMono.variable} ${instrumentSans.variable} font-sans antialiased`}
+        /* next/font emits a HASHED family name, so the design system's literal
+           'Martian Mono' can never match the self-hosted @font-face. Its token
+           CSS therefore reads --font-mono: var(--instrument-mono, 'Martian Mono', …);
+           these three bindings are what make that indirection resolve. Without
+           them the instrument type silently falls back to ui-monospace. */
+        style={{
+          '--instrument-mono': 'var(--font-martian-mono)',
+          '--instrument-display': 'var(--font-martian-mono)',
+          '--instrument-sans': 'var(--font-instrument-sans)',
+        } as React.CSSProperties}
+      >
         {children}
         <Analytics />
       </body>

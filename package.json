@@ -10,11 +10,12 @@
     "start": "next start",
     "shopify:dev": "shopify app dev",
     "shopify:deploy": "shopify app deploy",
-    "shopify:config:push": "shopify app config push"
+    "shopify:config:push": "shopify app config push",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
-    "@merninos/ui": "^0.1.0",
+    "@merninos/ui": "^0.4.1",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",
     "@radix-ui/react-aspect-ratio": "1.1.1",
@@ -68,6 +69,7 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
     "@tailwindcss/postcss": "^4.1.9",
     "@types/node": "^22",
     "@types/react": "^19",
