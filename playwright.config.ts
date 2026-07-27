@@ -20,6 +20,15 @@ export default defineConfig({
     toHaveScreenshot: { maxDiffPixelRatio: 0.01, animations: 'disabled' },
   },
 
+  // Desktop-only baselines are how a completely broken mobile layout shipped:
+  // the nav rail took 236 of 375px, content was crushed into ~140px, and a stat
+  // figure was cut mid-number. Every check passed. Mobile is a separate project
+  // rather than a wider matrix so its baselines are independently reviewable.
+  projects: [
+    { name: 'desktop', use: { viewport: { width: 1280, height: 800 } } },
+    { name: 'mobile', use: { viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true } },
+  ],
+
   webServer: {
     // node_modules/.bin/next directly, not `pnpm dev` — pnpm's deps-status check
     // runs an install on boot, which needs NODE_AUTH_TOKEN in the shell for the
