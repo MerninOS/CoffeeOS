@@ -72,16 +72,35 @@ test.describe('C5 — instrument tokens stay inside the app surface', () => {
   })
 })
 
-test.describe('P0 is visually inert', () => {
-  test('the dashboard does not yet carry data-surface="app"', async ({ page }) => {
-    // P1 applies the scope attribute. If it appears during P0 the token layer
-    // goes live early and every baseline captured here becomes wrong.
+test.describe('P1 — the instrument scope is live on the dashboard only', () => {
+  test('a dashboard route carries data-surface="app"', async ({ page }) => {
+    // <AppShell> sets the attribute on its root. It is the anchor the entire
+    // instrument token layer is scoped to, so if it disappears every var(--token)
+    // in the shell silently resolves to nothing and the chrome renders unstyled
+    // rather than erroring.
     await page.goto('/dashboard')
     await expect(page).not.toHaveURL(/\/auth\//)
 
-    const count = await page.locator('[data-surface="app"]').count()
-    expect(count, 'P0 must not activate the instrument scope').toBe(0)
+    await expect(page.locator('[data-surface="app"]').first()).toBeAttached()
   })
+
+})
+
+test.describe('P1 — the instrument scope stays off public routes', () => {
+  // Must run logged out: /auth/login redirects to the dashboard when a session
+  // exists, which would make the assertion below vacuously pass on the wrong page.
+  test.use({ storageState: { cookies: [], origins: [] } })
+
+  for (const route of ['/', '/auth/login']) {
+    test(`no data-surface="app" on ${route}`, async ({ page }) => {
+      // Public routes keep the loud Mernin' brand. The scope reaching them would
+      // re-skin them wholesale — this is the counterpart to the assertion above.
+      await page.goto(route)
+
+      const count = await page.locator('[data-surface="app"]').count()
+      expect(count, `instrument scope activated on ${route}`).toBe(0)
+    })
+  }
 })
 
 /* Enabled in P1, once <AppShell> sets data-surface="app":

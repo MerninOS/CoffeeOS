@@ -2,9 +2,7 @@ import React from "react"
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getEffectiveOwnerId } from "@/lib/team";
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
-import { Separator } from "@/components/ui/separator";
+import { InstrumentShell } from "@/components/instrument-shell";
 import { OnboardingTourWidget } from "@/components/onboarding-tour-widget";
 
 export default async function DashboardLayout({
@@ -99,19 +97,20 @@ export default async function DashboardLayout({
     role: role as "owner" | "admin" | "roaster" | "employee",
   };
 
+  // InstrumentShell is the client boundary: this layout stays a server
+  // component (it awaits Supabase above), and `userData` is plain serializable
+  // data. The navigation/sign-out callbacks AppShell needs are created inside
+  // the wrapper — a server component cannot pass functions across.
+  //
+  // The shell sets data-surface="app", which activates the instrument token
+  // layer for every dashboard route. Page *content* is still loud Mernin' until
+  // later phases; that mixed state is expected.
   return (
-    <SidebarProvider>
-      <AppSidebar user={userData} />
-      <SidebarInset>
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b-[3px] border-espresso bg-cream px-4">
-          <SidebarTrigger className="-ml-1 text-espresso hover:bg-fog/50" />
-          <Separator orientation="vertical" className="mr-2 h-4 bg-fog" />
-        </header>
-        <main className="flex-1 overflow-auto bg-cream">{children}</main>
-        {onboardingStatus ? (
-          <OnboardingTourWidget userId={user.id} initialStatus={onboardingStatus} />
-        ) : null}
-      </SidebarInset>
-    </SidebarProvider>
+    <>
+      <InstrumentShell user={userData}>{children}</InstrumentShell>
+      {onboardingStatus ? (
+        <OnboardingTourWidget userId={user.id} initialStatus={onboardingStatus} />
+      ) : null}
+    </>
   );
 }
