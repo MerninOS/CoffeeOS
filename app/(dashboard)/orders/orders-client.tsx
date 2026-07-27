@@ -45,6 +45,14 @@ import {
   removeOrderCustomCost,
   createRoastRequestForOrder,
 } from "./actions";
+import {
+  getLineItemCogs as cogsLineItem,
+  getOrderComponentsCogs as cogsOrderComponents,
+  getOrderCustomCostsTotal as cogsCustomCosts,
+  getTotalAdditionalCosts as cogsAdditional,
+  getOrderCogs as cogsOrder,
+} from "@/lib/orders/cogs";
+import { type PeriodValue } from "@/lib/orders/constants";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -111,6 +119,15 @@ interface OrdersClientProps {
   allComponents: ComponentData[];
   coffeeInventory: CoffeeInventory[];
   isAdminConfigured: boolean;
+  /** Active window. The list below is only the orders inside it. */
+  period: PeriodValue;
+  /**
+   * Aggregates over the WHOLE period, computed server-side. Not derived from
+   * `initialOrders` — that array is one page, and summing it would under-report
+   * as soon as a period exceeds the page limit.
+   */
+  totals: { revenue: number; cogs: number; profit: number; margin: number };
+  missingCogsCount: number;
 }
 
 // ── Primitives ──────────────────────────────────────────────────────────────
@@ -709,6 +726,7 @@ export function OrdersClient({
   allComponents,
   coffeeInventory,
   isAdminConfigured,
+  totals,
 }: OrdersClientProps) {
   const router = useRouter();
   const [orders, setOrders] = useState(initialOrders);
@@ -756,23 +774,15 @@ export function OrdersClient({
     setExpandedOrders(next);
   };
 
-  const getLineItemCogs = (item: OrderLineItem) => {
-    if (!item.product_id) return 0;
-    return (productCogsMap[item.product_id] || 0) * item.quantity;
-  };
-  const getOrderComponentsCogs = (order: Order) =>
-    (order.order_components || []).reduce(
-      (sum, oc) => sum + (oc.components?.cost_per_unit || 0) * oc.quantity,
-      0
-    );
-  const getOrderCustomCostsTotal = (order: Order) =>
-    (order.order_custom_costs || []).reduce((sum, cc) => sum + cc.amount, 0);
-  const getTotalAdditionalCosts = (order: Order) =>
-    getOrderComponentsCogs(order) + getOrderCustomCostsTotal(order);
-  const getOrderCogs = (order: Order) => {
-    const lineItemsCogs = order.order_line_items.reduce((sum, item) => sum + getLineItemCogs(item), 0);
-    return lineItemsCogs + getTotalAdditionalCosts(order);
-  };
+  // The costing math now lives in @/lib/orders/cogs so the per-row figures and
+  // the server-side range aggregate cannot drift apart. These adapters only bind
+  // `productCogsMap`, which the module takes explicitly instead of closing over —
+  // so every call site below, and OrderExpandedContent's props, stay unchanged.
+  const getLineItemCogs = (item: OrderLineItem) => cogsLineItem(item, productCogsMap);
+  const getOrderComponentsCogs = (order: Order) => cogsOrderComponents(order);
+  const getOrderCustomCostsTotal = (order: Order) => cogsCustomCosts(order);
+  const getTotalAdditionalCosts = (order: Order) => cogsAdditional(order);
+  const getOrderCogs = (order: Order) => cogsOrder(order, productCogsMap);
 
   const handleAddComponent = async (orderId: string) => {
     if (!selectedComponentId || componentQuantity <= 0) return;
@@ -835,10 +845,13 @@ export function OrdersClient({
     }
   };
 
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
-  const totalCogs = orders.reduce((sum, o) => sum + getOrderCogs(o), 0);
-  const totalProfit = totalRevenue - totalCogs;
-  const avgMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+  // From the server, over the whole period. These used to be reduced over
+  // `orders`, which was correct only while that fetch was unbounded — now that
+  // it is limited, summing it would report a page under a period's label.
+  const totalRevenue = totals.revenue;
+  const totalCogs = totals.cogs;
+  const totalProfit = totals.profit;
+  const avgMargin = totals.margin;
 
   if (!isAdminConfigured) {
     return (
