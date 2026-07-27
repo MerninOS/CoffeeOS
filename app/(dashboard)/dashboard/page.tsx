@@ -1,40 +1,91 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEffectiveOwnerId } from "@/lib/team";
+import {
+  Badge,
+  type BadgeProps,
+  EmptyState,
+  HeroMetric,
+  StatStrip,
+  type Stat,
+} from "@merninos/ui/instrument";
 import Link from "next/link";
+import type { CSSProperties } from "react";
+
+/**
+ * The dashboard overview, on the instrument design system.
+ *
+ * This stays a SERVER component. The `@merninos/ui/instrument` barrel is marked
+ * `'use client'` wholesale (esbuild drops per-module directives when bundling),
+ * so every instrument component here is across the server/client boundary and may
+ * only be handed serializable props. That is why the green-inventory table below
+ * is a plain <table> and not a <DataTable>: DataTable's status column needs a
+ * `render` callback, and a function cannot cross that boundary.
+ *
+ * Design-system rule: instrument values are read as `var(--token)` through inline
+ * styles, never through Tailwind classes — the Tailwind theme is the loud Mernin'
+ * palette (bg-cream, border-espresso, shadow-flat-*) and would silently render the
+ * wrong system inside the instrument shell. Tailwind is used below only for
+ * layout structure that needs a responsive breakpoint (grid templates), never for
+ * a colour, border, radius, shadow or type value.
+ */
 
 const LBS_TO_GRAMS = 453.592;
 const DAY_LABELS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
-function StatCard({
-  label,
-  value,
-  delta,
-}: {
-  label: string;
-  value: string;
-  delta?: string;
-}) {
-  return (
-    <div className="bg-chalk border-[3px] border-espresso rounded-[14px] p-4 shadow-flat-md">
-      <div className="text-[10.5px] font-extrabold tracking-[.12em] uppercase text-muted-foreground">
-        {label}
-      </div>
-      <div className="font-extrabold text-[42px] leading-none mt-1.5 text-espresso">
-        {value}
-      </div>
-      {delta && (
-        <div
-          className={`mt-2 text-[11px] font-extrabold tracking-[.08em] uppercase ${
-            delta.startsWith("+") ? "text-matcha" : "text-tomato"
-          }`}
-        >
-          {delta}
-        </div>
-      )}
-    </div>
-  );
-}
+type BadgeTone = NonNullable<BadgeProps["tone"]>;
 
+/**
+ * The loud `Pill` variants mapped onto instrument's semantic tones. This is a
+ * mechanical colour → meaning map so the conversion stays a re-skin: the old
+ * palette carried the semantics implicitly, this makes them explicit.
+ *   tomato → danger   sun → warning   matcha → success
+ *   sky    → info     espresso/fog → neutral
+ * The one deliberate departure is green-coffee "Out", which was `espresso`
+ * (merely the strongest swatch) and is `danger` here — being out of green stock
+ * is a blocking condition, not a neutral one.
+ */
+const ORDER_STATUS_TONE: Record<string, BadgeTone> = {
+  paid: "info",
+  pending: "warning",
+  refunded: "neutral",
+  voided: "neutral",
+  partially_paid: "warning",
+  authorized: "success",
+};
+
+const overline: CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontVariationSettings: "var(--overline-settings)",
+  fontWeight: "var(--overline-weight)" as unknown as number,
+  textTransform: "uppercase",
+  letterSpacing: "var(--overline-tracking)",
+  fontSize: "var(--fs-overline)",
+  color: "var(--ink-subtle)",
+};
+
+const mono: CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontVariationSettings: "var(--data-settings)",
+  fontWeight: "var(--data-weight)" as unknown as number,
+  fontVariantNumeric: "tabular-nums",
+};
+
+const sans: CSSProperties = {
+  fontFamily: "var(--font-sans)",
+  fontSize: "var(--fs-body)",
+  color: "var(--ink)",
+};
+
+/**
+ * PROVISIONAL — do not extract, do not move into @merninos/ui.
+ *
+ * The instrument design system deliberately ships no Panel/Card primitive: its
+ * layout model is a worksheet (content directly on the canvas, hairline rules, no
+ * nested cards by default), and whether a bordered container belongs in the
+ * package is an open design question. This local component only re-skins the
+ * container markup that was already here with instrument tokens. When the design
+ * system ships a real container primitive, delete this and use that.
+ */
 function Panel({
   title,
   action,
@@ -47,44 +98,38 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b-2 border-espresso bg-cream">
-        <div className="font-extrabold text-sm uppercase tracking-[.08em]">{title}</div>
+    <section
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        background: "var(--surface)",
+        border: "1px solid var(--hairline)",
+        borderRadius: "var(--r-lg)",
+        boxShadow: "var(--shadow-sm)",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "var(--space-3)",
+          padding: "var(--space-3) var(--space-4)",
+          borderBottom: "1px solid var(--hairline)",
+        }}
+      >
+        <h2 style={{ ...overline, color: "var(--ink-muted)" }}>{title}</h2>
         {action && actionHref && (
-          <Link
-            href={actionHref}
-            className="inline-flex items-center h-[30px] px-3.5 rounded-full border-[2.5px] border-espresso text-espresso bg-transparent text-[11px] font-extrabold tracking-[.08em] uppercase shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2.5px] active:translate-y-[2.5px] active:shadow-none transition-all duration-100"
-          >
+          // Colour is deliberately not set: the design system's own `a` rule
+          // gives it --ink plus a --brand hover, which is the link affordance.
+          <Link href={actionHref} style={{ ...overline, whiteSpace: "nowrap" }}>
             {action}
           </Link>
         )}
       </div>
-      <div className="p-4">{children}</div>
-    </div>
-  );
-}
-
-function Pill({
-  variant,
-  children,
-}: {
-  variant: "tomato" | "sun" | "matcha" | "sky" | "espresso" | "fog";
-  children: React.ReactNode;
-}) {
-  const styles: Record<string, string> = {
-    tomato: "bg-tomato text-cream",
-    sun: "bg-sun text-espresso",
-    matcha: "bg-matcha text-cream",
-    sky: "bg-sky text-espresso",
-    espresso: "bg-espresso text-cream",
-    fog: "bg-fog text-espresso",
-  };
-  return (
-    <span
-      className={`inline-flex items-center px-[10px] py-[2px] rounded-full border-2 border-espresso text-[10px] font-extrabold tracking-[.1em] uppercase ${styles[variant]}`}
-    >
-      {children}
-    </span>
+      <div style={{ flex: 1, padding: "var(--space-4)" }}>{children}</div>
+    </section>
   );
 }
 
@@ -212,91 +257,188 @@ export default async function DashboardPage() {
   const firstName = user?.user_metadata?.first_name || "there";
   const isOwnerOrAdmin = role === "owner" || role === "admin";
 
+  /**
+   * ROLE FORK — identical membership to the four StatCards it replaces.
+   *
+   * Every role sees "lbs Roasted · This Week" (now the hero) and "Total
+   * Products". Owners/admins additionally see Avg Margin and Shop Revenue;
+   * roasters instead see Green Stock and Total Batches. The hero figure is the
+   * SAME for both roles on purpose, so the fork stays confined to this one array
+   * — one branch to read instead of two.
+   */
+  const secondaryStats: Stat[] = [
+    { label: "Total Products", value: totalProducts.toString() },
+    ...(isOwnerOrAdmin
+      ? ([
+          {
+            label: "Avg Margin",
+            value: avgMargin > 0 ? avgMargin.toFixed(0) : "—",
+            unit: avgMargin > 0 ? "%" : undefined,
+          },
+          {
+            label: "Shop Revenue · 7d",
+            value:
+              totalOrderRevenue > 0
+                ? `$${totalOrderRevenue >= 1000 ? `${(totalOrderRevenue / 1000).toFixed(1)}k` : totalOrderRevenue.toFixed(0)}`
+                : "—",
+          },
+        ] satisfies Stat[])
+      : ([
+          {
+            label: "Green Stock",
+            value: totalInventoryLbs.toFixed(0),
+            unit: "lbs",
+          },
+          { label: "Total Batches", value: batches.length.toString() },
+        ] satisfies Stat[])),
+  ];
+
   return (
-    <div className="flex flex-col gap-4 p-6">
-      {/* Stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="lbs Roasted · This Week"
-          value={weeklyRoastedLbs > 0 ? weeklyRoastedLbs.toFixed(0) : "—"}
-        />
-        <StatCard label="Total Products" value={totalProducts.toString()} />
-        {isOwnerOrAdmin ? (
-          <>
-            <StatCard
-              label="Avg Margin"
-              value={avgMargin > 0 ? `${avgMargin.toFixed(0)}%` : "—"}
-            />
-            <StatCard
-              label="Shop Revenue · 7d"
-              value={
-                totalOrderRevenue > 0
-                  ? `$${totalOrderRevenue >= 1000 ? `${(totalOrderRevenue / 1000).toFixed(1)}k` : totalOrderRevenue.toFixed(0)}`
-                  : "—"
-              }
-            />
-          </>
-        ) : (
-          <>
-            <StatCard
-              label="Green Stock"
-              value={`${totalInventoryLbs.toFixed(0)} lbs`}
-            />
-            <StatCard label="Total Batches" value={batches.length.toString()} />
-          </>
-        )}
+    <div
+      style={{
+        maxWidth: "var(--content-max)",
+        margin: "0 auto",
+        padding: "var(--space-6)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-6)",
+      }}
+    >
+      {/*
+        One hero figure + one ruled stat strip — never a row of equal KPI cards.
+        The hero is weekly roast output: it is the only *rate* on the page (the
+        rest are stock levels, counts or a ratio), it is the figure the panel
+        directly below it breaks down day by day, and it is the one number both
+        roles are shown — so the role fork lives entirely in the strip.
+      */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "var(--space-6)",
+          alignItems: "end",
+        }}
+      >
+        <div style={{ flex: "0 0 260px", minWidth: 0 }}>
+          <HeroMetric
+            label="lbs Roasted · This Week"
+            value={weeklyRoastedLbs > 0 ? weeklyRoastedLbs.toFixed(0) : "—"}
+            unit={weeklyRoastedLbs > 0 ? "lbs" : undefined}
+            note="sellable weight over the last 7 days"
+          />
+        </div>
+        <div style={{ flex: "1 1 420px", minWidth: 0 }}>
+          <StatStrip stats={secondaryStats} />
+        </div>
       </div>
 
-      {/* Main row: chart + on hand */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-4">
-        {/* Bar chart */}
+      {/* Main row: chart + recent roasts */}
+      <div
+        className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr]"
+        style={{ gap: "var(--space-4)" }}
+      >
+        {/*
+          Bar chart — one series (lbs roasted per day), seven divs, no library.
+
+          Bar fill is --ink-subtle and the peak bar is --ink: a single-series
+          chart needs exactly one hue, and the peak is distinguished by WEIGHT,
+          which is how this system emphasises. It is not --brand (red is the live
+          register — "happening now / needs you" — and a seven-day history is
+          neither), not --viz-highlight (that token *is* --brand), and not the
+          --roast-* ramp (banned: nothing here encodes roast level).
+          The track behind each bar is --viz-grid, so a zero day reads as an
+          empty column rather than a misleading stub, and --viz-axis rules the
+          baseline.
+        */}
         <Panel title="Daily Roast Output · lbs" action="All Roasts" actionHref="/roasting">
-          <div className="flex items-flex-end justify-around gap-2 h-[180px] py-3">
-            {chartDays.map((day, i) => {
-              const heightPct = maxChartLbs > 0 ? (day.lbs / maxChartLbs) * 100 : 0;
-              const isPeak = i === peakDayIdx && day.lbs > 0;
-              return (
-                <div
-                  key={i}
-                  className="flex-1 flex flex-col items-center gap-1.5"
-                >
-                  <div className="relative w-full flex items-end" style={{ height: 150 }}>
-                    <div
-                      className="w-full border-[2.5px] border-espresso rounded-t-[8px] shadow-[2px_2px_0_#1C0F05] relative"
+          <div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-end",
+                gap: "var(--space-2)",
+                borderBottom: "1px solid var(--viz-axis)",
+              }}
+            >
+              {chartDays.map((day, i) => {
+                const heightPct =
+                  day.lbs > 0 ? Math.max((day.lbs / maxChartLbs) * 100, 4) : 0;
+                const isPeak = i === peakDayIdx && day.lbs > 0;
+                return (
+                  <div
+                    key={day.dateStr}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "var(--space-1)",
+                    }}
+                  >
+                    <span
                       style={{
-                        height: `${Math.max(heightPct, day.lbs > 0 ? 8 : 4)}%`,
-                        background: isPeak ? "#E8442A" : "#3B1F0A",
-                        minHeight: day.lbs > 0 ? 8 : 4,
+                        ...mono,
+                        fontSize: "var(--fs-overline)",
+                        color: "var(--ink)",
+                        height: 14,
+                        lineHeight: "14px",
                       }}
                     >
-                      {isPeak && day.lbs > 0 && (
-                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-extrabold bg-sun text-espresso px-1.5 py-[2px] rounded-full border-2 border-espresso whitespace-nowrap">
-                          {day.lbs.toFixed(0)} lb
-                        </div>
-                      )}
+                      {isPeak ? day.lbs.toFixed(0) : " "}
+                    </span>
+                    <div
+                      style={{
+                        width: "100%",
+                        height: 132,
+                        display: "flex",
+                        alignItems: "flex-end",
+                        background: "var(--viz-grid)",
+                        borderRadius: "var(--r-sm) var(--r-sm) 0 0",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "100%",
+                          height: `${heightPct}%`,
+                          background: isPeak ? "var(--ink)" : "var(--ink-subtle)",
+                          borderRadius: "var(--r-sm) var(--r-sm) 0 0",
+                        }}
+                      />
                     </div>
                   </div>
-                  <div className="text-[10px] font-extrabold tracking-[.1em] text-muted-foreground">
-                    {day.label}
-                  </div>
+                );
+              })}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: "var(--space-2)",
+                marginTop: "var(--space-2)",
+              }}
+            >
+              {chartDays.map((day) => (
+                <div
+                  key={day.dateStr}
+                  style={{ ...overline, flex: 1, minWidth: 0, textAlign: "center" }}
+                >
+                  {day.label}
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
         </Panel>
 
-        {/* On Hand / Recent Roasts */}
+        {/* Recent Roasts — ruled rows, not tinted tiles. The old rows cycled
+            tomato/sun/honey per index, which encoded nothing. */}
         <Panel title="Recent Roasts" action="View All" actionHref="/roasting">
           {recentBatches.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm font-bold tracking-wide uppercase">
-              No batches yet
-            </div>
+            <EmptyState compact title="No batches yet" description="Logged roasts show up here." />
           ) : (
-            <div className="flex flex-col gap-2.5">
+            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
               {recentBatches.map((batch, i) => {
                 const lbs = (batch.sellable_g || 0) / LBS_TO_GRAMS;
-                const colors = ["tomato", "sun", "honey"] as const;
-                const bgColor = colors[i % colors.length];
                 const date = new Date(batch.created_at);
                 const daysAgo = Math.floor(
                   (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24)
@@ -308,77 +450,101 @@ export default async function DashboardPage() {
                     ? "Yesterday"
                     : `${daysAgo}d ago`;
                 return (
-                  <div
+                  <li
                     key={batch.id}
-                    className="p-3 border-[2.5px] border-espresso rounded-[12px] bg-cream flex items-center gap-3"
+                    style={{
+                      display: "flex",
+                      alignItems: "baseline",
+                      gap: "var(--space-3)",
+                      padding: "var(--space-3) 0",
+                      borderTop: i === 0 ? undefined : "1px solid var(--hairline)",
+                    }}
                   >
-                    <div
-                      className="w-9 h-9 border-[2.5px] border-espresso rounded-[10px] flex items-center justify-center shrink-0"
+                    <span
                       style={{
-                        background:
-                          bgColor === "tomato"
-                            ? "#E8442A"
-                            : bgColor === "sun"
-                            ? "#F5C842"
-                            : "#E8913A",
+                        ...mono,
+                        fontSize: "var(--fs-label)",
+                        color: "var(--ink)",
                       }}
                     >
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke={bgColor === "sun" ? "#1C0F05" : "#FDFAF0"}
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-extrabold text-[13px] leading-snug text-espresso truncate">
-                        Batch #{batch.id.slice(-6).toUpperCase()}
-                      </div>
-                      <div className="text-[10.5px] text-muted-foreground mt-0.5">
-                        Roasted {dateLabel}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="font-extrabold text-[22px] leading-none text-espresso">
-                        {lbs.toFixed(1)}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground tracking-[.08em] uppercase font-extrabold">
-                        lbs
-                      </div>
-                    </div>
-                  </div>
+                      #{batch.id.slice(-6).toUpperCase()}
+                    </span>
+                    <span
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontFamily: "var(--font-sans)",
+                        fontSize: "var(--fs-caption)",
+                        color: "var(--ink-muted)",
+                      }}
+                    >
+                      {dateLabel}
+                    </span>
+                    <span
+                      style={{
+                        ...mono,
+                        fontSize: "var(--fs-data)",
+                        color: "var(--ink)",
+                      }}
+                    >
+                      {lbs.toFixed(1)}
+                    </span>
+                    <span style={overline}>lbs</span>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
         </Panel>
       </div>
 
-      {/* Bottom row: green inventory + orders */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Green Inventory */}
+      {/* Bottom row: green inventory + orders (owner/admin) or quick actions */}
+      <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: "var(--space-4)" }}>
+        {/*
+          Green Inventory — stays a plain <table>, retokenized. DataTable would
+          need a `render` callback for the Status badge column, and this file is
+          a server component: functions cannot be passed to the client-marked
+          instrument barrel.
+        */}
         <Panel title="Green Inventory" action="View All" actionHref="/inventory">
           {inventory.length === 0 ? (
-            <div className="text-center py-6 text-muted-foreground text-sm font-bold tracking-wide uppercase">
-              No inventory yet
-            </div>
+            <EmptyState
+              compact
+              title="No inventory yet"
+              description="Green coffee lots show up here once you add them."
+            />
           ) : (
-            <table className="w-full border-collapse text-[13px]">
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr className="border-b-2 border-espresso">
-                  <th className="text-left py-1.5 text-[10px] tracking-[.1em] uppercase text-muted-foreground font-extrabold">
+                <tr>
+                  <th
+                    style={{
+                      ...overline,
+                      textAlign: "left",
+                      padding: "0 0 var(--space-2)",
+                      borderBottom: "1px solid var(--hairline-strong)",
+                    }}
+                  >
                     Origin
                   </th>
-                  <th className="text-right py-1.5 text-[10px] tracking-[.1em] uppercase text-muted-foreground font-extrabold">
+                  <th
+                    style={{
+                      ...overline,
+                      textAlign: "right",
+                      padding: "0 0 var(--space-2)",
+                      borderBottom: "1px solid var(--hairline-strong)",
+                    }}
+                  >
                     On Hand
                   </th>
-                  <th className="text-right py-1.5 text-[10px] tracking-[.1em] uppercase text-muted-foreground font-extrabold">
+                  <th
+                    style={{
+                      ...overline,
+                      textAlign: "right",
+                      padding: "0 0 var(--space-2)",
+                      borderBottom: "1px solid var(--hairline-strong)",
+                    }}
+                  >
                     Status
                   </th>
                 </tr>
@@ -386,27 +552,46 @@ export default async function DashboardPage() {
               <tbody>
                 {inventory.slice(0, 5).map((item) => {
                   const lbs = (item.current_green_quantity_g || 0) / LBS_TO_GRAMS;
-                  const status =
-                    lbs === 0 ? "out" : lbs < 5 ? "low" : "fresh";
+                  const status = lbs === 0 ? "out" : lbs < 5 ? "low" : "fresh";
                   return (
-                    <tr
-                      key={item.id}
-                      className="border-b border-dashed border-fog last:border-0"
-                    >
-                      <td className="py-2.5 font-semibold text-espresso">
+                    <tr key={item.id}>
+                      <td
+                        style={{
+                          ...sans,
+                          fontSize: "var(--fs-label)",
+                          padding: "var(--space-3) 0",
+                          borderBottom: "1px solid var(--hairline)",
+                        }}
+                      >
                         {item.name}
                       </td>
-                      <td className="text-right font-mono font-bold text-espresso">
+                      <td
+                        style={{
+                          ...mono,
+                          fontSize: "var(--fs-label)",
+                          color: "var(--ink)",
+                          textAlign: "right",
+                          padding: "var(--space-3) 0",
+                          borderBottom: "1px solid var(--hairline)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {lbs.toFixed(0)} lb
                       </td>
-                      <td className="text-right py-2.5">
-                        <Pill
-                          variant={
+                      <td
+                        style={{
+                          textAlign: "right",
+                          padding: "var(--space-3) 0",
+                          borderBottom: "1px solid var(--hairline)",
+                        }}
+                      >
+                        <Badge
+                          tone={
                             status === "fresh"
-                              ? "matcha"
+                              ? "success"
                               : status === "low"
-                              ? "sun"
-                              : "espresso"
+                              ? "warning"
+                              : "danger"
                           }
                         >
                           {status === "fresh"
@@ -414,7 +599,7 @@ export default async function DashboardPage() {
                             : status === "low"
                             ? "Low"
                             : "Out"}
-                        </Pill>
+                        </Badge>
                       </td>
                     </tr>
                   );
@@ -424,107 +609,162 @@ export default async function DashboardPage() {
           )}
         </Panel>
 
-        {/* Recent Orders */}
+        {/* ROLE FORK — owners/admins only. */}
         {isOwnerOrAdmin && (
           <Panel title="Recent Orders" action="All Orders" actionHref="/orders">
             {orders.length === 0 ? (
-              <div className="text-center py-6 text-muted-foreground text-sm font-bold tracking-wide uppercase">
-                No orders yet
-              </div>
+              <EmptyState
+                compact
+                title="No orders yet"
+                description="Orders synced from your shop show up here."
+              />
             ) : (
-              <div className="flex flex-col gap-2">
-                {orders.map((order) => {
-                  const statusVariant: Record<
-                    string,
-                    "tomato" | "sun" | "matcha" | "sky" | "fog"
-                  > = {
-                    paid: "sky",
-                    pending: "sun",
-                    refunded: "fog",
-                    voided: "fog",
-                    partially_paid: "sun",
-                    authorized: "matcha",
-                  };
-                  const pill =
-                    statusVariant[order.financial_status || ""] || "fog";
-                  return (
+              <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                {orders.map((order, i) => (
+                  <li
+                    key={order.id}
+                    style={{
+                      borderTop: i === 0 ? undefined : "1px solid var(--hairline)",
+                    }}
+                  >
+                    {/*
+                      Kept a real <Link>. DataTable.onRowClick is a JS callback
+                      and would lose middle-click, open-in-new-tab and prefetch.
+                    */}
                     <Link
-                      key={order.id}
                       href={`/orders/${order.id}`}
-                      className="flex items-center gap-2.5 p-2.5 border-[2.5px] border-espresso rounded-[10px] bg-cream hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[4px_4px_0_#1C0F05] transition-all duration-100"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "var(--space-3)",
+                        padding: "var(--space-3) 0",
+                        textDecoration: "none",
+                      }}
                     >
-                      <div className="font-mono text-[11px] font-bold text-muted-foreground w-12 shrink-0">
+                      <span
+                        style={{
+                          ...mono,
+                          fontSize: "var(--fs-caption)",
+                          color: "var(--ink-subtle)",
+                          width: 48,
+                          flexShrink: 0,
+                        }}
+                      >
                         #{String(order.id).slice(-4)}
-                      </div>
-                      <div className="flex-1 font-bold text-[13px] text-espresso truncate">
+                      </span>
+                      {/* No explicit colour — inherits the design system's
+                          --ink link colour and its --brand hover. */}
+                      <span
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontFamily: "var(--font-sans)",
+                          fontSize: "var(--fs-label)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         Order {new Date(order.created_at).toLocaleDateString()}
-                      </div>
-                      <div className="font-extrabold text-[16px] text-espresso w-16 text-right shrink-0">
+                      </span>
+                      <span
+                        style={{
+                          ...mono,
+                          fontSize: "var(--fs-label)",
+                          color: "var(--ink)",
+                          textAlign: "right",
+                          flexShrink: 0,
+                        }}
+                      >
                         ${(order.total_price || 0).toFixed(0)}
-                      </div>
-                      <Pill variant={pill}>
+                      </span>
+                      <Badge
+                        tone={ORDER_STATUS_TONE[order.financial_status || ""] || "neutral"}
+                      >
                         {order.financial_status || "pending"}
-                      </Pill>
+                      </Badge>
                     </Link>
-                  );
-                })}
-              </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </Panel>
         )}
 
-        {/* Quick Actions for roasters */}
+        {/* ROLE FORK — everyone who is not an owner/admin. */}
         {!isOwnerOrAdmin && (
           <Panel title="Quick Actions">
-            <div className="flex flex-col gap-2">
-              <Link
-                href="/roasting"
-                className="flex items-center gap-3 p-3 border-[2.5px] border-espresso rounded-[12px] bg-cream hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[4px_4px_0_#1C0F05] transition-all duration-100"
-              >
-                <div className="w-9 h-9 bg-tomato border-[2.5px] border-espresso rounded-[10px] flex items-center justify-center shrink-0">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#FDFAF0"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              {[
+                {
+                  href: "/roasting",
+                  title: "Start a Roast",
+                  description: "Log a new roasting batch",
+                  path: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z",
+                },
+                {
+                  href: "/inventory",
+                  title: "Check Inventory",
+                  description: "View green coffee stock",
+                  path: "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10",
+                },
+              ].map((action, i) => (
+                <li
+                  key={action.href}
+                  style={{
+                    borderTop: i === 0 ? undefined : "1px solid var(--hairline)",
+                  }}
+                >
+                  <Link
+                    href={action.href}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "var(--space-3)",
+                      padding: "var(--space-3) 0",
+                      textDecoration: "none",
+                    }}
                   >
-                    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
-                  </svg>
-                </div>
-                <div>
-                  <div className="font-bold text-[13px] text-espresso">Start a Roast</div>
-                  <div className="text-[11px] text-muted-foreground">Log a new roasting batch</div>
-                </div>
-              </Link>
-              <Link
-                href="/inventory"
-                className="flex items-center gap-3 p-3 border-[2.5px] border-espresso rounded-[12px] bg-cream hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[4px_4px_0_#1C0F05] transition-all duration-100"
-              >
-                <div className="w-9 h-9 bg-espresso border-[2.5px] border-espresso rounded-[10px] flex items-center justify-center shrink-0">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#FDFAF0"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                    <polyline points="9 22 9 12 15 12 15 22" />
-                  </svg>
-                </div>
-                <div>
-                  <div className="font-bold text-[13px] text-espresso">Check Inventory</div>
-                  <div className="text-[11px] text-muted-foreground">View green coffee stock</div>
-                </div>
-              </Link>
-            </div>
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="var(--ink-muted)"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ flexShrink: 0 }}
+                      aria-hidden="true"
+                    >
+                      <path d={action.path} />
+                    </svg>
+                    <span style={{ minWidth: 0 }}>
+                      <span
+                        style={{
+                          display: "block",
+                          fontFamily: "var(--font-sans)",
+                          fontSize: "var(--fs-label)",
+                          fontWeight: "var(--fw-medium)" as unknown as number,
+                        }}
+                      >
+                        {action.title}
+                      </span>
+                      <span
+                        style={{
+                          display: "block",
+                          fontFamily: "var(--font-sans)",
+                          fontSize: "var(--fs-caption)",
+                          color: "var(--ink-muted)",
+                        }}
+                      >
+                        {action.description}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </Panel>
         )}
       </div>
