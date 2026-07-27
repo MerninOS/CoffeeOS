@@ -45,9 +45,14 @@ const ORDERS = [
   { id: '#4816', customer: 'Sam Okafor', channel: 'DTC', items: 2, total: '$44.00', status: 'cancelled', date: 'Jul 20' },
 ]
 
-const TONE: Record<string, { tone: string; label: string; pulse?: boolean }> = {
+// No `pulse`. The design system offers it for a "currently roasting" badge, but
+// CoffeeOS has no live layer — no polling, no realtime, no timer, no status column
+// on roasting_sessions — so a pulsing indicator would animate over a value that
+// only changes on page load. Ruled out until real live data exists; enforced by
+// tests/e2e/design-rulings.spec.ts.
+const TONE: Record<string, { tone: string; label: string }> = {
   open: { tone: 'warning', label: 'Open' },
-  roasting: { tone: 'brand', label: 'Roasting', pulse: true },
+  roasting: { tone: 'brand', label: 'Roasting' },
   fulfilled: { tone: 'success', label: 'Fulfilled' },
   cancelled: { tone: 'neutral', label: 'Cancelled' },
 }
@@ -83,7 +88,7 @@ export default function InstrumentPreview() {
       header: 'Status',
       width: 130,
       render: (v: string) => (
-        <Badge tone={TONE[v].tone as never} dot pulse={TONE[v].pulse}>
+        <Badge tone={TONE[v].tone as never} dot>
           {TONE[v].label}
         </Badge>
       ),
