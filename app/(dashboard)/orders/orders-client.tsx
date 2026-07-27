@@ -451,14 +451,46 @@ export function OrdersClient({
         read as one ruled line, which is the whole point of a StatStrip.
       */}
       <div className="flex flex-col gap-6 min-[1400px]:flex-row min-[1400px]:items-end">
-        <div className="min-[1400px]:flex-[0_1_340px]" style={{ minWidth: 0 }}>
+        {/*
+          The hero column sizes to its content and never shrinks.
+
+          It was `flex-[0_1_340px]` with `minWidth: 0`, and the `minWidth: 0` was
+          the actual defect. A flex item's default `min-width: auto` refuses to
+          shrink below its content; zeroing it removes that floor, so the column
+          collapsed toward its 340px basis while the figure inside stayed 388px
+          and spilled out. It ran under the strip, which paints its own
+          background, so the last glyphs were covered: at 1440, "$337.38" in a
+          340px column, overlapping by 24px. Not a cosmetic overlap — an
+          unreadable number, the same failure as the stat that once clipped
+          "23,840" to "23,84".
+
+          Verified by reverting: with `minWidth: 0` restored, all six assertions
+          in orders-layout.spec.ts fail; without it they pass even at the old
+          340px basis. `minWidth: 0` is correct on the strip beside it (a strip
+          SHOULD absorb the leftover width) and wrong here.
+
+          No baseline could catch this. Desktop snapshots run at 1280 and mobile
+          at 375, both below the 1400px breakpoint where this row goes side by
+          side, so the two-column layout is captured by no baseline at all. The
+          regression test asserts geometry above 1400 instead of pixels.
+
+          Content-sized rather than a bigger fixed basis because the figure grows
+          with the business — a seven-figure profit is wider than any number we
+          could pick today. If it ever crowds the strip, the strip wraps, which
+          is survivable; a truncated number is not.
+        */}
+        <div className="min-[1400px]:flex-[0_0_auto]" data-testid="hero-column">
           <HeroMetric
             label="Gross profit"
             value={money(totalProfit)}
             note={`revenue minus COGS · last ${periodPhrase.toLowerCase()}`}
           />
         </div>
-        <div className="min-[1400px]:flex-1" style={{ minWidth: 0 }}>
+        <div
+          className="min-[1400px]:flex-1"
+          style={{ minWidth: 0 }}
+          data-testid="strip-column"
+        >
           <StatStrip stats={stats} />
         </div>
       </div>

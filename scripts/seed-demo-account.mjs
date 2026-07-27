@@ -337,15 +337,36 @@ async function seedDemoData(admin, ownerId) {
         price: 78,
         variant_id: "gid://shopify/ProductVariant/10000000033",
       },
+      // Deliberately gets NO product_components below — a product nobody has
+      // written a recipe for yet.
+      //
+      // This is not an edge case, it is the normal state of a real account:
+      // Shopify syncs products and orders but has no concept of a bill of
+      // materials, so a recipe is data only the roaster can supply. On the
+      // production account 101 of 119 products look like this one.
+      //
+      // Without it the fixture had no order carrying a line item whose product
+      // is uncosted, so nothing could tell "$0.00" apart from a real zero — the
+      // exact defect orders-uncosted.spec.ts exists to catch.
+      {
+        user_id: ownerId,
+        shopify_id: "gid://shopify/Product/1000000004",
+        title: "Guatemala Huehuetenango 12oz",
+        description: "Synced from Shopify, not yet costed.",
+        sku: "GTM-12-HUEHUE",
+        price: 22,
+        variant_id: "gid://shopify/ProductVariant/10000000044",
+      },
     ])
     .select("id,title");
-  if (productsError || !products || products.length < 3) {
+  if (productsError || !products || products.length < 4) {
     throw new Error(`Failed to insert products: ${productsError?.message || "unknown error"}`);
   }
 
   const yirgProduct = products.find((p) => p.title.includes("Yirgacheffe")) || products[0];
   const espressoProduct = products.find((p) => p.title.includes("Espresso")) || products[1];
   const coldBrewProduct = products.find((p) => p.title.includes("Cold Brew")) || products[2];
+  const uncostedProduct = products.find((p) => p.title.includes("Huehuetenango")) || products[3];
 
   const { error: productComponentsError } = await admin.from("product_components").insert([
     { product_id: yirgProduct.id, component_id: roastedCoffeeComponent.id, quantity: 340 },
@@ -553,8 +574,27 @@ async function seedDemoData(admin, ownerId) {
 
   const order1001 = orders.find((o) => o.order_name === "#1001") || orders[0];
   const order1002 = orders.find((o) => o.order_name === "#1002") || orders[1];
+  const order1003 = orders.find((o) => o.order_name === "#1003") || orders[2];
 
   const { error: lineItemError } = await admin.from("order_line_items").insert([
+    // #1003 sells the uncosted product. It was already the fixture's "missing
+    // COGS" order, but it had no line items at all, so it was uncosted for the
+    // trivial reason that there was nothing to cost. That is not the case worth
+    // testing — the real one is a genuine sale of a product whose recipe has
+    // never been entered, where the page must say "not set" rather than "$0.00"
+    // and margin must read 100% for a reason the operator can see and fix.
+    {
+      order_id: order1003.id,
+      product_id: uncostedProduct.id,
+      shopify_line_item_id: "gid://shopify/LineItem/3000000004",
+      shopify_product_id: "gid://shopify/Product/1000000004",
+      shopify_variant_id: "gid://shopify/ProductVariant/10000000044",
+      title: "Guatemala Huehuetenango 12oz",
+      quantity: 2,
+      price: 22,
+      total_price: 44,
+      sku: "GTM-12-HUEHUE",
+    },
     {
       order_id: order1001.id,
       product_id: yirgProduct.id,
