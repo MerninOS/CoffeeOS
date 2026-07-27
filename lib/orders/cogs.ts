@@ -19,9 +19,29 @@ export interface CogsLineItem {
   quantity: number
 }
 
+/**
+ * Supabase types a nested relation as an ARRAY even when it is many-to-one, so
+ * `components` arrives typed `{cost_per_unit}[]` while at runtime it is a single
+ * object. The existing page casts it (`as {cost_per_unit: number} | null`) —
+ * a cast that is simply untrue to the type.
+ *
+ * Accept both shapes and normalise instead, so this module is honest about what
+ * it can actually receive and does not depend on a lie holding.
+ */
+export type CogsComponentRef =
+  | { cost_per_unit: number | null }
+  | { cost_per_unit: number | null }[]
+  | null
+
 export interface CogsOrderComponent {
   quantity: number
-  components: { cost_per_unit: number } | null
+  components: CogsComponentRef
+}
+
+function costPerUnit(ref: CogsComponentRef): number {
+  if (!ref) return 0
+  const one = Array.isArray(ref) ? ref[0] : ref
+  return one?.cost_per_unit || 0
 }
 
 export interface CogsCustomCost {
@@ -42,7 +62,7 @@ export function getLineItemCogs(item: CogsLineItem, map: ProductCogsMap): number
 
 export function getOrderComponentsCogs(order: CostableOrder): number {
   return (order.order_components || []).reduce(
-    (sum, oc) => sum + (oc.components?.cost_per_unit || 0) * oc.quantity,
+    (sum, oc) => sum + costPerUnit(oc.components) * oc.quantity,
     0
   )
 }
