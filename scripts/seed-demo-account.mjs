@@ -477,9 +477,59 @@ async function seedDemoData(admin, ownerId) {
         customer_email: "orders@sunrisehotel.com",
         customer_name: "Sunrise Hotel",
       },
+      // Orders #1003-#1005 exist so list-view assertions are meaningful: a
+      // "no zebra striping" check passes trivially against 1-2 rows, and the
+      // status filters need more than one value to exercise. Statuses are
+      // deliberately spread across paid/pending and fulfilled/unfulfilled.
+      {
+        user_id: ownerId,
+        shopify_order_id: "gid://shopify/Order/2000000003",
+        shopify_order_number: "1003",
+        order_name: "#1003",
+        created_at_shopify: new Date(Date.now() - 2 * 86400000).toISOString(),
+        financial_status: "pending",
+        fulfillment_status: null,
+        total_price: 246,
+        subtotal_price: 232,
+        total_tax: 14,
+        currency: "USD",
+        customer_email: "buyer@northpierroasters.com",
+        customer_name: "North Pier Roasters",
+      },
+      {
+        user_id: ownerId,
+        shopify_order_id: "gid://shopify/Order/2000000004",
+        shopify_order_number: "1004",
+        order_name: "#1004",
+        created_at_shopify: new Date(Date.now() - 5 * 86400000).toISOString(),
+        financial_status: "paid",
+        fulfillment_status: "fulfilled",
+        total_price: 54,
+        subtotal_price: 51,
+        total_tax: 3,
+        currency: "USD",
+        customer_email: "aya.tanaka@example.com",
+        customer_name: "Aya Tanaka",
+      },
+      {
+        user_id: ownerId,
+        shopify_order_id: "gid://shopify/Order/2000000005",
+        shopify_order_number: "1005",
+        order_name: "#1005",
+        created_at_shopify: new Date(Date.now() - 6 * 86400000).toISOString(),
+        financial_status: "refunded",
+        fulfillment_status: null,
+        total_price: 96,
+        subtotal_price: 90,
+        total_tax: 6,
+        currency: "USD",
+        customer_email: "halden@haldencoffeebar.com",
+        customer_name: "Halden Coffee Bar",
+      },
     ])
     .select("id,order_name");
-  if (ordersError || !orders || orders.length < 2) {
+  // >= 5 so visual-baseline assertions over the orders table are not vacuous.
+  if (ordersError || !orders || orders.length < 5) {
     throw new Error(`Failed to insert orders: ${ordersError?.message || "unknown error"}`);
   }
 
