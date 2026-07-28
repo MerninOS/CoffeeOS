@@ -547,6 +547,50 @@ async function seedDemoData(admin, ownerId) {
         customer_email: "halden@haldencoffeebar.com",
         customer_name: "Halden Coffee Bar",
       },
+      // ── Exclusion fixtures (CoffeeOS#79) ──────────────────────────────────
+      //
+      // Inside the 30-day default window on purpose: a fixture the default view
+      // cannot reach gets verified by nobody.
+      //
+      // The uncosted PRODUCT these lean on (Guatemala Huehuetenango 12oz) comes
+      // from CoffeeOS#68 and is already above — not duplicated here.
+      {
+        // MIXED — one costed line item beside one uncosted. The only case where
+        // "any line item resolves to $0" differs from "total COGS is $0": the
+        // total is non-zero, so the predicate CoffeeOS#79 replaced passed it
+        // unflagged while it reported a margin built partly on a fabricated $0.
+        user_id: ownerId,
+        shopify_order_id: "gid://shopify/Order/2000000007",
+        shopify_order_number: "1006",
+        order_name: "#1006",
+        created_at_shopify: new Date(Date.now() - 5 * 86400000).toISOString(),
+        financial_status: "paid",
+        fulfillment_status: "fulfilled",
+        total_price: 43,
+        subtotal_price: 40,
+        total_tax: 3,
+        currency: "USD",
+        customer_email: "mixed@example.com",
+        customer_name: "Bellwether Coffee",
+      },
+      {
+        // UNLINKED with a named line item — product_id null, the state 328 of 436
+        // production line items are in. Distinct from #1004/#1005/#0902, which
+        // are also unlinked but have no item to name and render different copy.
+        user_id: ownerId,
+        shopify_order_id: "gid://shopify/Order/2000000008",
+        shopify_order_number: "1007",
+        order_name: "#1007",
+        created_at_shopify: new Date(Date.now() - 9 * 86400000).toISOString(),
+        financial_status: "paid",
+        fulfillment_status: "fulfilled",
+        total_price: 31,
+        subtotal_price: 29,
+        total_tax: 2,
+        currency: "USD",
+        customer_email: "discontinued@example.com",
+        customer_name: "Harbourline Cafe",
+      },
       // Deliberately older than the longest period preset (365d). Without an
       // out-of-range order, "1 year" is indistinguishable from "everything" and
       // the bounded-query tests cannot prove a filter is applied at all.
@@ -568,12 +612,17 @@ async function seedDemoData(admin, ownerId) {
     ])
     .select("id,order_name");
   // >= 5 so visual-baseline assertions over the orders table are not vacuous.
-  if (ordersError || !orders || orders.length < 6) {
+  if (ordersError || !orders || orders.length < 8) {
     throw new Error(`Failed to insert orders: ${ordersError?.message || "unknown error"}`);
   }
 
   const order1001 = orders.find((o) => o.order_name === "#1001") || orders[0];
   const order1002 = orders.find((o) => o.order_name === "#1002") || orders[1];
+  const order1006 = orders.find((o) => o.order_name === "#1006");
+  const order1007 = orders.find((o) => o.order_name === "#1007");
+  if (!order1006 || !order1007) {
+    throw new Error("Missing an exclusion fixture order (#1006/#1007).");
+  }
   const order1003 = orders.find((o) => o.order_name === "#1003") || orders[2];
 
   const { error: lineItemError } = await admin.from("order_line_items").insert([
@@ -630,6 +679,38 @@ async function seedDemoData(admin, ownerId) {
       price: 78,
       total_price: 78,
       sku: "CB-5LB",
+    },
+
+    // ── Exclusion fixtures (CoffeeOS#79) ────────────────────────────────────
+    {
+      order_id: order1006.id,
+      product_id: yirgProduct.id,
+      shopify_line_item_id: "gid://shopify/LineItem/3000000005",
+      shopify_product_id: "gid://shopify/Product/1000000001",
+      shopify_variant_id: "gid://shopify/ProductVariant/10000000011",
+      title: "Yirgacheffe Light Roast 12oz",
+      quantity: 1, price: 18, total_price: 18, sku: "ETH-12-LIGHT",
+    },
+    {
+      order_id: order1006.id,
+      product_id: uncostedProduct.id,
+      shopify_line_item_id: "gid://shopify/LineItem/3000000006",
+      shopify_product_id: "gid://shopify/Product/1000000004",
+      shopify_variant_id: "gid://shopify/ProductVariant/10000000044",
+      title: "Guatemala Huehuetenango 12oz",
+      quantity: 1, price: 22, total_price: 22, sku: "GTM-12-HUEHUE",
+    },
+    {
+      // `shopify_product_id` is retained deliberately: Shopify keeps returning it
+      // for a while after a product is deleted, and 197 of the 328 unlinked
+      // production line items look exactly like this.
+      order_id: order1007.id,
+      product_id: null,
+      shopify_line_item_id: "gid://shopify/LineItem/3000000007",
+      shopify_product_id: "gid://shopify/Product/1999999999",
+      shopify_variant_id: null,
+      title: "Sunrise Blend (discontinued)",
+      quantity: 1, price: 29, total_price: 29, sku: "SUNRISE-12",
     },
   ]);
   if (lineItemError) {

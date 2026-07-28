@@ -83,8 +83,19 @@ test.describe('Criterion 5 — aggregates cover the range, not the page', () => 
         `got ${rowCount} rows, so the fixture fits in one page. Re-run with ORDERS_PAGE_LIMIT=3`
     ).toBe(LIMIT)
 
-    const aggregate = money(
-      await page.locator('[data-testid="stat-revenue"]').first().innerText()
+    // Reads the PERIOD revenue, not `stat-revenue`.
+    //
+    // `stat-revenue` now covers only the costed subset of the range, so it can
+    // legitimately be smaller than the visible page — an order on screen whose
+    // COGS is unknown contributes to `visible` but not to it. Probing it here
+    // would fail on correct code and, worse, could be "fixed" by putting
+    // uncostable orders back into the aggregate, which is the defect this whole
+    // change removes.
+    //
+    // The property Criterion 5 actually guards — range, not page — belongs to
+    // the period figure, which still covers every order in range.
+    const aggregate = Number(
+      await page.locator('[data-testid="strip-column"]').first().getAttribute('data-period-revenue')
     )
     const visible = (await page.locator('[data-testid="row-revenue"]').allInnerTexts())
       .reduce((sum, t) => sum + money(t), 0)
@@ -100,10 +111,16 @@ test.describe('Criterion 5 — aggregates cover the range, not the page', () => 
   test('aggregates grow with the period', async ({ page }) => {
     // Cheap companion that needs no limit override, so there is still coverage
     // when the suite runs with production settings.
+    // Period revenue for the same reason as above. Measured on the demo seed,
+    // COSTED revenue is $192.00 at both 7d and 365d — equal, because no costed
+    // order falls between them — so this assertion on `stat-revenue` would fail
+    // while nothing is wrong. Period revenue still grows: $438.00 at 365d.
     const revenueFor = async (period: string) => {
       await page.goto(`/orders?period=${period}`)
       await page.waitForLoadState('networkidle')
-      return money(await page.locator('[data-testid="stat-revenue"]').first().innerText())
+      return Number(
+        await page.locator('[data-testid="strip-column"]').first().getAttribute('data-period-revenue')
+      )
     }
     expect(await revenueFor('365')).toBeGreaterThan(await revenueFor('7'))
   })
