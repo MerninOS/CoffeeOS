@@ -174,8 +174,15 @@ export function ExpandedOrder({
       {missing && (
         <div style={{ marginBottom: "var(--space-4)" }}>
           <InlineBanner tone="warning" title="No product COGS assigned">
-            This order&apos;s margin is revenue only. Assign components to its
-            products so the figures below can be trusted.
+            {/*
+              Points at the per-item labels rather than naming a single remedy.
+              "Assign components to its products" is only actionable for a line
+              item that HAS a product; an unlinked one has nothing to assign to.
+            */}
+            This order&apos;s margin is revenue only. Check the unit COGS column
+            below: <strong>not set</strong> needs a recipe on the product,
+            <strong> not linked</strong> needs the line item matched to a product
+            first.
           </InlineBanner>
         </div>
       )}
@@ -222,12 +229,45 @@ export function ExpandedOrder({
             </span>
             <span className="flex flex-col gap-0.5 min-[900px]:block min-[900px]:text-right">
               <span style={overline} className="min-[900px]:hidden">Unit COGS</span>
-              {item.product_id ? (
-                <span style={mono}>{money(productCogsMap[item.product_id] || 0)}</span>
+              {/*
+                Two DIFFERENT failures used to collapse into one label, each
+                reported as the other:
+
+                  unlinked          → "not set"  (blamed costing for a broken link)
+                  linked, uncosted  → "$0.00"    (the silent-free lie CoffeeOS#68 removed
+                                                  from the row COGS but not from here)
+
+                They need different operator actions, so they get different
+                words and different tones. `not linked` means this line item
+                resolves to no product in the catalogue — the Shopify product
+                was deleted or replaced, and no amount of costing work will fix
+                it. `not set` means the product IS linked and genuinely has no
+                recipe, which is the CoffeeOS#76 backlog.
+
+                Threshold is `> 0`, matching OrdersWorksheetTable's row-level
+                rule, so a line item and its order cannot disagree about whether
+                anything is costed.
+              */}
+              {!item.product_id ? (
+                <span
+                  style={{ ...mono, color: "var(--warning)" }}
+                  title="This line item resolves to no product in the catalogue. Costing it is not possible until it is linked."
+                  data-testid="line-item-unlinked"
+                >
+                  not linked
+                </span>
+              ) : (productCogsMap[item.product_id] || 0) > 0 ? (
+                <span style={mono} data-testid="line-item-cogs">
+                  {money(productCogsMap[item.product_id])}
+                </span>
               ) : (
-                // Red marks what needs the operator, and this is the root cause
-                // of an uncosted order — the product has no components attached.
-                <span style={{ ...mono, color: "var(--danger)" }}>not set</span>
+                <span
+                  style={{ ...mono, color: "var(--danger)" }}
+                  title="This product has no components attached, so its cost is unknown."
+                  data-testid="line-item-uncosted"
+                >
+                  not set
+                </span>
               )}
             </span>
           </div>

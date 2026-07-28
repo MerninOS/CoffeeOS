@@ -500,7 +500,20 @@ export function OrdersClient({
           >
             Average margin reads {avgMargin.toFixed(1)}% because{" "}
             {missingCogsCount === 1 ? "that order counts" : "those orders count"} as pure
-            profit. Assign components to their products to cost them.
+            profit.{" "}
+            {/*
+              Deliberately does NOT say "assign components to their products".
+              That is only the remedy when the line item is LINKED and uncosted.
+              The larger population is line items that resolve to no product at
+              all — a deleted or replaced Shopify product — where no amount of
+              costing work changes the figure. Naming one cure for two diseases
+              sends most of the affected operators to a dead end, so the banner
+              points at the per-item labels, which now distinguish them.
+            */}
+            Expand an order to see which: {" "}
+            <strong>not set</strong> is a linked product with no recipe;{" "}
+            <strong>not linked</strong> is a line item that matches no product
+            in the catalogue.
             {/*
               Say it plainly rather than suggesting a way through: the list is
               the NEWEST page of the period, so neither a wider nor a narrower
