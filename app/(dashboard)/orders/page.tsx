@@ -6,11 +6,8 @@ import {
   periodStartISO,
   resolvePeriod,
 } from "@/lib/orders/constants";
-import {
-  aggregate,
-  type CostableOrder,
-  type ProductLookup,
-} from "@/lib/orders/cogs";
+import { aggregate, type CostableOrder } from "@/lib/orders/cogs";
+import { buildProductLookup } from "@/lib/products/costing";
 
 export default async function OrdersPage({
   searchParams,
@@ -140,75 +137,10 @@ export default async function OrdersPage({
     throw new Error(`Could not load variant costs: ${variantsError.message}`);
   }
 
-  /** product_id -> the one cost every variant agrees on, or null when unknowable. */
-  const variantCogsByProduct = new Map<string, number | null>();
-  for (const variant of variantRows || []) {
-    const rows = (variant.product_variant_components || []) as Array<{
-      quantity: number | null;
-      components: unknown;
-    }>;
-    const cost = rows.reduce((sum, vc) => {
-      const rel = vc.components as unknown as
-        | { cost_per_unit: number | null }
-        | { cost_per_unit: number | null }[]
-        | null;
-      const one = Array.isArray(rel) ? rel[0] : rel;
-      return sum + (vc.quantity || 0) * (one?.cost_per_unit || 0);
-    }, 0);
-
-    const key = variant.product_id as string;
-    const seen = variantCogsByProduct.get(key);
-
-    if (rows.length === 0) {
-      // An uncosted variant makes the product's cost depend on which one sold,
-      // which we cannot know. Poisons the product for good.
-      variantCogsByProduct.set(key, null);
-      continue;
-    }
-    if (seen === undefined) variantCogsByProduct.set(key, cost);
-    else if (seen !== null && Math.abs(seen - cost) > 0.0001) {
-      variantCogsByProduct.set(key, null); // variants disagree
-    }
-  }
-
-  // Every owned product gets an entry, INCLUDING uncosted ones at 0. That is
-  // what lets classifyOrder tell "linked but has no recipe" (present, 0) apart
-  // from "points at a product that no longer exists" (absent). Making this
-  // write conditional would silently merge the two classes.
-  const productLookup: ProductLookup = {};
-  if (productsWithCogs) {
-    for (const product of productsWithCogs) {
-      let totalCogs = 0;
-      if (product.product_components) {
-        for (const pc of product.product_components) {
-          // Supabase types a nested relation as an ARRAY even when it is
-          // many-to-one, so `components` arrives typed `{...}[]` while at runtime
-          // it is a single object. The previous cast here asserted the object
-          // shape outright, which was simply untrue to the type — normalise both
-          // instead, exactly as lib/orders/cogs.ts does for the same quirk.
-          const rel = pc.components as unknown as
-            | { cost_per_unit: number | null }
-            | { cost_per_unit: number | null }[]
-            | null;
-          const one = Array.isArray(rel) ? rel[0] : rel;
-          totalCogs += (pc.quantity || 0) * (one?.cost_per_unit || 0);
-        }
-      }
-      const hasProductRecipe = (product.product_components?.length ?? 0) > 0;
-      const variantCogs = variantCogsByProduct.get(product.id);
-      const hasVariantRecipe = variantCogs !== undefined && variantCogs !== null;
-
-      // Product level wins where both exist — it is the coarser, deliberately
-      // maintained figure, and only one product on this account has both.
-      productLookup[product.id] = {
-        title: (product as { title: string | null }).title || "Untitled product",
-        cogs: hasProductRecipe ? totalCogs : hasVariantRecipe ? variantCogs : 0,
-        // Presence of a recipe at EITHER level, not a positive total: a product
-        // costed from zero-cost components is costed. See lib/orders/cogs.ts.
-        hasRecipe: hasProductRecipe || hasVariantRecipe,
-      };
-    }
-  }
+  // The product/variant precedence rule lives in lib/products/costing.ts so that
+  // /products resolves costing identically — see CoffeeOS#69. The comments that
+  // used to sit here moved with it; they are the specification for that rule.
+  const productLookup = buildProductLookup(productsWithCogs, variantRows);
 
   // Check if Shopify Admin API is configured
   const { data: settings } = await supabase
