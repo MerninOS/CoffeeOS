@@ -131,6 +131,31 @@ test.describe('classifyOrder', () => {
     })
   })
 
+  test('a product costed only at variant level is costed', () => {
+    // The regression this guards: /orders read only `product_components`, so a
+    // product costed per-variant looked uncosted and its orders were excluded —
+    // taking covered revenue to $0.00 of $261.80 over 30 days on production while
+    // every order in that window was fully costed. page.tsx now folds an agreeing
+    // variant cost into the lookup, so `hasRecipe` means "costed at EITHER level".
+    const products: ProductLookup = {
+      'p-variant': { title: 'DayGlow Brazil Medium Roast', cogs: 8.93, hasRecipe: true },
+    }
+    expect(classifyOrder({ order_line_items: [item('p-variant')] }, products)).toEqual({
+      status: 'costed',
+    })
+  })
+
+  test('a product whose variants disagree stays uncosted', () => {
+    // Line items carry no variant id (432 of 436 null), so when the cost depends
+    // on which variant sold, it is genuinely unknown — page.tsx collapses that to
+    // hasRecipe:false rather than picking one and printing a plausible figure.
+    const products: ProductLookup = {
+      'p-ambiguous': { title: 'Dayglow Medium Roast Retail', cogs: 0, hasRecipe: false },
+    }
+    const result = classifyOrder({ order_line_items: [item('p-ambiguous')] }, products)
+    expect(result.status).toBe('uncosted')
+  })
+
   test('a zero-cost product contributes revenue and no cost to the aggregate', () => {
     const result = aggregate(
       [{ total_price: 25, order_line_items: [item('p-free')] }],

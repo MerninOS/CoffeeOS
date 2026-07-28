@@ -112,6 +112,65 @@ export default async function OrdersPage({
     throw new Error(`Could not load product costs: ${productsError.message}`);
   }
 
+  // A recipe can live at PRODUCT level or at VARIANT level, and this page used to
+  // read only the first — so a product costed per-variant looked uncosted, its
+  // orders were excluded, and the operator was told to add a recipe that was
+  // already there. On this account it took covered revenue to $0.00 of $261.80
+  // over 30 days while every order in that window was fully costed.
+  //
+  // `order_line_items.shopify_variant_id` is null for 432 of 436 rows (the sync
+  // never populates it), so a line item cannot be matched to the variant that
+  // actually sold. The cost is therefore only KNOWABLE when it does not depend on
+  // that choice: every variant costed, and all of them agreeing. Anything else
+  // stays uncosted rather than guessing — this page exists to stop plausible
+  // figures standing in for unknown ones.
+  const { data: variantRows, error: variantsError } = await supabase
+    .from("product_variants")
+    .select(`
+      id,
+      product_id,
+      product_variant_components (
+        quantity,
+        components ( cost_per_unit )
+      )
+    `)
+    .in("product_id", (productsWithCogs || []).map((p) => p.id));
+
+  if (variantsError) {
+    throw new Error(`Could not load variant costs: ${variantsError.message}`);
+  }
+
+  /** product_id -> the one cost every variant agrees on, or null when unknowable. */
+  const variantCogsByProduct = new Map<string, number | null>();
+  for (const variant of variantRows || []) {
+    const rows = (variant.product_variant_components || []) as Array<{
+      quantity: number | null;
+      components: unknown;
+    }>;
+    const cost = rows.reduce((sum, vc) => {
+      const rel = vc.components as unknown as
+        | { cost_per_unit: number | null }
+        | { cost_per_unit: number | null }[]
+        | null;
+      const one = Array.isArray(rel) ? rel[0] : rel;
+      return sum + (vc.quantity || 0) * (one?.cost_per_unit || 0);
+    }, 0);
+
+    const key = variant.product_id as string;
+    const seen = variantCogsByProduct.get(key);
+
+    if (rows.length === 0) {
+      // An uncosted variant makes the product's cost depend on which one sold,
+      // which we cannot know. Poisons the product for good.
+      variantCogsByProduct.set(key, null);
+      continue;
+    }
+    if (seen === undefined) variantCogsByProduct.set(key, cost);
+    else if (seen !== null && Math.abs(seen - cost) > 0.0001) {
+      variantCogsByProduct.set(key, null); // variants disagree
+    }
+  }
+
   // Every owned product gets an entry, INCLUDING uncosted ones at 0. That is
   // what lets classifyOrder tell "linked but has no recipe" (present, 0) apart
   // from "points at a product that no longer exists" (absent). Making this
@@ -135,12 +194,18 @@ export default async function OrdersPage({
           totalCogs += (pc.quantity || 0) * (one?.cost_per_unit || 0);
         }
       }
+      const hasProductRecipe = (product.product_components?.length ?? 0) > 0;
+      const variantCogs = variantCogsByProduct.get(product.id);
+      const hasVariantRecipe = variantCogs !== undefined && variantCogs !== null;
+
+      // Product level wins where both exist — it is the coarser, deliberately
+      // maintained figure, and only one product on this account has both.
       productLookup[product.id] = {
         title: (product as { title: string | null }).title || "Untitled product",
-        cogs: totalCogs,
-        // Presence of a recipe, NOT a positive total: a product costed from
-        // zero-cost components is costed. See ProductLookup in lib/orders/cogs.ts.
-        hasRecipe: (product.product_components?.length ?? 0) > 0,
+        cogs: hasProductRecipe ? totalCogs : hasVariantRecipe ? variantCogs : 0,
+        // Presence of a recipe at EITHER level, not a positive total: a product
+        // costed from zero-cost components is costed. See lib/orders/cogs.ts.
+        hasRecipe: hasProductRecipe || hasVariantRecipe,
       };
     }
   }
