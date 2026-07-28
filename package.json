@@ -11,7 +11,8 @@
     "shopify:dev": "shopify app dev",
     "shopify:deploy": "shopify app deploy",
     "shopify:config:push": "shopify app config push",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:unit": "playwright test -c playwright.unit.config.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
