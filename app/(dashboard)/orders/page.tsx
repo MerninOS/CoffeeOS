@@ -6,7 +6,11 @@ import {
   periodStartISO,
   resolvePeriod,
 } from "@/lib/orders/constants";
-import { aggregate, getOrderLineItemsCogs, type CostableOrder } from "@/lib/orders/cogs";
+import {
+  aggregate,
+  type CostableOrder,
+  type ProductLookup,
+} from "@/lib/orders/cogs";
 
 export default async function OrdersPage({
   searchParams,
@@ -80,10 +84,15 @@ export default async function OrdersPage({
 
   // Fetch all products with their components and component costs
   // This allows us to calculate COGS for each line item
-  const { data: productsWithCogs } = await supabase
+  // `title` is here for the excluded-row badge, which has to NAME the product
+  // blocking an order. Keep `.eq("user_id", ownerId)` on THIS query rather than
+  // relying on any parent scope — CoffeeOS#75 is exactly that mistake, an
+  // unscoped product_components count that read as true for every account.
+  const { data: productsWithCogs, error: productsError } = await supabase
     .from("products")
     .select(`
       id,
+      title,
       product_components (
         quantity,
         components (
@@ -93,18 +102,46 @@ export default async function OrdersPage({
     `)
     .eq("user_id", ownerId);
 
-  // Build a map of product_id -> total COGS
-  const productCogsMap: Record<string, number> = {};
+  // FAIL LOUDLY. Without this lookup there is no cost data at all, so every
+  // order classifies `unlinked` and the page states, as fact, that each one's
+  // Shopify product "was deleted or replaced" — a specific, confident, wrong
+  // diagnosis of a transient database error. Every figure would also be wrong
+  // while looking entirely plausible, which is the exact defect this page was
+  // rebuilt to remove. A blank error beats a convincing lie.
+  if (productsError) {
+    throw new Error(`Could not load product costs: ${productsError.message}`);
+  }
+
+  // Every owned product gets an entry, INCLUDING uncosted ones at 0. That is
+  // what lets classifyOrder tell "linked but has no recipe" (present, 0) apart
+  // from "points at a product that no longer exists" (absent). Making this
+  // write conditional would silently merge the two classes.
+  const productLookup: ProductLookup = {};
   if (productsWithCogs) {
     for (const product of productsWithCogs) {
       let totalCogs = 0;
       if (product.product_components) {
         for (const pc of product.product_components) {
-          const componentCost = (pc.components as { cost_per_unit: number } | null)?.cost_per_unit || 0;
-          totalCogs += (pc.quantity || 0) * componentCost;
+          // Supabase types a nested relation as an ARRAY even when it is
+          // many-to-one, so `components` arrives typed `{...}[]` while at runtime
+          // it is a single object. The previous cast here asserted the object
+          // shape outright, which was simply untrue to the type — normalise both
+          // instead, exactly as lib/orders/cogs.ts does for the same quirk.
+          const rel = pc.components as unknown as
+            | { cost_per_unit: number | null }
+            | { cost_per_unit: number | null }[]
+            | null;
+          const one = Array.isArray(rel) ? rel[0] : rel;
+          totalCogs += (pc.quantity || 0) * (one?.cost_per_unit || 0);
         }
       }
-      productCogsMap[product.id] = totalCogs;
+      productLookup[product.id] = {
+        title: (product as { title: string | null }).title || "Untitled product",
+        cogs: totalCogs,
+        // Presence of a recipe, NOT a positive total: a product costed from
+        // zero-cost components is costed. See ProductLookup in lib/orders/cogs.ts.
+        hasRecipe: (product.product_components?.length ?? 0) > 0,
+      };
     }
   }
 
@@ -125,7 +162,7 @@ export default async function OrdersPage({
   // Summing the paginated `orders` above would silently under-report the moment
   // a period exceeds one page, and would look entirely plausible while doing it.
   // That is spec Criterion 5.
-  const { data: aggregateRows } = await supabase
+  const { data: aggregateRows, error: aggregateError } = await supabase
     .from("orders")
     .select(`
       total_price,
@@ -141,25 +178,25 @@ export default async function OrdersPage({
   // client cannot derive this — and a footer that counts the page while naming
   // the period is the same class of defect Criterion 5 guards the aggregate
   // against, just in copy instead of arithmetic.
-  const rangeRows: CostableOrder[] = aggregateRows || [];
-  const totals = aggregate(rangeRows, productCogsMap);
+  // Same reasoning as the products query: falling through with `[]` would
+  // report a period that genuinely holds orders as empty, at 0% margin, with no
+  // indication anything failed.
+  if (aggregateError) {
+    throw new Error(`Could not load the period aggregate: ${aggregateError.message}`);
+  }
 
-  // An order whose line items resolve to zero product COGS counts as pure
-  // profit — the failure mode the page exists to surface.
-  const missingCogsCount = rangeRows.filter(
-    (o) => getOrderLineItemsCogs(o, productCogsMap) === 0
-  ).length;
+  const rangeRows: CostableOrder[] = aggregateRows || [];
+  const totals = aggregate(rangeRows, productLookup);
 
   return (
     <OrdersClient
       initialOrders={orders || []}
-      productCogsMap={productCogsMap}
+      products={productLookup}
       allComponents={allComponents || []}
       coffeeInventory={coffeeInventory || []}
       isAdminConfigured={isAdminConfigured}
       period={period}
       totals={totals}
-      missingCogsCount={missingCogsCount}
       rangeCount={rangeRows.length}
     />
   );

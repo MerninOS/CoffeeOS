@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { Plus, Minus, Trash2, X, Flame } from "lucide-react";
 import { Button, IconButton, Input, InlineBanner } from "@merninos/ui/instrument";
 import {
@@ -10,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { needsCogs } from "@/lib/orders/cogs";
+import { classifyOrder, type ProductLookup } from "@/lib/orders/cogs";
 import { mono, overline, sans, money } from "./tokens";
 import type {
   Order,
@@ -43,7 +44,7 @@ import type {
 
 export interface OrderExpandedContentProps {
   order: Order;
-  productCogsMap: Record<string, number>;
+  products: ProductLookup;
   allComponents: ComponentData[];
   coffeeInventory: CoffeeInventory[];
   getLineItemCogs: (item: OrderLineItem) => number;
@@ -127,7 +128,7 @@ const ruled = (isLast: boolean): React.CSSProperties => ({
 
 export function ExpandedOrder({
   order,
-  productCogsMap,
+  products,
   allComponents,
   coffeeInventory,
   getOrderComponentsCogs,
@@ -159,7 +160,7 @@ export function ExpandedOrder({
 
   const components = order.order_components || [];
   const customCosts = order.order_custom_costs || [];
-  const missing = needsCogs(order, productCogsMap);
+  const costability = classifyOrder(order, products);
 
   return (
     <div
@@ -171,11 +172,62 @@ export function ExpandedOrder({
         borderBottom: "1px solid var(--hairline)",
       }}
     >
-      {missing && (
+      {/*
+        Names the specific thing to fix, and links to the page that fixes it.
+
+        The two classes get genuinely different treatment because they need
+        different work. `uncosted` is repairable: the products are known, they
+        just have no recipe, so each one links to /products/[id] — the page
+        carrying "Add Component". `unlinked` is not repairable at all; the line
+        item matches no product in the catalogue, so there is nothing to link to
+        and offering a link would promise a fix that does not exist.
+
+        On production, 7 products block all 26 repairable orders. That is why the
+        remedy is named per PRODUCT here rather than per order.
+      */}
+      {costability.status === "uncosted" && (
         <div style={{ marginBottom: "var(--space-4)" }}>
-          <InlineBanner tone="warning" title="No product COGS assigned">
-            This order&apos;s margin is revenue only. Assign components to its
-            products so the figures below can be trusted.
+          <InlineBanner tone="warning" title="Excluded from margin — products not costed">
+            <span data-testid="expanded-excluded-uncosted">
+              This order is left out of the margin figures because{" "}
+              {costability.blocking.length === 1 ? "a product has" : "these products have"}{" "}
+              no recipe:{" "}
+              {costability.blocking.map((p, i) => (
+                <React.Fragment key={p.id}>
+                  {i > 0 && ", "}
+                  <Link
+                    href={`/products/${p.id}`}
+                    data-testid="blocking-product"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ color: "var(--action)", textDecoration: "underline" }}
+                  >
+                    {p.title}
+                  </Link>
+                </React.Fragment>
+              ))}
+              . Add components to {costability.blocking.length === 1 ? "it" : "them"} and
+              this order rejoins the aggregate.
+            </span>
+          </InlineBanner>
+        </div>
+      )}
+
+      {costability.status === "unlinked" && (
+        <div style={{ marginBottom: "var(--space-4)" }}>
+          <InlineBanner tone="danger" title="Excluded from margin — no matching product">
+            <span data-testid="expanded-excluded-unlinked">
+              {costability.unresolvable.length === 0 ? (
+                <>This order has no line items, so there is nothing to cost.</>
+              ) : (
+                <>
+                  This order is left out of the margin figures because{" "}
+                  {costability.unresolvable.length === 1 ? "a line item matches" : "these line items match"}{" "}
+                  no product in the catalogue:{" "}
+                  <strong>{costability.unresolvable.join(", ")}</strong>. The Shopify
+                  product was deleted or replaced, so costing cannot fix it.
+                </>
+              )}
+            </span>
           </InlineBanner>
         </div>
       )}
@@ -223,33 +275,80 @@ export function ExpandedOrder({
             <span className="flex flex-col gap-0.5 min-[900px]:block min-[900px]:text-right">
               <span style={overline} className="min-[900px]:hidden">Unit COGS</span>
               {/*
-                `not set` when there is no cost to show, NOT merely when the line
-                item has no product_id.
+                Two DIFFERENT failures used to collapse into one label, each
+                reported as the other:
 
-                The earlier condition tested `item.product_id`, which only catches
-                an unlinked line item. A linked product with no recipe still has a
-                map entry — page.tsx assigns every product a total, so an uncosted
-                one is 0, not undefined — so it rendered "$0.00". That reads as
-                "this costs nothing", which is a claim about the product. The truth
-                is that nobody has told CoffeeOS what it is made of, and only the
-                roaster can. Printing a confident zero for missing data is how a
-                94.9% margin looks credible.
+                  unlinked          → "not set"  (blamed costing for a broken link)
+                  linked, uncosted  → "$0.00"    (the silent-free lie CoffeeOS#68 removed
+                                                  from the row COGS but not from here)
 
-                Same rule as the COGS column in OrdersWorksheetTable: no cost at
-                all → "not set"; a real figure → the figure.
+                They need different operator actions, so they get different words
+                and different tones. `not linked` means this line item resolves to
+                no product in the catalogue — the Shopify product was deleted or
+                replaced, and no amount of costing work will fix it. `not set`
+                means the product IS linked and genuinely has no recipe, which is
+                the CoffeeOS#76 backlog.
+
+                BRANCHES ON LOOKUP PRESENCE, NOT ON `product_id` NULLNESS.
+
+                Those are not the same test. A `product_id` that is set but absent
+                from the lookup — a product row that no longer exists, which
+                nothing prevents, since order_line_items carries no foreign keys —
+                is `unlinked` to classifyOrder. Testing `!item.product_id` here
+                sent that case to the `not set` branch, so the item read "add
+                components" directly beneath its own order banner saying "deleted
+                or replaced, so costing cannot fix it": two contradictory
+                diagnoses of one line, one inch apart.
+
+                `products[id]?.cogs || 0` is what collapsed them — the exact
+                distinction ProductLookup's docstring says the type was widened to
+                preserve. Resolve the entry ONCE and branch on it.
+
+                All three states keep `data-testid="line-item-cogs"` and carry the
+                distinction in `data-state`. CoffeeOS#68 landed a regression test
+                (tests/e2e/orders-uncosted.spec.ts) that reads every
+                `line-item-cogs` cell and asserts an uncosted one says "not set" —
+                moving the sentinel to its own test id would have broken a test
+                guarding the very bug this branch also cares about.
               */}
-              {item.product_id && (productCogsMap[item.product_id] || 0) > 0 ? (
-                <span style={mono} data-testid="line-item-cogs">
-                  {money(productCogsMap[item.product_id])}
-                </span>
-              ) : (
-                <span
-                  style={{ ...mono, color: "var(--danger)" }}
-                  data-testid="line-item-cogs"
-                >
-                  not set
-                </span>
-              )}
+              {(() => {
+                const product = item.product_id ? products[item.product_id] : undefined;
+
+                if (!product) {
+                  return (
+                    <span
+                      style={{ ...mono, color: "var(--warning)" }}
+                      title="This line item resolves to no product in the catalogue. Costing it is not possible until it is linked."
+                      data-testid="line-item-cogs"
+                      data-state="unlinked"
+                    >
+                      not linked
+                    </span>
+                  );
+                }
+
+                // Recipe presence, not a positive total — a product costed from
+                // zero-cost components is costed, and telling its owner to "add
+                // components" would be false. Matches classifyOrder exactly.
+                if (!product.hasRecipe || product.cogs < 0) {
+                  return (
+                    <span
+                      style={{ ...mono, color: "var(--danger)" }}
+                      title="This product has no components attached, so its cost is unknown."
+                      data-testid="line-item-cogs"
+                      data-state="uncosted"
+                    >
+                      not set
+                    </span>
+                  );
+                }
+
+                return (
+                  <span style={mono} data-testid="line-item-cogs" data-state="costed">
+                    {money(product.cogs)}
+                  </span>
+                );
+              })()}
             </span>
           </div>
         ))}

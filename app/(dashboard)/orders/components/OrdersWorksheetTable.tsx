@@ -5,7 +5,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { ChevronRight, Truck, ExternalLink } from "lucide-react";
 import { Badge, type BadgeProps } from "@merninos/ui/instrument";
-import { needsCogs } from "@/lib/orders/cogs";
+import { classifyOrder } from "@/lib/orders/cogs";
 import { ExpandedOrder, type OrderExpandedContentProps } from "./ExpandedOrder";
 import { mono, overline, money } from "./tokens";
 import type { Order } from "./types";
@@ -126,7 +126,7 @@ export function OrdersWorksheetTable({
   getOrderCogs,
   ...expandedProps
 }: OrdersWorksheetTableProps) {
-  const { productCogsMap } = expandedProps;
+  const { products } = expandedProps;
 
   const head: React.CSSProperties = {
     ...overline,
@@ -172,10 +172,18 @@ export function OrdersWorksheetTable({
         const margin = revenue > 0 ? ((revenue - cogs) / revenue) * 100 : 0;
         const isExpanded = expandedOrders.has(order.id);
 
-        // The whole point of the page: nothing in this order resolves to a
-        // product COGS, so its margin is revenue-only and reads as better than
-        // it is. Red marks it — this is the live register, not decoration.
-        const missing = needsCogs(order, productCogsMap);
+        // The whole point of the page: this order's cost is not fully known, so
+        // its margin would read as better than it is. Red marks it — this is the
+        // live register, not decoration.
+        //
+        // Stricter than the predicate this replaced, which asked whether TOTAL line-item
+        // COGS was zero. An order pairing a costed product with an uncosted one
+        // has a non-zero total, so it slipped through unflagged while still
+        // reporting a margin built partly on a fabricated $0 — orders #1304 and
+        // #1305 on production do exactly that, showing 72.2% against a truth
+        // nearer 46%.
+        const costability = classifyOrder(order, products);
+        const missing = costability.status !== "costed";
         const last = i === filteredOrders.length - 1;
 
         return (
@@ -242,6 +250,29 @@ export function OrdersWorksheetTable({
                     Ready
                   </Badge>
                 )}
+                {/*
+                  Excluded from the margin aggregate — and said so on the row,
+                  because an order silently missing from a total is worse than one
+                  visibly set aside. The word differs by remedy: `uncosted` is
+                  fixable by putting a recipe on a product, `unlinked` never is.
+                  Tones match the per-line-item labels so the row and the line
+                  agree on colour for the same cause.
+
+                  The blocking product is NAMED in the expanded row, not here —
+                  the longest is "Goldilocks Chilled Espresso Concentrate" at 38
+                  characters, and this is the only flexible track in the grid.
+                */}
+                {costability.status !== "costed" && (
+                  // Wrapped rather than passing `data-testid` to Badge: the
+                  // instrument Badge destructures only its known props, so an
+                  // extra attribute is silently dropped — and a test seam that
+                  // vanishes without erroring is worse than none.
+                  <span data-testid="row-excluded" data-status={costability.status}>
+                    <Badge tone={costability.status === "uncosted" ? "warning" : "danger"}>
+                      {costability.status}
+                    </Badge>
+                  </span>
+                )}
               </div>
 
               {/* The four figures. 2×2 stacked, 4-up on a wide phone/tablet, one
@@ -265,12 +296,28 @@ export function OrdersWorksheetTable({
                     {missing && cogs === 0 ? "not set" : money(cogs)}
                   </span>
                 </Figure>
-                <Figure label="Profit">
-                  <span style={mono}>{money(profit)}</span>
+                {/*
+                  Profit and margin are WITHHELD, not reddened, when the cost is
+                  unknown.
+
+                  Revenue and COGS above are real as far as they go — revenue comes
+                  from Shopify, COGS is what has actually been costed. Profit and
+                  margin are wholly derived from the number that is missing, so a
+                  figure here is not "uncertain", it is invented. Red says "be
+                  careful"; an em dash says "we do not know", which is the true
+                  statement and the reason the order left the aggregate at all.
+
+                  Printing 100.0% in red on an order with no COGS is how the header
+                  figure got believed in the first place.
+                */}
+                <Figure label="Profit" testId="row-profit">
+                  <span style={{ ...mono, color: missing ? "var(--ink-subtle)" : "var(--ink)" }}>
+                    {missing ? "—" : money(profit)}
+                  </span>
                 </Figure>
-                <Figure label="Margin">
-                  <span style={{ ...mono, color: missing ? "var(--danger)" : "var(--ink)" }}>
-                    {margin.toFixed(1)}%
+                <Figure label="Margin" testId="row-margin">
+                  <span style={{ ...mono, color: missing ? "var(--ink-subtle)" : "var(--ink)" }}>
+                    {missing ? "—" : `${margin.toFixed(1)}%`}
                   </span>
                 </Figure>
               </div>

@@ -43,7 +43,8 @@ import {
   getOrderCustomCostsTotal as cogsCustomCosts,
   getTotalAdditionalCosts as cogsAdditional,
   getOrderCogs as cogsOrder,
-  needsCogs,
+  classifyOrder,
+  type ProductLookup,
 } from "@/lib/orders/cogs";
 import { type PeriodValue } from "@/lib/orders/constants";
 import { OrdersWorksheetTable } from "./components/OrdersWorksheetTable";
@@ -81,7 +82,7 @@ import type {
 
 interface OrdersClientProps {
   initialOrders: Order[];
-  productCogsMap: Record<string, number>;
+  products: ProductLookup;
   allComponents: ComponentData[];
   coffeeInventory: CoffeeInventory[];
   isAdminConfigured: boolean;
@@ -92,9 +93,25 @@ interface OrdersClientProps {
    * `initialOrders` — that array is one page, and summing it would under-report
    * as soon as a period exceeds the page limit.
    */
-  totals: { revenue: number; cogs: number; profit: number; margin: number };
-  /** Also over the whole period, for the same reason. */
-  missingCogsCount: number;
+  totals: {
+    /** COSTED orders only — the subset whose margin is knowable. */
+    revenue: number;
+    cogs: number;
+    profit: number;
+    margin: number;
+    /**
+     * EVERY order in the period, costed or not. The honest denominator, and the
+     * only figure any copy naming the period may use.
+     *
+     * It is also what Criterion 5 must probe. `revenue` above covers a subset by
+     * design, so "the aggregate exceeds the visible page" is no longer true of
+     * it — and a test left pointing at it would fail for the right reason while
+     * looking like a regression.
+     */
+    totalRevenue: number;
+    excludedUnlinked: number;
+    excludedUncosted: number;
+  };
   /**
    * How many orders the period actually holds. `initialOrders` is one page of
    * at most ORDERS_PAGE_LIMIT, so it is NOT a period count and must never be
@@ -105,11 +122,11 @@ interface OrdersClientProps {
 
 /** The costed/uncosted filter. Not a period — this one is purely a view of the
  *  page already fetched, so it stays client-side. */
-type CogsFilter = "all" | "missing" | "costed";
+type CogsFilter = "all" | "excluded" | "costed";
 
 const COGS_FILTERS = [
   { value: "all", label: "All" },
-  { value: "missing", label: "Missing COGS" },
+  { value: "excluded", label: "Excluded" },
   { value: "costed", label: "Costed" },
 ];
 
@@ -149,13 +166,12 @@ const DIALOG_SELECT: React.CSSProperties = {
 
 export function OrdersClient({
   initialOrders,
-  productCogsMap,
+  products,
   allComponents,
   coffeeInventory,
   isAdminConfigured,
   period,
   totals,
-  missingCogsCount,
   rangeCount,
 }: OrdersClientProps) {
   const router = useRouter();
@@ -193,15 +209,15 @@ export function OrdersClient({
     )
     .filter((order) => {
       if (cogsFilter === "all") return true;
-      const uncosted = needsCogs(order, productCogsMap);
-      return cogsFilter === "missing" ? uncosted : !uncosted;
+      const excluded = classifyOrder(order, products).status !== "costed";
+      return cogsFilter === "excluded" ? excluded : !excluded;
     });
 
   /**
    * PAGE vs PERIOD.
    *
-   * `orders` is one page, capped at ORDERS_PAGE_LIMIT; `rangeCount` and
-   * `missingCogsCount` cover the whole period. Every sentence below that names
+   * `orders` is one page, capped at ORDERS_PAGE_LIMIT; `rangeCount` and the
+   * exclusion counts inside `totals` cover the whole period. Every sentence below that names
    * the period has to read the second pair, and every control that acts on the
    * list has to read the first — mixing them is how "100 of 100 orders shown ·
    * last 30 days" ends up asserting a period figure it cannot support, and how a
@@ -210,12 +226,13 @@ export function OrdersClient({
    */
   const pageCoversRange = orders.length >= rangeCount;
 
-  /** Uncosted orders reachable by the client-side filter — the page, not the
+  /** Excluded orders reachable by the client-side filter — the page, not the
    *  period. This is what the banner's action can actually produce. */
-  const missingCogsOnPage = orders.filter((order) =>
-    needsCogs(order, productCogsMap)
+  const excludedTotal = totals.excludedUnlinked + totals.excludedUncosted;
+  const excludedOnPage = orders.filter(
+    (order) => classifyOrder(order, products).status !== "costed"
   ).length;
-  const missingCogsOffPage = missingCogsCount - missingCogsOnPage;
+  const excludedOffPage = excludedTotal - excludedOnPage;
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -233,12 +250,12 @@ export function OrdersClient({
 
   // The costing math lives in @/lib/orders/cogs so the per-row figures and the
   // server-side range aggregate cannot drift apart. These adapters only bind
-  // `productCogsMap`, which the module takes explicitly instead of closing over.
-  const getLineItemCogs = (item: OrderLineItem) => cogsLineItem(item, productCogsMap);
+  // `products`, which the module takes explicitly instead of closing over.
+  const getLineItemCogs = (item: OrderLineItem) => cogsLineItem(item, products);
   const getOrderComponentsCogs = (order: Order) => cogsOrderComponents(order);
   const getOrderCustomCostsTotal = (order: Order) => cogsCustomCosts(order);
   const getTotalAdditionalCosts = (order: Order) => cogsAdditional(order);
-  const getOrderCogs = (order: Order) => cogsOrder(order, productCogsMap);
+  const getOrderCogs = (order: Order) => cogsOrder(order, products);
 
   const handleAddComponent = async (orderId: string) => {
     if (!selectedComponentId || componentQuantity <= 0) return;
@@ -304,7 +321,7 @@ export function OrdersClient({
   // Everything the expanded row needs, assembled once. Same prop names, same
   // handlers, same values as before the rebuild.
   const expandedProps = {
-    productCogsMap,
+    products,
     allComponents,
     coffeeInventory,
     getLineItemCogs,
@@ -333,7 +350,16 @@ export function OrdersClient({
 
   // From the server, over the whole period. These used to be reduced over
   // `orders`, which was correct only while that fetch was unbounded.
-  const { revenue: totalRevenue, cogs: totalCogs, profit: totalProfit, margin: avgMargin } = totals;
+  // `coveredRevenue` is deliberately NOT called `totalRevenue` any more: it is
+  // the costed subset, and the previous name invited exactly the confusion this
+  // whole change exists to remove. `periodRevenue` is the real total.
+  const {
+    revenue: coveredRevenue,
+    cogs: totalCogs,
+    profit: totalProfit,
+    margin: avgMargin,
+    totalRevenue: periodRevenue,
+  } = totals;
 
   // "1 year" reads badly inside "the last …", so say it the way a person would.
   const periodPhrase = period === "365" ? "Year" : `${period} Days`;
@@ -383,14 +409,33 @@ export function OrdersClient({
    * the capability tests — splitting the glyph off would break them for a purely
    * cosmetic reason.
    */
+  // Criterion 4/6: the figures state the revenue they cover, and say nothing
+  // extra when they cover everything.
+  //
+  // Gated on the MONEY, not on the exclusion count. Those come apart: an
+  // excluded order with $0 revenue (19 of them on production — comps, $0
+  // deposits, fully-discounted orders) leaves covered === period while the count
+  // is non-zero, and the count-gated version then rendered "$438.00 of $438.00"
+  // under a red banner headlined "Margin covers $438.00 of $438.00" — a
+  // live-register alert whose own headline says nothing is missing.
+  //
+  // Compares the RENDERED strings rather than the floats, so a sub-cent gap that
+  // would print as "$X of $X" is treated as no gap at all — same defect, smaller.
+  const revenueDiffers = money(coveredRevenue) !== money(periodRevenue);
+  const scopeNote = revenueDiffers ? `of ${money(periodRevenue)}` : undefined;
+
   const stats: Stat[] = [
-    { label: "Revenue", value: <span data-testid="stat-revenue">{money(totalRevenue)}</span> },
+    {
+      label: "Revenue",
+      value: <span data-testid="stat-revenue">{money(coveredRevenue)}</span>,
+      unit: scopeNote,
+    },
     { label: "Total COGS", value: <span data-testid="stat-cogs">{money(totalCogs)}</span> },
     { label: "Avg margin", value: avgMargin.toFixed(1), unit: "%" },
     {
-      label: "Missing COGS",
-      value: String(missingCogsCount),
-      unit: missingCogsCount === 1 ? "order" : "orders",
+      label: "Excluded",
+      value: String(excludedTotal),
+      unit: excludedTotal === 1 ? "order" : "orders",
     },
   ];
 
@@ -486,10 +531,34 @@ export function OrdersClient({
             note={`revenue minus COGS · last ${periodPhrase.toLowerCase()}`}
           />
         </div>
+{/*
+          `data-period-revenue` and `data-excluded-revenue` are explicit TEST
+          SEAMS, not dead markup.
+
+          Criterion 5 proves the aggregate covers the range rather than the page.
+          Its probe used to be `stat-revenue`, which now covers only the costed
+          subset by design — so the property stopped holding of it and two tests
+          failed for entirely the right reason. The range-wide figures have to be
+          readable at every period for that probe to work, and the VISIBLE
+          qualifier cannot serve: Criterion 6 requires it to disappear when
+          nothing is excluded, which is exactly the demo seed's 7-day window.
+
+          `data-excluded-revenue` exists because the reconciliation test cannot
+          sum the excluded rows it can SEE and compare that to a range-wide total
+          — page-scoped evidence cannot check a range-scoped claim, and doing so
+          was off by $277 once the seed fixtures landed.
+
+          `data-testid` stays `strip-column`, which CoffeeOS#68 added for the
+          layout regression test in orders-layout.spec.ts. One element gets one
+          test id; the exclusion tests query this same node rather than renaming
+          a seam another suite already depends on.
+        */}
         <div
           className="min-[1400px]:flex-1"
           style={{ minWidth: 0 }}
           data-testid="strip-column"
+          data-period-revenue={periodRevenue}
+          data-excluded-revenue={periodRevenue - coveredRevenue}
         >
           <StatStrip stats={stats} />
         </div>
@@ -500,52 +569,92 @@ export function OrdersClient({
         needs the operator, and red earns its place here because every margin
         above is overstated until it clears.
       */}
-      {missingCogsCount > 0 && (
+      {excludedTotal > 0 && (
         <div data-testid="missing-cogs-banner">
           <InlineBanner
             tone="danger"
-            title={`${missingCogsCount} ${missingCogsCount === 1 ? "order has" : "orders have"} no product COGS`}
             /*
-              The COUNT is range-true — it is the honest number and the reason
-              the banner exists. The ACTION is not: `setCogsFilter` filters
+              The banner stays gated on the COUNT while its title is gated on the
+              MONEY — deliberately different conditions, because that is the
+              actual relationship. Excluded $0 orders are still a costing gap
+              worth clearing; they just carry no revenue to talk about, so the
+              title must not claim a shortfall it cannot show.
+            */
+            title={
+              revenueDiffers
+                ? `Margin covers ${money(coveredRevenue)} of ${money(periodRevenue)} in this period`
+                : `${excludedTotal} ${excludedTotal === 1 ? "order is" : "orders are"} excluded from the margin figures`
+            }
+            /*
+              The COUNTS are range-true — they are the honest numbers and the
+              reason the banner exists. The ACTION is not: `setCogsFilter` filters
               `orders`, which is one page. So the action only appears when the
               page actually holds one of these orders, and says how many it can
               reach; otherwise it would hand the operator a button that lands
               them on "No orders match" with this banner still overhead.
             */
             action={
-              missingCogsOnPage > 0 ? (
+              excludedOnPage > 0 ? (
                 <Button
                   size="sm"
                   variant="secondary"
                   data-testid="missing-cogs-show"
-                  onClick={() => setCogsFilter("missing")}
+                  onClick={() => setCogsFilter("excluded")}
                 >
-                  {missingCogsOffPage === 0
-                    ? missingCogsCount === 1
+                  {excludedOffPage === 0
+                    ? excludedTotal === 1
                       ? "Show it"
                       : "Show them"
-                    : `Show the ${missingCogsOnPage} on this page`}
+                    : `Show the ${excludedOnPage} on this page`}
                 </Button>
               ) : undefined
             }
           >
-            Average margin reads {avgMargin.toFixed(1)}% because{" "}
-            {missingCogsCount === 1 ? "that order counts" : "those orders count"} as pure
-            profit. Assign components to their products to cost them.
+            {/*
+              TWO counts, never one total.
+
+              They need different work and have wildly different ceilings. On
+              production 26 orders are repairable by costing 7 products, while
+              239 can never be repaired at all — their Shopify products no longer
+              exist. Collapsing those into a single "265 excluded" would hide the
+              only actionable number behind one that is mostly noise, which is the
+              same conflation the per-line-item labels were split to undo.
+            */}
+            <span data-testid="excluded-uncosted-count">
+              {totals.excludedUncosted > 0 && (
+                <>
+                  <strong>{totals.excludedUncosted}</strong>{" "}
+                  {totals.excludedUncosted === 1 ? "order is" : "orders are"} waiting on a
+                  product recipe — expand{" "}
+                  {totals.excludedUncosted === 1 ? "it" : "one"} to see which product, and
+                  costing it brings {totals.excludedUncosted === 1 ? "the order" : "them"}{" "}
+                  back into the figures above.{" "}
+                </>
+              )}
+            </span>
+            <span data-testid="excluded-unlinked-count">
+              {totals.excludedUnlinked > 0 && (
+                <>
+                  <strong>{totals.excludedUnlinked}</strong>{" "}
+                  {totals.excludedUnlinked === 1 ? "order has" : "orders have"} line items
+                  matching no product in the catalogue — the Shopify product was deleted
+                  or replaced, so costing cannot recover{" "}
+                  {totals.excludedUnlinked === 1 ? "it" : "them"}.{" "}
+                </>
+              )}
+            </span>
             {/*
               Say it plainly rather than suggesting a way through: the list is
               the NEWEST page of the period, so neither a wider nor a narrower
-              preset surfaces an older uncosted order. Nothing on this screen
+              preset surfaces an older excluded order. Nothing on this screen
               reaches them today, and pretending otherwise sends the operator
               round in circles.
             */}
-            {missingCogsOffPage > 0 && (
+            {excludedOffPage > 0 && (
               <>
-                {" "}
-                {missingCogsOffPage === missingCogsCount
+                {excludedOffPage === excludedTotal
                   ? `None of them are among the ${orders.length} most recent orders listed below.`
-                  : `${missingCogsOffPage} of them are older than the ${orders.length} most recent orders listed below.`}
+                  : `${excludedOffPage} of them are older than the ${orders.length} most recent orders listed below.`}
               </>
             )}
           </InlineBanner>
