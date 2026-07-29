@@ -483,3 +483,47 @@ export async function updateWholesalePricing(
 
   return { success: true };
 }
+
+/**
+ * Set which recipe basis a product is billed from (CoffeeOS#69).
+ *
+ * Deliberately its own action rather than a field on the recipe save: flipping
+ * this re-costs every order line for the product, so it is a consequential
+ * write and the UI defers it to an explicit Save rather than firing it on a
+ * click. A stray toggle should not silently change historic margin.
+ *
+ * It writes ONLY the column. Neither basis's rows are touched — the unselected
+ * one stays stored and is rendered inert, so switching back loses nothing.
+ */
+export async function updateProductCostingMode(
+  productId: string,
+  mode: "product" | "variant",
+) {
+  const supabase = await createClient();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
+
+  // Matches every sibling action in this file. Without it the auth error was
+  // swallowed and `ownerId!` asserted — PostgREST does not treat `.eq(col, null)`
+  // as a wildcard so nothing leaked, but the update silently affected zero rows
+  // and still returned success, masking an authorization failure.
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
+  }
+
+  const { data, error } = await supabase
+    .from("products")
+    .update({ costing_mode: mode })
+    .eq("id", productId)
+    .eq("user_id", ownerId)
+    .select("id");
+
+  if (error) return { error: error.message };
+  // A zero-row update means the product is not this owner's. Reporting success
+  // there would tell the operator their costing source changed when it did not.
+  if (!data || data.length === 0) return { error: "Product not found" };
+
+  revalidatePath(`/products/${productId}`);
+  revalidatePath("/products");
+  revalidatePath("/dashboard");
+  return { success: true };
+}

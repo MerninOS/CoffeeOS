@@ -1,0 +1,403 @@
+import { test, expect, type Page, type Locator } from '@playwright/test'
+
+/**
+ * The six recipe-editing capabilities of /products/[id], asserted by their
+ * EFFECT ON COGS rather than by the presence of a control.
+ *
+ * CoffeeOS#69 Stage A.5. These exist to survive Stage B: the page is about to be
+ * rebuilt from loud Mernin' onto instrument, every class string replaced and the
+ * duplicate mobile rendering deleted. A test that asserts "the button is there"
+ * would pass through a rewrite that quietly stopped saving. A test that asserts
+ * "the total moved by exactly cost_per_unit x quantity" cannot.
+ *
+ * That is why they are written NOW, against the pre-restyle markup, and must be
+ * green on this commit's parent. Written after the rewrite they would only
+ * assert whatever the rewrite happens to do.
+ *
+ * Everything is selected by `data-testid`, never by class or copy — those are
+ * exactly what Stage B changes. The testids are the contract.
+ *
+ * Two properties of the page shape these tests:
+ *
+ * 1. THE PAGE RENDERS EVERY ROW TWICE — a `sm:hidden` card list and a
+ *    `hidden sm:block` table — so every testid matches twice. `vis()` filters to
+ *    the rendering the current viewport actually shows. Criterion 21 deletes the
+ *    duplication in Stage B, at which point `vis()` becomes a no-op rather than
+ *    a lie.
+ *
+ * 2. THE EDITOR IS LOCAL STATE UNTIL SAVED. Tests 1-3 therefore never touch the
+ *    database. Only 4 and 5 write, and both restore what they changed.
+ */
+
+// Figures render through `fmt`, i.e. THREE decimals ($11.480). Comparing at
+// precision 3 matches what the page actually displays; asserting more would be
+// asserting on values the operator cannot see.
+const PRECISION = 3
+
+/**
+ * Cold Brew Blend 5lb: product-mode (no variants), already costed, and uses
+ * THREE of the four seeded components — so exactly one remains addable.
+ * Yirgacheffe would be the obvious choice but uses all four, which permanently
+ * disables "Add Component".
+ */
+const PRODUCT_MODE_FIXTURE = 'Cold Brew Blend 5lb'
+
+const money = (s: string) => Number(s.replace(/[^0-9.-]/g, ''))
+
+/** The copy of a duplicated element that this viewport actually shows. */
+const vis = (l: Locator) => l.filter({ visible: true })
+
+async function hideOnboardingWidget(page: Page) {
+  await page.addStyleTag({
+    content: 'div.fixed.bottom-4.right-4.z-50 { display: none !important; }',
+  })
+}
+
+/**
+ * Open a product's detail page by NAME.
+ *
+ * Reads the href and navigates rather than clicking, for the same two reasons
+ * baselines.spec.ts does: the onboarding widget covers the row at 375px, and the
+ * duplicate renderings make the name match twice.
+ */
+async function openProduct(page: Page, name: string) {
+  await page.goto('/products')
+  await expect(page).not.toHaveURL(/\/auth\//)
+  const link = page.getByRole('link', { name, exact: false }).first()
+  await link.waitFor({ timeout: 20_000 })
+  const href = await link.getAttribute('href')
+  expect(href, `no detail link for "${name}"`).toMatch(/^\/products\/[0-9a-f-]{36}$/)
+  await page.goto(href!)
+  await page.waitForLoadState('networkidle')
+  await hideOnboardingWidget(page)
+}
+
+const cogs = (page: Page) => page.getByTestId('stat-total-cogs')
+const rows = (page: Page) => vis(page.getByTestId('recipe-row'))
+
+async function readCogs(page: Page): Promise<number> {
+  return money(await cogs(page).innerText())
+}
+
+async function expectCogs(page: Page, expected: number, message: string) {
+  await expect
+    .poll(async () => readCogs(page), { message })
+    .toBeCloseTo(expected, PRECISION)
+}
+
+/**
+ * Adds a component and returns its unit cost, parsed from the row the app itself
+ * renders. Deriving the expected delta from the app's own declared price — not a
+ * hardcoded number — means the assertion stays exact if the seed's costs change.
+ *
+ * "Add Component" appends the first component not already used, at quantity 1,
+ * so the new row is the last one.
+ */
+async function addComponent(page: Page): Promise<number> {
+  const before = await rows(page).count()
+
+  // Precondition, stated rather than discovered as a 30s timeout: "Add
+  // Component" is disabled once every available component is already used, which
+  // is how the page prevents adding the same component twice. Yirgacheffe uses
+  // all four seeded components, so it can never satisfy this — hence
+  // PRODUCT_MODE_FIXTURE is Cold Brew, which uses three of four.
+  const add = vis(page.getByTestId('recipe-add'))
+  await expect(
+    add,
+    'Add Component is disabled — this product already uses every seeded component, so nothing can be added'
+  ).toBeEnabled()
+
+  await add.click()
+  await expect(rows(page)).toHaveCount(before + 1)
+
+  const unitCost = money(await rows(page).last().getByTestId('recipe-unit-cost').innerText())
+  expect(unitCost, 'could not parse a unit cost from the new row').toBeGreaterThan(0)
+  return unitCost
+}
+
+async function removeLastRow(page: Page) {
+  const before = await rows(page).count()
+  await rows(page).last().getByTestId('recipe-remove').click()
+  await expect(rows(page)).toHaveCount(before - 1)
+}
+
+async function save(page: Page) {
+  await vis(page.getByTestId('recipe-save')).click()
+  await expect(page.getByTestId('detail-toast')).toBeVisible()
+}
+
+// ── 1-3: the arithmetic, in local state, no writes ──────────────────────────
+
+test.describe('recipe editing moves COGS by exactly the right amount', () => {
+  test('1 — adding a component raises COGS by its unit cost', async ({ page }) => {
+    await openProduct(page, PRODUCT_MODE_FIXTURE)
+    const before = await readCogs(page)
+    expect(before, 'fixture product should already be costed').toBeGreaterThan(0)
+
+    const unitCost = await addComponent(page)
+    await expectCogs(page, before + unitCost, 'COGS did not rise by the added unit cost')
+
+    await removeLastRow(page)
+    await expectCogs(page, before, 'COGS did not settle back after cleanup')
+  })
+
+  test('2 — changing a quantity moves COGS by the quantity delta', async ({ page }) => {
+    await openProduct(page, PRODUCT_MODE_FIXTURE)
+    const before = await readCogs(page)
+
+    const unitCost = await addComponent(page)
+    await expectCogs(page, before + unitCost, 'setup: one unit should be reflected')
+
+    // The capability under test: 1 -> 3 must be worth exactly two more units.
+    await rows(page).last().getByTestId('recipe-qty').fill('3')
+    await expectCogs(page, before + unitCost * 3, 'COGS did not track the quantity')
+
+    await removeLastRow(page)
+    await expectCogs(page, before, 'COGS did not settle back after cleanup')
+  })
+
+  test('3 — removing a component drops COGS by exactly its contribution', async ({ page }) => {
+    await openProduct(page, PRODUCT_MODE_FIXTURE)
+    const before = await readCogs(page)
+
+    const unitCost = await addComponent(page)
+    await rows(page).last().getByTestId('recipe-qty').fill('4')
+    await expectCogs(page, before + unitCost * 4, 'setup: four units should be reflected')
+
+    await removeLastRow(page)
+    await expectCogs(page, before, 'removing the row did not remove exactly its contribution')
+  })
+})
+
+// ── 4-5: the writes, each restoring what it changed ─────────────────────────
+
+test.describe('recipes persist', () => {
+  test('4 — a saved product-level recipe survives a reload', async ({ page }) => {
+    await openProduct(page, PRODUCT_MODE_FIXTURE)
+    const before = await readCogs(page)
+    const originalRows = await rows(page).count()
+
+    const unitCost = await addComponent(page)
+    await save(page)
+
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await hideOnboardingWidget(page)
+
+    await expect(rows(page), 'the saved row is missing after reload').toHaveCount(originalRows + 1)
+    await expectCogs(page, before + unitCost, 'the saved COGS did not survive the reload')
+
+    // Restore, and prove the restore worked — a failed cleanup here would leave
+    // the fixture costed differently for every other spec.
+    await removeLastRow(page)
+    await save(page)
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await hideOnboardingWidget(page)
+    await expect(rows(page), 'cleanup did not restore the original row count').toHaveCount(originalRows)
+    await expectCogs(page, before, 'cleanup did not restore the original COGS')
+  })
+
+  test('5 — a saved variant-level recipe survives a reload', async ({ page }) => {
+    // Kenya is variant-costed: two variants that agree, so it is COSTED. Editing
+    // one writes to product_variant_components, a different table and a
+    // different server action from test 4.
+    await openProduct(page, 'Kenya Nyeri AA')
+
+    await expect(page.getByTestId('variant-basis-row'), 'fixture should carry two variants').toHaveCount(2)
+    const pill = page.locator('[data-testid="variant-basis-row"][data-variant-sku="KEN-NYERI-12"]')
+    await pill.click()
+
+    const before = await readCogs(page)
+    const originalRows = await rows(page).count()
+    expect(originalRows, 'the seeded variant should already have a recipe').toBeGreaterThan(0)
+
+    const unitCost = await addComponent(page)
+    await save(page)
+
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await hideOnboardingWidget(page)
+    await pill.click()
+
+    await expect(rows(page), 'the saved variant row is missing after reload').toHaveCount(originalRows + 1)
+    await expectCogs(page, before + unitCost, 'the saved variant COGS did not survive the reload')
+
+    await removeLastRow(page)
+    await save(page)
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await hideOnboardingWidget(page)
+    await pill.click()
+    await expect(rows(page), 'cleanup did not restore the variant row count').toHaveCount(originalRows)
+    await expectCogs(page, before, 'cleanup did not restore the variant COGS')
+  })
+})
+
+// ── 6: the one that matters most ────────────────────────────────────────────
+
+test.describe('variant selection', () => {
+  /**
+   * Sumatra's two variants cost DIFFERENT amounts on purpose ($11.30 for the
+   * 12oz, $29.64 for the 2lb). That difference is the whole point: it is what
+   * makes "the page shows the selected variant's cost" falsifiable.
+   *
+   * This is also the closest thing to a regression test for the class of bug
+   * CoffeeOS#85 fixed — variant-level recipes being ignored. That bug reached
+   * production because the fixture had no variants at all to read.
+   */
+  test('6 — switching variant shows that variant\'s COGS, not the other one\'s', async ({ page }) => {
+    await openProduct(page, 'Sumatra Mandheling')
+
+    // Selection moved from a pill row to the costing-source table in Stage C —
+    // the same act, a different element. The ASSERTIONS below are unchanged.
+    const small = page.locator('[data-testid="variant-basis-row"][data-variant-sku="SUM-MAND-12"]')
+    const large = page.locator('[data-testid="variant-basis-row"][data-variant-sku="SUM-MAND-2LB"]')
+    await expect(small).toHaveCount(1)
+    await expect(large).toHaveCount(1)
+
+    await small.click()
+    const smallCogs = await readCogs(page)
+
+    await large.click()
+    const largeCogs = await readCogs(page)
+
+    // The guard that makes this test mean something: if the two variants cost
+    // the same, "it changed" is unfalsifiable and the assertions below would
+    // pass against a page that ignores the selection entirely.
+    expect(
+      Math.abs(largeCogs - smallCogs),
+      'fixture variants must differ in cost, or this proves nothing'
+    ).toBeGreaterThan(1)
+
+    // And back, to prove the figure tracks the selection rather than only ever
+    // moving forwards.
+    await small.click()
+    await expectCogs(page, smallCogs, 'switching back did not restore the first variant figure')
+  })
+})
+
+// ── 7-11: the costing source (CoffeeOS#69 Stage C, Criteria 9-13) ───────────
+
+/**
+ * House Espresso is the fixture's BOTH-bases product: a product-level recipe at
+ * $31.320 and a variant recipe at $31.660. Those two figures differ on purpose —
+ * it is what makes "which one is billed" a falsifiable question. Every test
+ * below asserts the fixture's precondition before trusting its own result.
+ */
+const BOTH_BASES = 'House Espresso Blend 2lb'
+const PRODUCT_LEVEL = 31.32
+const VARIANT_LEVEL = 31.66
+
+test.describe('costing source', () => {
+  test('7 — the page opens on the STORED mode, not on variants.length', async ({ page }) => {
+    await openProduct(page, BOTH_BASES)
+
+    // costing_mode backfilled to 'product' for a both-bases product, because
+    // that is what Orders bills. The old rule (`variants.length > 0`) would have
+    // opened this on Per variant and immediately contradicted the column.
+    await expect(page.getByTestId('costing-source-explainer')).toContainText('One recipe costs')
+    await expect(page.getByTestId('costing-source-explainer')).toContainText('$31.320')
+  })
+
+  test('8 — every figure on the page is the BILLED figure', async ({ page }) => {
+    await openProduct(page, BOTH_BASES)
+
+    expect(
+      Math.abs(PRODUCT_LEVEL - VARIANT_LEVEL),
+      'fixture bases must differ, or "which is billed" is unfalsifiable'
+    ).toBeGreaterThan(0.1)
+
+    // Hero, and the variant row, must both read the PRODUCT figure — not the
+    // variant's own $31.660, which is what the page used to show while an
+    // invoice was billed $31.320.
+    await expectCogs(page, PRODUCT_LEVEL, 'hero is not the billed figure')
+    const billed = vis(page.getByTestId('variant-billed-cogs')).first()
+    expect(money(await billed.innerText())).toBeCloseTo(PRODUCT_LEVEL, 2)
+    expect(money(await billed.innerText())).not.toBeCloseTo(VARIANT_LEVEL, 2)
+  })
+
+  test('9 — the unbilled basis is visible, inert, and named', async ({ page }) => {
+    await openProduct(page, BOTH_BASES)
+
+    await expect(page.getByTestId('unbilled-basis-banner')).toContainText('stored but not billed')
+
+    // VISIBLE — hiding it would recreate the "where did my recipe go" problem.
+    const stored = vis(page.getByTestId('stored-recipe-row'))
+    expect(await stored.count(), 'the stored recipe must still be readable').toBeGreaterThan(0)
+
+    // ...and INERT. --ink-subtle is rgb(154, 143, 134).
+    const colour = await stored.first().evaluate(
+      (el) => getComputedStyle(el.querySelector('[data-testid="recipe-line-total"]')!).color
+    )
+    expect(colour, 'stored figures must not render as live ink').toBe('rgb(154, 143, 134)')
+  })
+
+  test('10 — the product recipe is reachable on a product that has variants', async ({ page }) => {
+    await openProduct(page, BOTH_BASES)
+
+    // The defect this replaces: `isVariantMode = variants.length > 0` made the
+    // product recipe unreachable the moment a product had variants, while
+    // Orders went on costing from it.
+    await expect(vis(page.getByTestId('recipe-row')).first()).toBeVisible()
+    await expectCogs(page, PRODUCT_LEVEL, 'the editor is not showing the product recipe')
+  })
+
+  test('11 — a figure with no single true value is a range, not an average', async ({ page }) => {
+    // Kenya is variant-costed with variants priced $24 and $26, so in One recipe
+    // mode there is no one Price. A single number there would be the same class
+    // of invention as the old flat `average_margin`.
+    await openProduct(page, 'Kenya Nyeri AA')
+    // SegmentedControl renders `<button role="tab">`, and the explicit role
+    // wins over the implicit one — getByRole('button') does not match it.
+    await page.getByRole('tab', { name: 'One recipe' }).click()
+
+    const strip = page.locator('body')
+    await expect(strip).toContainText('Price range')
+    await expect(strip).toContainText('$24.00–$26.00')
+    await expect(strip, 'a mean would read $25.00').not.toContainText('Price range$25.00')
+  })
+})
+
+// ── 12-13: the cases test 8 never opened (review, blocking finding 1) ───────
+
+/**
+ * Test 8 asserted "every figure on the page is the BILLED figure" while only
+ * ever opening House Espresso — the one basis (`both`) where the product rule,
+ * the variant rule and the naive fallback all coincide. Kenya, Sumatra and
+ * Costa Rica were never opened on the detail page by any test, which is exactly
+ * why `billedFor` shipped inventing $0.000 for them.
+ *
+ * A test that only exercises the case where every rule agrees cannot tell you
+ * which rule is implemented.
+ */
+test.describe('the detail page agrees with the list', () => {
+  test('12 — a variant with no recipe reads not set, never $0.000', async ({ page }) => {
+    // Costa Rica: 12oz is costed, `Sample 4oz` deliberately has no rows, and
+    // there is no product-level recipe to inherit. buildProductLookup poisons
+    // the product; /products says `not set`; /orders drops it from margin.
+    await openProduct(page, 'Costa Rica Tarrazu')
+
+    const rows = page.locator('[data-testid="variant-basis-row"][data-variant-sku="CRI-TARRAZU-4OZ"]')
+    await expect(rows).toHaveCount(1)
+    const billed = rows.getByTestId('variant-billed-cogs')
+    await expect(billed, 'an uncostable variant must not report a cost of zero').toHaveText('not set')
+    await expect(billed).not.toHaveText('$0.000')
+  })
+
+  test('13 — One recipe with no product recipe says so instead of costing $0', async ({ page }) => {
+    // Kenya is variant-basis with NO product-level recipe. Switching to One
+    // recipe used to report "One recipe costs all 2 variants at $0.000", show
+    // $0.000 / 100.0% on every row, and let that mode be saved.
+    await openProduct(page, 'Kenya Nyeri AA')
+    await page.getByRole('tab', { name: 'One recipe' }).click()
+
+    await expect(page.getByTestId('costing-source-explainer')).toContainText('no product-level recipe')
+    await expect(page.getByTestId('costing-source-explainer')).not.toContainText('$0.000')
+    await expect(page.getByTestId('stat-total-cogs')).toHaveText('not set')
+
+    for (const t of await vis(page.getByTestId('variant-billed-cogs')).allInnerTexts()) {
+      expect(t, 'no variant may report a cost of zero here').toBe('not set')
+    }
+  })
+})

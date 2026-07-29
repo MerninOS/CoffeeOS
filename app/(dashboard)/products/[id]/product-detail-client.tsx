@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import Image from "next/image";
 import {
   createProductVariant,
   deleteProductVariant,
@@ -10,249 +8,62 @@ import {
   updateProductPrice,
   updateProductVariantPrice,
   updateProductVariantComponents,
+  updateProductCostingMode,
   updateWholesalePricing,
 } from "./actions";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import {
-  ArrowLeft,
-  Plus,
-  Trash2,
-  Package,
-  Loader2,
-  Save,
-  DollarSign,
-  AlertCircle,
-  Store,
-  TrendingUp,
-} from "lucide-react";
+import Link from "next/link";
+import { Button, HeroMetric, InlineBanner, StatStrip } from "@merninos/ui/instrument";
+import { ArrowLeft } from "lucide-react";
+import { mono, sans, money, money3 } from "@/lib/instrument/tokens";
+import { VariantsPanel } from "./components/VariantsPanel";
+import { CostingSource, StoredRecipesHeading } from "./components/CostingSource";
+import { RecipeTable } from "./components/RecipeTable";
+import { Section } from "./components/Section";
+import { ProductDetailsPanel } from "./components/ProductDetailsPanel";
+import { CogsCalculator } from "./components/CogsCalculator";
+import { WholesalePanel } from "./components/WholesalePanel";
+import { AddVariantDialog } from "./components/AddVariantDialog";
+import type {
+  Component,
+  Product,
+  ProductComponent,
+  ProductVariant,
+  ProductVariantComponent,
+  SelectedComponent,
+  WholesaleTier,
+} from "./components/types";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface Component {
-  id: string;
-  name: string;
-  cost_per_unit: number;
-  unit: string;
-  type?: string;
-}
-
-interface ProductComponent {
-  id: string;
-  quantity: number;
-  component_id: string;
-  components: Component | null;
-}
-
-interface ProductVariant {
-  id: string;
-  title: string;
-  sku: string | null;
-  price: number | null;
-  shopify_variant_id: string | null;
-}
-
-interface ProductVariantComponent extends ProductComponent {
-  product_variant_id: string;
-}
-
-interface Product {
-  id: string;
-  title: string;
-  description: string | null;
-  sku: string | null;
-  price: number | null;
-  image_url: string | null;
-  wholesale_price: number | null;
-  wholesale_minimum_qty: number | null;
-  wholesale_enabled: boolean | null;
-}
-
-interface WholesaleTier {
-  id: string;
-  min_quantity: number;
-  price: number;
-}
-
-interface SelectedComponent {
-  componentId: string;
-  quantity: number;
-}
-
-// ─── Primitives ───────────────────────────────────────────────────────────────
-
-function Btn({
-  variant = "primary",
-  size = "md",
-  onClick,
-  disabled,
-  href,
-  children,
-  type = "button",
-  className = "",
-}: {
-  variant?: "primary" | "outline" | "ghost" | "icon-ghost";
-  size?: "sm" | "md" | "icon";
-  onClick?: () => void;
-  disabled?: boolean;
-  href?: string;
-  children: React.ReactNode;
-  type?: "button" | "submit";
-  className?: string;
-}) {
-  const base =
-    "inline-flex items-center justify-center gap-2 font-extrabold uppercase tracking-[.08em] rounded-full transition-all duration-100 cursor-pointer whitespace-nowrap select-none disabled:opacity-50 disabled:pointer-events-none";
-  const sizes = {
-    sm: "h-[30px] px-3.5 text-[11px]",
-    md: "h-[38px] px-5 text-[12px]",
-    icon: "h-[34px] w-[34px] p-0",
-  };
-  const variants = {
-    primary:
-      "bg-tomato text-cream border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2.5px] active:translate-y-[2.5px] active:shadow-none",
-    outline:
-      "bg-transparent text-espresso border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2.5px] active:translate-y-[2.5px] active:shadow-none",
-    ghost:
-      "bg-transparent text-espresso border-[2.5px] border-transparent hover:bg-fog/50",
-    "icon-ghost":
-      "bg-transparent text-tomato border-[2px] border-transparent hover:bg-tomato/10",
-  };
-  const cls = `${base} ${sizes[size]} ${variants[variant]} ${className}`;
-  if (href)
-    return (
-      <Link href={href} className={cls}>
-        {children}
-      </Link>
-    );
-  return (
-    <button type={type} onClick={onClick} disabled={disabled} className={cls}>
-      {children}
-    </button>
-  );
-}
-
-function Panel({
-  title,
-  subtitle,
-  action,
-  children,
-  className = "",
-}: {
-  title: string;
-  subtitle?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden ${className}`}
-    >
-      <div className="flex items-start justify-between gap-3 px-5 py-4 border-b-2 border-espresso bg-cream">
-        <div>
-          <div className="font-extrabold text-sm uppercase tracking-[.08em] text-espresso">
-            {title}
-          </div>
-          {subtitle && (
-            <div className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</div>
-          )}
-        </div>
-        {action && <div className="shrink-0">{action}</div>}
-      </div>
-      <div className="p-5">{children}</div>
-    </div>
-  );
-}
-
-function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
-  return (
-    <label
-      htmlFor={htmlFor}
-      className="block text-[10.5px] font-extrabold uppercase tracking-[.1em] text-espresso mb-1.5"
-    >
-      {children}
-    </label>
-  );
-}
-
-function MerninInput({
-  id,
-  value,
-  onChange,
-  placeholder,
-  type = "text",
-  step,
-  min,
-  prefix,
-}: {
-  id?: string;
-  value: string | number;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  placeholder?: string;
-  type?: string;
-  step?: string;
-  min?: string;
-  prefix?: React.ReactNode;
-}) {
-  return (
-    <div className="relative">
-      {prefix && (
-        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
-          {prefix}
-        </div>
-      )}
-      <input
-        id={id}
-        type={type}
-        step={step}
-        min={min}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className={`w-full bg-chalk border-[3px] border-espresso rounded-[10px] ${prefix ? "pl-9" : "px-3.5"} py-2.5 pr-3.5 font-body text-[14px] text-espresso shadow-[3px_3px_0_#1C0F05] outline-none placeholder:text-muted-foreground focus:-translate-x-[1px] focus:-translate-y-[1px] focus:shadow-[4px_4px_0_#E8442A] focus:border-tomato transition-all duration-100`}
-      />
-    </div>
-  );
-}
-
-function Pill({
-  variant,
-  children,
-}: {
-  variant: "matcha" | "sun" | "tomato" | "sky" | "fog";
-  children: React.ReactNode;
-}) {
-  const styles: Record<string, string> = {
-    matcha: "bg-matcha text-cream",
-    sun: "bg-sun text-espresso",
-    tomato: "bg-tomato text-cream",
-    sky: "bg-sky text-espresso",
-    fog: "bg-fog text-espresso",
-  };
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full border-2 border-espresso text-[10px] font-extrabold tracking-[.1em] uppercase ${styles[variant]}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-const fmt = (n: number) => `$${n.toFixed(3)}`;
-
-const CHART_COLORS = ["#E8442A", "#F5C842", "#E8913A", "#5BC8D5", "#5A7A3A", "#3B1F0A", "#D8D0B8"];
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-
+/**
+ * CoffeeOS#69 Stage A: this component was 972 lines. The primitives, the
+ * variants panel, the stat tiles, the product/COGS panels, the recipe editor,
+ * the wholesale block and the add-variant dialog moved into ./components with
+ * their markup BYTE-IDENTICAL. Nothing was improved on the way out — Stage A's
+ * proof is that the visual baselines do not move, and a broken behaviour is only
+ * distinguishable from a changed pixel if exactly one of them can happen at a
+ * time.
+ *
+ * What is left here is what actually belongs here: all the state, the derived
+ * values, the server-action handlers, the header, the toast and composition.
+ * State was NOT pushed down into the children — several of these values feed
+ * three panels at once (`calculatedCogs` alone feeds the tiles, the donut, the
+ * wholesale margin and every tier margin), so ownership stays at the top.
+ *
+ * Behaviour preserved deliberately, and changed in later stages:
+ *  - money is `fmt`'s THREE decimals nearly everywhere, but the wholesale
+ *    "Profit: $…" line is `toFixed(2)` — the page disagrees with itself, and the
+ *    sibling list page uses two decimals throughout (see components/primitives.tsx)
+ *  - three different margin threshold sets are live at once: 30/15 on the stat
+ *    tiles, 20/10 on the wholesale tiers, 30/15 again on the list page's pill
+ *  - Remove Variant is a `window.confirm`, not a dialog
+ *  - `handleSaveComponents`, `handleUpdatePrice` and `handleSaveWholesale` all
+ *    write into the same single `message` toast, so the last action wins and
+ *    nothing ever clears it on a timer
+ *  - the `useEffect` that re-seeds `sellingPrice` fires on `selectedVariant?.id`
+ *    AND `selectedVariant?.price`, so a successful price save round-trips
+ *    through state and overwrites whatever the user has typed since
+ *  - `handleUpdatePrice` updates local `variants` optimistically but never
+ *    refreshes `product.price`, so leaving variant mode shows a stale figure
+ */
 export function ProductDetailClient({
   product,
   availableComponents,
@@ -300,6 +111,68 @@ export function ProductDetailClient({
   );
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  /**
+   * CoffeeOS#69 Criterion 9 — the page opens on the STORED costing_mode, not on
+   * `variants.length > 0`. A product carrying both bases backfilled to
+   * 'product', which is what Orders bills, so it opens on One recipe.
+   *
+   * `modeDirty` keeps the toggle out of the database until an explicit Save:
+   * flipping it re-costs every order line for this product.
+   */
+  const [mode, setMode] = useState<"product" | "variant">(
+    product.costing_mode === "variant" ? "variant" : "product"
+  );
+  const [modeDirty, setModeDirty] = useState(false);
+
+  /**
+   * CoffeeOS#69 task 26 — which SCOPES have unsaved edits.
+   *
+   * Edits already survive a variant switch: `variantComponentMap` is keyed by
+   * variant id, so switching away and back returns the draft. What was missing
+   * is that nothing TOLD you a scope you can no longer see is still unsaved, and
+   * the per-section Save only ever wrote the scope on screen. A draft you cannot
+   * see and were never told about is lost work with extra steps.
+   *
+   * Compared against the rows the server sent, so returning a value to its
+   * original makes the scope clean again rather than staying dirty forever.
+   */
+  const initialByScope = useMemo(() => {
+    const map: Record<string, SelectedComponent[]> = {
+      product: initialProductComponents.map((pc) => ({
+        componentId: pc.component_id,
+        quantity: pc.quantity,
+      })),
+    };
+    for (const vc of initialVariantComponents) {
+      (map[vc.product_variant_id] ||= []).push({
+        componentId: vc.component_id,
+        quantity: vc.quantity,
+      });
+    }
+    for (const v of productVariants) map[v.id] ||= [];
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const sameRows = (a: SelectedComponent[], b: SelectedComponent[]) =>
+    a.length === b.length &&
+    a.every((r, i) => r.componentId === b[i].componentId && r.quantity === b[i].quantity);
+
+  const dirtyScopes = useMemo(() => {
+    const out: Array<{ id: string; label: string }> = [];
+    if (!sameRows(defaultSelectedComponents, initialByScope.product ?? [])) {
+      out.push({ id: "product", label: "Product recipe" });
+    }
+    for (const v of variants) {
+      const current = variantComponentMap[v.id];
+      if (current && !sameRows(current, initialByScope[v.id] ?? [])) {
+        out.push({ id: v.id, label: v.title });
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultSelectedComponents, variantComponentMap, variants, initialByScope]);
+
   // Wholesale
   const [wholesaleEnabled, setWholesaleEnabled] = useState(product.wholesale_enabled || false);
   const [wholesalePrice, setWholesalePrice] = useState(product.wholesale_price?.toString() || "");
@@ -309,13 +182,20 @@ export function ProductDetailClient({
   );
   const [isWholesaleSaving, setIsWholesaleSaving] = useState(false);
 
-  const isVariantMode = variants.length > 0;
+  // The toggle is the authority. This used to be `variants.length > 0`, which
+  // is what made a product's own recipe unreachable the moment it had variants.
+  const isVariantMode = mode === "variant";
   const selectedVariant = variants.find((v) => v.id === selectedVariantId) || null;
+
+  const variantOwnRows = (variantId: string) => variantComponentMap[variantId] ?? null;
 
   const selectedComponents = useMemo(() => {
     if (!isVariantMode) return defaultSelectedComponents;
-    if (!selectedVariantId) return [];
-    return variantComponentMap[selectedVariantId] || [];
+    if (!selectedVariantId) return defaultSelectedComponents;
+    // Inherit rather than show an empty editor: a variant with no rows of its
+    // own is costed from the product recipe, which is exactly what
+    // lib/products/costing.ts bills for it.
+    return variantComponentMap[selectedVariantId] ?? defaultSelectedComponents;
   }, [isVariantMode, defaultSelectedComponents, selectedVariantId, variantComponentMap]);
 
   const setSelectedComponents = (components: SelectedComponent[]) => {
@@ -337,24 +217,115 @@ export function ProductDetailClient({
     [selectedComponents, availableComponents]
   );
 
+  const totalOf = (rows: SelectedComponent[]) =>
+    rows.reduce((sum, sc) => {
+      const comp = availableComponents.find((c) => c.id === sc.componentId);
+      return comp ? sum + sc.quantity * comp.cost_per_unit : sum;
+    }, 0);
+
+  const productRecipeCogs = useMemo(
+    () => totalOf(defaultSelectedComponents),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [defaultSelectedComponents, availableComponents]
+  );
+
+  const variantHasOwnRecipe = (v: ProductVariant) => (variantOwnRows(v.id)?.length ?? 0) > 0;
+
+  /**
+   * THE BILLED FIGURE — one expression, read by the hero, the variant table and
+   * the wholesale tiers. Three separate COGS implementations already exist in
+   * this codebase; adding a mode switch on top of that is how a page ends up
+   * showing four numbers for one cost.
+   */
+  const hasProductRecipe = defaultSelectedComponents.length > 0;
+
+  /**
+   * Returns `null` when the cost is NOT KNOWABLE — the same three-state
+   * vocabulary the list uses, and the fix for the review's first blocking
+   * finding.
+   *
+   * The previous version fell back to `productRecipeCogs` unconditionally, which
+   * on a variant-basis product means falling back to ZERO. It rendered
+   * `$0.000 / 100.0% margin` for Costa Rica's deliberately-empty 4oz variant —
+   * on a product `buildProductLookup` poisons and /orders drops from margin —
+   * and let Kenya be switched to One recipe where every figure read `$0.000`
+   * and the mode could be SAVED.
+   *
+   * A cost of zero and a cost we cannot compute are not the same statement, and
+   * this page was making the second one look like the first.
+   */
+  const billedFor = (v: ProductVariant): number | null => {
+    if (!isVariantMode) return hasProductRecipe ? productRecipeCogs : null;
+    if (variantHasOwnRecipe(v)) return totalOf(variantOwnRows(v.id)!);
+    // Inherits — but only if there is something to inherit.
+    return hasProductRecipe ? productRecipeCogs : null;
+  };
+
+  /** The figure for the CURRENT selection: hero, wholesale, everything. */
+  const billedSelection: number | null = !isVariantMode
+    ? hasProductRecipe
+      ? productRecipeCogs
+      : null
+    : selectedVariant
+      ? billedFor(selectedVariant)
+      : null;
+
+  /** How many recipes are stored on the basis that is NOT being billed. */
+  const storedUnusedCount = isVariantMode
+    ? defaultSelectedComponents.length > 0
+      ? 1
+      : 0
+    : variants.filter(variantHasOwnRecipe).length;
+
   const priceValue = parseFloat(sellingPrice) || 0;
+
   const margin = priceValue > 0 ? ((priceValue - calculatedCogs) / priceValue) * 100 : 0;
   const profit = priceValue - calculatedCogs;
   const wholesalePriceValue = parseFloat(wholesalePrice) || 0;
   const wholesaleMargin = wholesalePriceValue > 0 ? ((wholesalePriceValue - calculatedCogs) / wholesalePriceValue) * 100 : 0;
 
-  const cogsBreakdown = useMemo(() => {
-    const map = new Map<string, { name: string; value: number }>();
-    for (const sc of selectedComponents) {
-      const comp = availableComponents.find((c) => c.id === sc.componentId);
-      if (!comp) continue;
-      const value = sc.quantity * comp.cost_per_unit;
-      if (value <= 0) continue;
-      const prev = map.get(comp.id);
-      map.set(comp.id, { name: comp.name, value: (prev?.value ?? 0) + value });
-    }
-    return Array.from(map.values()).sort((a, b) => b.value - a.value);
-  }, [selectedComponents, availableComponents]);
+  /**
+   * Criterion 13 — a figure with no single true value is a RANGE, not an
+   * average.
+   *
+   * In `One recipe` mode the variants can carry different prices, so there is no
+   * one Price, Profit or Margin for the product. Showing a single number there
+   * would be the same class of invention as the old `average_margin`, which
+   * mean-averaged every variant's margin across the catalogue. The per-variant
+   * truth lives in the costing-source table above; the strip states the spread.
+   */
+  const variantPrices = variants
+    .map((v) => v.price)
+    .filter((p): p is number => p !== null && p !== undefined);
+  const priceSpread =
+    !isVariantMode && variantPrices.length > 1
+      ? { lo: Math.min(...variantPrices), hi: Math.max(...variantPrices) }
+      : null;
+
+  const strip = priceSpread
+    ? [
+        { label: "Variants", value: String(variants.length) },
+        { label: "Components", value: String(selectedComponents.length) },
+        {
+          label: "Price range",
+          value: `${money(priceSpread.lo)}\u2013${money(priceSpread.hi)}`,
+        },
+        {
+          label: "Margin range",
+          value: `${(((priceSpread.lo - calculatedCogs) / priceSpread.lo) * 100).toFixed(1)}\u2013${(
+            ((priceSpread.hi - calculatedCogs) / priceSpread.hi) *
+            100
+          ).toFixed(1)}`,
+          unit: "%",
+        },
+      ]
+    : [
+        { label: isVariantMode ? "Variant price" : "Price", value: money(priceValue) },
+        { label: "Profit \u00b7 unit", value: money3(profit) },
+        { label: "Margin", value: margin.toFixed(1), unit: "%" },
+        { label: "Components", value: String(selectedComponents.length) },
+      ];
+
 
   const addComponent = () => {
     const unused = availableComponents.find((c) => !selectedComponents.some((sc) => sc.componentId === c.id));
@@ -369,15 +340,64 @@ export function ProductDetailClient({
     setSelectedComponents(updated);
   };
 
-  const handleSaveComponents = async () => {
-    if (isVariantMode && !selectedVariantId) { setMessage({ type: "error", text: "Select a variant first" }); return; }
-    setIsSaving(true); setMessage(null);
-    const result = isVariantMode
-      ? await updateProductVariantComponents(product.id, selectedVariantId, selectedComponents)
-      : await updateProductComponents(product.id, selectedComponents);
-    setMessage(result.error ? { type: "error", text: result.error } : { type: "success", text: isVariantMode ? "Variant COGS saved." : "Components saved." });
+  const persistModeIfDirty = async () => {
+    if (!modeDirty) return null;
+    const r = await updateProductCostingMode(product.id, mode);
+    if (!r.error) setModeDirty(false);
+    return r.error ?? null;
+  };
+
+  /**
+   * Saves EVERY dirty scope, not just the one on screen.
+   *
+   * Sequential and stop-on-first-error: a partial failure leaves the remaining
+   * scopes dirty and names the one that failed, so the bar stays up and the
+   * operator knows exactly what did not land. Parallel writes would make "which
+   * one failed" unanswerable.
+   */
+  const handleSaveAll = async () => {
+    setIsSaving(true);
+    setMessage(null);
+
+    const modeError = await persistModeIfDirty();
+    if (modeError) {
+      setMessage({ type: "error", text: modeError });
+      setIsSaving(false);
+      return;
+    }
+
+    for (const scope of dirtyScopes) {
+      const rows =
+        scope.id === "product" ? defaultSelectedComponents : variantComponentMap[scope.id] ?? [];
+      const result =
+        scope.id === "product"
+          ? await updateProductComponents(product.id, rows)
+          : await updateProductVariantComponents(product.id, scope.id, rows);
+      if (result.error) {
+        setMessage({ type: "error", text: `${scope.label}: ${result.error}` });
+        setIsSaving(false);
+        return;
+      }
+    }
+
+    setMessage({ type: "success", text: "Saved." });
     setIsSaving(false);
   };
+
+  /**
+   * `handleSaveComponents` is GONE (CoffeeOS#69 review, blocking finding 2).
+   *
+   * It saved `selectedComponents`, which in Per variant mode falls back to the
+   * PRODUCT recipe for display when a variant has no rows of its own. Saving
+   * that persisted the product recipe into a variant scope the operator never
+   * edited: cost_basis flipped to `both`, a "Stored variant recipes" section
+   * appeared, and two independently editable copies of one recipe began to
+   * drift — the exact failure the migration comment warns about.
+   *
+   * `handleSaveAll` is the only write path now. It iterates `dirtyScopes`, which
+   * skips a variant whose draft map entry is `undefined`, so an untouched
+   * inheriting variant is never written.
+   */
 
   const handleAddVariant = async () => {
     const title = newVariantTitle.trim();
@@ -444,529 +464,269 @@ export function ProductDetailClient({
     setIsWholesaleSaving(false);
   };
 
-  const marginPill = (m: number) => {
-    const v = m >= 30 ? "matcha" : m >= 15 ? "sun" : "tomato";
-    return <Pill variant={v}>{m >= 30 ? "Healthy" : m >= 15 ? "Fair" : "Low"}</Pill>;
-  };
-
   return (
-    <div className="flex flex-col gap-5 p-6 mb-20">
-      {/* Back + title */}
-      <div className="flex items-start gap-4">
-        <Btn variant="outline" size="sm" href="/products">
-          <ArrowLeft size={13} strokeWidth={2.5} />
-          Products
-        </Btn>
-      </div>
-
-      <div>
-        <h1 className="text-[28px] md:text-[36px] font-extrabold uppercase tracking-tight leading-none text-espresso">
+    <div
+      style={{
+        maxWidth: "var(--content-max)",
+        margin: "0 auto",
+        padding: "var(--space-6)",
+        // Clear the fixed unsaved-changes bar. Without this it sits on top of
+        // the last section's Save button at narrow widths, which is how the
+        // variant-save test started timing out on "visible, enabled and stable".
+        paddingBottom: 112,
+      }}
+    >
+      {/* Header */}
+      <div style={{ marginBottom: "var(--space-5)" }}>
+        <Link
+          href="/products"
+          style={{
+            ...sans,
+            fontSize: "var(--fs-caption)",
+            color: "var(--ink-muted)",
+            textDecoration: "none",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            marginBottom: 8,
+          }}
+        >
+          <ArrowLeft size={14} strokeWidth={2} />
+          All products
+        </Link>
+        <h1
+          style={{
+            fontFamily: "var(--font-display)",
+            fontVariationSettings: "var(--display-settings)",
+            fontWeight: "var(--display-weight)" as unknown as number,
+            letterSpacing: "var(--display-tracking)",
+            fontSize: "var(--fs-display)",
+            textTransform: "uppercase",
+            color: "var(--ink)",
+            margin: 0,
+          }}
+        >
           {product.title}
         </h1>
-        {product.sku && (
-          <p className="font-mono text-[12px] text-muted-foreground mt-1">SKU: {product.sku}</p>
-        )}
+        <p style={{ ...mono, fontSize: "var(--fs-caption)", color: "var(--ink-subtle)", marginTop: 6, marginBottom: 0 }}>
+          {[product.sku, `${variants.length} variant${variants.length === 1 ? "" : "s"}`]
+            .filter(Boolean)
+            .join(" \u00b7 ")}
+        </p>
       </div>
 
-      {/* Toast */}
       {message && (
-        <div className={`flex items-center gap-2.5 rounded-[12px] border-[2.5px] p-3 text-[13px] font-bold ${message.type === "error" ? "border-tomato bg-tomato/10 text-tomato" : "border-matcha bg-matcha/10 text-matcha"}`}>
-          <AlertCircle size={15} strokeWidth={2.5} />
-          {message.text}
+        <div style={{ marginBottom: "var(--space-4)" }} data-testid="detail-toast">
+          <InlineBanner
+            tone={message.type === "error" ? "danger" : "success"}
+            onDismiss={() => setMessage(null)}
+          >
+            {message.text}
+          </InlineBanner>
         </div>
       )}
 
-      {/* Variants */}
-      <Panel
-        title="Variants"
-        subtitle="Add variants, then edit COGS per variant."
-        action={
-          <Btn variant="outline" size="sm" onClick={() => setIsAddVariantDialogOpen(true)}>
-            <Plus size={13} strokeWidth={2.5} />
-            Add Variant
-          </Btn>
-        }
+      {/* One hero + one ruled strip. Replaces four equal stat tiles — the
+          worksheet model has exactly one figure at display scale (Criterion 18).
+          The donut that used to sit beside these is gone: share is read off the
+          recipe table now, which also means no chart needs a colour ramp this
+          product has no data for. */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "var(--space-6)",
+          alignItems: "end",
+          marginBottom: "var(--space-2)",
+        }}
       >
-        {variants.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">
-            No variants yet. Add one to get started.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap gap-2">
-              {variants.map((v) => (
-                <button
-                  key={v.id}
-                  type="button"
-                  onClick={() => setSelectedVariantId(v.id)}
-                  className={`inline-flex items-center h-[30px] px-4 rounded-full border-[2.5px] text-[11px] font-extrabold uppercase tracking-[.08em] transition-all duration-100 ${
-                    v.id === selectedVariantId
-                      ? "bg-tomato text-cream border-espresso shadow-[3px_3px_0_#1C0F05]"
-                      : "bg-transparent text-espresso border-espresso hover:bg-fog/40"
-                  }`}
-                >
-                  {v.title}
-                </button>
-              ))}
-            </div>
-            {selectedVariant && (
-              <div className="flex items-center justify-between rounded-[10px] border-[2px] border-dashed border-fog bg-cream p-3">
-                <span className="text-[12px] text-muted-foreground font-bold">
-                  {selectedVariant.sku ? `SKU: ${selectedVariant.sku}` : "Select a variant to edit its COGS."}
-                </span>
-                <Btn
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRemoveVariant}
-                  disabled={!selectedVariant || isRemovingVariant}
-                  className="text-tomato hover:bg-tomato/10 !border-transparent"
-                >
-                  {isRemovingVariant && <Loader2 size={12} className="animate-spin" />}
-                  Remove Variant
-                </Btn>
-              </div>
-            )}
-          </div>
-        )}
-      </Panel>
-
-      {/* Stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          {
-            label: isVariantMode ? "Variant Price" : "Selling Price",
-            value: fmt(priceValue),
-            sub: null as React.ReactNode,
-          },
-          { label: "Total COGS", value: fmt(calculatedCogs), sub: null },
-          {
-            label: "Profit / Unit",
-            value: fmt(profit),
-            sub: null,
-            color: profit >= 0 ? "text-matcha" : "text-tomato",
-          },
-          {
-            label: "Profit Margin",
-            value: `${margin.toFixed(1)}%`,
-            sub: marginPill(margin),
-          },
-        ].map(({ label, value, sub, color }) => (
-          <div
-            key={label}
-            className="bg-chalk border-[3px] border-espresso rounded-[14px] p-4 shadow-flat-md"
-          >
-            <div className="text-[10.5px] font-extrabold tracking-[.12em] uppercase text-muted-foreground">
-              {label}
-            </div>
-            <div className={`font-extrabold text-[28px] leading-none mt-1.5 ${color || "text-espresso"}`}>
-              {value}
-            </div>
-            {sub && <div className="mt-2">{sub}</div>}
-          </div>
-        ))}
+        <div style={{ flex: "0 0 280px" }}>
+          <HeroMetric
+            label="Unit COGS"
+            // The test id goes on the VALUE, not the component: HeroMetric
+            // destructures its props and would drop a data-testid silently, and
+            // wrapping the whole metric would put the label and note inside the
+            // element the specs parse a number out of. `value` is a ReactNode,
+            // so the seam sits on exactly the figure.
+            value={
+              <span
+                data-testid="stat-total-cogs"
+                style={billedSelection === null ? { color: "var(--danger)" } : undefined}
+              >
+                {billedSelection === null ? "not set" : money3(billedSelection)}
+              </span>
+            }
+            note={isVariantMode && selectedVariant ? selectedVariant.title : "all units"}
+          />
+        </div>
+        <div style={{ flex: "1 1 460px", minWidth: 0 }}>
+          <StatStrip
+            stats={strip}
+          />
+        </div>
       </div>
 
-      {/* Product info + COGS chart */}
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* Product Details */}
-        <Panel title="Product Details">
-          <div className="flex flex-col gap-4">
-            <div className="relative w-full overflow-hidden rounded-[12px] border-[3px] border-espresso bg-fog aspect-[4/3] sm:aspect-square">
-              {product.image_url ? (
-                <Image
-                  src={product.image_url}
-                  alt={product.title}
-                  fill
-                  sizes="(min-width: 1024px) 50vw, 100vw"
-                  className="object-cover"
-                  priority={false}
+      <CostingSource
+        mode={mode}
+        onModeChange={(next) => {
+          setMode(next);
+          setModeDirty(true);
+        }}
+        variants={variants}
+        selectedVariantId={selectedVariantId}
+        onSelectVariant={setSelectedVariantId}
+        productRecipeCogs={hasProductRecipe ? productRecipeCogs : null}
+        billedFor={billedFor}
+        variantHasOwnRecipe={variantHasOwnRecipe}
+        storedUnusedCount={storedUnusedCount}
+      />
+
+      <VariantsPanel
+        variants={variants}
+        selectedVariantId={selectedVariantId}
+        selectedVariant={selectedVariant}
+        onSelectVariant={setSelectedVariantId}
+        onOpenAddVariant={() => setIsAddVariantDialogOpen(true)}
+        onRemoveVariant={handleRemoveVariant}
+        isRemovingVariant={isRemovingVariant}
+      />
+
+      <ProductDetailsPanel
+        product={product}
+        isVariantMode={isVariantMode}
+        selectedVariant={selectedVariant}
+        sellingPrice={sellingPrice}
+        onSellingPriceChange={setSellingPrice}
+        onUpdatePrice={handleUpdatePrice}
+        isPriceUpdating={isPriceUpdating}
+      />
+
+      <CogsCalculator
+        availableComponents={availableComponents}
+        selectedComponents={selectedComponents}
+        isVariantMode={isVariantMode}
+        selectedVariantId={selectedVariantId}
+        isSaving={isSaving}
+        onAddComponent={addComponent}
+        onRemoveComponent={removeComponent}
+        onUpdateComponent={updateComponent}
+      />
+
+      {storedUnusedCount > 0 && (
+        <Section
+          title={isVariantMode ? "Stored product recipe" : "Stored variant recipes"}
+          note="Not billed while the current costing source is selected. Kept so switching does not lose work."
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+            {isVariantMode ? (
+              <div>
+                <StoredRecipesHeading title="Product recipe" sku={product.sku} />
+                <RecipeTable
+                  availableComponents={availableComponents}
+                  selectedComponents={defaultSelectedComponents}
+                  inert
                 />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <Package size={36} strokeWidth={1.5} className="text-muted-foreground" />
-                </div>
-              )}
-            </div>
-
-            {isVariantMode && selectedVariant && (
-              <div className="rounded-[10px] border-[2px] border-fog bg-cream p-3">
-                <div className="text-[10px] font-extrabold uppercase tracking-wide text-muted-foreground">
-                  Selected Variant
-                </div>
-                <div className="font-bold text-[14px] text-espresso mt-0.5">{selectedVariant.title}</div>
-                {selectedVariant.sku && (
-                  <div className="font-mono text-[11px] text-muted-foreground">{selectedVariant.sku}</div>
-                )}
               </div>
-            )}
-
-            <div>
-              <FieldLabel htmlFor="sellingPrice">
-                {isVariantMode ? "Variant Price" : "Selling Price"}
-              </FieldLabel>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <MerninInput
-                    id="sellingPrice"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={sellingPrice}
-                    onChange={(e) => setSellingPrice(e.target.value)}
-                    placeholder="0.00"
-                    prefix={<DollarSign size={15} strokeWidth={2} />}
+            ) : (
+              variants.filter(variantHasOwnRecipe).map((v) => (
+                <div key={v.id}>
+                  <StoredRecipesHeading title={v.title} sku={v.sku} />
+                  <RecipeTable
+                    availableComponents={availableComponents}
+                    selectedComponents={variantOwnRows(v.id) ?? []}
+                    inert
                   />
                 </div>
-                <Btn
-                  onClick={handleUpdatePrice}
-                  disabled={isPriceUpdating || (isVariantMode && !selectedVariant)}
-                  size="icon"
-                  variant="outline"
-                >
-                  {isPriceUpdating ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} strokeWidth={2} />}
-                </Btn>
-              </div>
-              {isVariantMode && (
-                <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  Updates apply to the selected variant.
-                </p>
-              )}
-            </div>
+              ))
+            )}
           </div>
-        </Panel>
+        </Section>
+      )}
 
-        {/* COGS Breakdown */}
-        <Panel title="COGS Breakdown" subtitle={calculatedCogs > 0 ? fmt(calculatedCogs) : undefined}>
-          {calculatedCogs > 0 && cogsBreakdown.length > 0 ? (
-            <>
-              <div className="h-52 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={cogsBreakdown} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="80%" paddingAngle={2}>
-                      {cogsBreakdown.map((_, i) => (
-                        <Cell key={`cell-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v) => fmt(Number(v))} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="mt-3 space-y-2">
-                {cogsBreakdown.map((d, i) => (
-                  <div key={d.name} className="flex items-center justify-between gap-3 text-[12px]">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-2.5 h-2.5 rounded-[3px] shrink-0" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
-                      <span className="truncate font-medium text-espresso">{d.name}</span>
-                    </div>
-                    <div className="shrink-0 font-bold tabular-nums text-espresso">
-                      {fmt(d.value)}{" "}
-                      <span className="text-muted-foreground font-normal">
-                        ({((d.value / calculatedCogs) * 100).toFixed(0)}%)
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
-              <TrendingUp size={32} strokeWidth={1.5} className="text-fog mb-3" />
-              <p className="text-[13px] text-muted-foreground">
-                Add components with costs to see the breakdown.
-              </p>
-            </div>
-          )}
-        </Panel>
-      </div>
+      <WholesalePanel
+        wholesaleEnabled={wholesaleEnabled}
+        onWholesaleEnabledChange={setWholesaleEnabled}
+        wholesalePrice={wholesalePrice}
+        onWholesalePriceChange={setWholesalePrice}
+        wholesaleMinQty={wholesaleMinQty}
+        onWholesaleMinQtyChange={setWholesaleMinQty}
+        wholesalePriceValue={wholesalePriceValue}
+        wholesaleMargin={wholesaleMargin}
+        calculatedCogs={calculatedCogs}
+        priceTiers={priceTiers}
+        onPriceTiersChange={setPriceTiers}
+        onAddPriceTier={addPriceTier}
+        onSaveWholesale={handleSaveWholesale}
+        isWholesaleSaving={isWholesaleSaving}
+      />
 
-      {/* COGS Calculator */}
-      <Panel
-        title="COGS Calculator"
-        subtitle="Add cost components to calculate total COGS"
-        action={
-          <Btn
-            onClick={addComponent}
-            disabled={availableComponents.length === 0 || selectedComponents.length >= availableComponents.length}
-            size="sm"
+      {/* Unsaved-changes bar. Edits already survived a variant switch — the
+          draft map is keyed by variant — but nothing told you a scope you can no
+          longer SEE still had unsaved work, and the per-section Save only wrote
+          the scope on screen. This names every dirty scope and saves them all.
+          Same visual contract as DataTable's bulk bar. */}
+      {(dirtyScopes.length > 0 || modeDirty) && (
+        <div
+          data-testid="unsaved-bar"
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: 20,
+            zIndex: "var(--z-bulkbar)" as unknown as number,
+            transform: "translateX(-50%)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              padding: "10px 12px 10px 16px",
+              background: "var(--ink)",
+              color: "var(--on-ink)",
+              borderRadius: "var(--r-md)",
+              boxShadow: "var(--shadow-modal)",
+            }}
           >
-            <Plus size={13} strokeWidth={2.5} />
-            Add Component
-          </Btn>
-        }
-      >
-        {availableComponents.length === 0 ? (
-          <div className="flex flex-col items-center py-10 text-center">
-            <Package size={32} strokeWidth={1.5} className="text-fog mb-3" />
-            <p className="font-extrabold uppercase text-[13px] tracking-wide text-espresso">No components available</p>
-            <p className="text-[12px] text-muted-foreground mt-1">
-              <Link href="/components" className="text-tomato underline font-bold">Create components first</Link> to calculate COGS.
-            </p>
+            <span style={{ ...mono, fontSize: "var(--fs-label)" }}>
+              {[
+                modeDirty ? `costing source \u2192 ${mode === "product" ? "one recipe" : "per variant"}` : null,
+                dirtyScopes.length > 0
+                  ? `${dirtyScopes.length} unsaved ${dirtyScopes.length === 1 ? "recipe" : "recipes"}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" \u00b7 ")}
+            </span>
+            <Button
+              data-testid="recipe-save"
+              size="sm"
+              variant="secondary"
+              onClick={handleSaveAll}
+              disabled={isSaving}
+            >
+              {isSaving ? "Saving\u2026" : "Save all"}
+            </Button>
           </div>
-        ) : selectedComponents.length === 0 ? (
-          <div className="flex flex-col items-center py-10 text-center">
-            <Package size={32} strokeWidth={1.5} className="text-fog mb-3" />
-            <p className="font-extrabold uppercase text-[13px] tracking-wide text-espresso">No components added</p>
-            <p className="text-[12px] text-muted-foreground mt-1">Click &quot;Add Component&quot; to start building your COGS.</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {/* Mobile: stacked cards */}
-            <div className="flex flex-col gap-3 sm:hidden">
-              {selectedComponents.map((sc, idx) => {
-                const comp = availableComponents.find((c) => c.id === sc.componentId);
-                const lineTotal = comp ? sc.quantity * comp.cost_per_unit : 0;
-                return (
-                  <div key={idx} className="rounded-[12px] border-[2.5px] border-espresso bg-cream p-3">
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <div className="flex-1">
-                        <FieldLabel>Component</FieldLabel>
-                        <Select value={sc.componentId} onValueChange={(v) => updateComponent(idx, "componentId", v)}>
-                          <SelectTrigger className="border-[2px] border-espresso rounded-[8px] h-9 text-[12px] font-bold">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableComponents.map((c) => (
-                              <SelectItem key={c.id} value={c.id}>{c.name} ({c.unit})</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <button onClick={() => removeComponent(idx)} className="w-8 h-8 mt-5 inline-flex items-center justify-center rounded-full text-tomato hover:bg-tomato/10 transition-colors">
-                        <Trash2 size={14} strokeWidth={2} />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <FieldLabel>Quantity</FieldLabel>
-                        <MerninInput type="number" min="0" step="0.01" value={sc.quantity} onChange={(e) => updateComponent(idx, "quantity", parseFloat(e.target.value) || 0)} />
-                      </div>
-                      <div className="rounded-[10px] bg-fog/50 border-[2px] border-fog p-3">
-                        <div className="text-[9.5px] font-extrabold uppercase tracking-wide text-muted-foreground">Line total</div>
-                        <div className="font-extrabold text-[15px] text-espresso mt-0.5 tabular-nums">{fmt(lineTotal)}</div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5">{comp ? `${fmt(comp.cost_per_unit)}/${comp.unit}` : "—"}</div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        </div>
+      )}
 
-            {/* Desktop: table */}
-            <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full border-collapse text-[13px]">
-                <thead>
-                  <tr className="border-b-2 border-espresso">
-                    {["Component", "Quantity", "Unit Cost", "Total", ""].map((h, i) => (
-                      <th key={i} className={`py-2.5 text-[9.5px] font-extrabold uppercase tracking-[.1em] text-muted-foreground ${i > 0 ? "text-right" : "text-left"} ${i === 4 ? "w-10" : ""}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedComponents.map((sc, idx) => {
-                    const comp = availableComponents.find((c) => c.id === sc.componentId);
-                    const lineTotal = comp ? sc.quantity * comp.cost_per_unit : 0;
-                    return (
-                      <tr key={idx} className="border-b border-dashed border-fog last:border-0">
-                        <td className="py-3 pr-4">
-                          <Select value={sc.componentId} onValueChange={(v) => updateComponent(idx, "componentId", v)}>
-                            <SelectTrigger className="border-[2px] border-espresso rounded-[8px] h-9 text-[12px] font-bold">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableComponents.map((c) => (
-                                <SelectItem key={c.id} value={c.id}>{c.name} ({c.unit})</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="py-3 pr-4">
-                          <input
-                            type="number" min="0" step="0.01" value={sc.quantity}
-                            onChange={(e) => updateComponent(idx, "quantity", parseFloat(e.target.value) || 0)}
-                            className="w-24 bg-chalk border-[2px] border-espresso rounded-[8px] px-3 py-2 text-[13px] font-bold text-espresso outline-none focus:border-tomato text-right tabular-nums"
-                          />
-                        </td>
-                        <td className="py-3 text-right font-mono text-[12px] text-muted-foreground">
-                          {comp ? `${fmt(comp.cost_per_unit)}/${comp.unit}` : "—"}
-                        </td>
-                        <td className="py-3 text-right font-bold text-espresso tabular-nums">{fmt(lineTotal)}</td>
-                        <td className="py-3 pl-3">
-                          <button onClick={() => removeComponent(idx)} className="w-7 h-7 inline-flex items-center justify-center rounded-full text-tomato hover:bg-tomato/10 transition-colors">
-                            <Trash2 size={13} strokeWidth={2} />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex justify-end pt-2 border-t-2 border-fog">
-              <Btn onClick={handleSaveComponents} disabled={isSaving || (isVariantMode && !selectedVariantId)}>
-                {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} strokeWidth={2} />}
-                {isVariantMode ? "Save Variant COGS" : "Save Components"}
-              </Btn>
-            </div>
-          </div>
-        )}
-      </Panel>
-
-      {/* Wholesale Pricing */}
-      <Panel
-        title="Wholesale Pricing"
-        subtitle="Set up volume discounts for wholesale customers"
-        action={
-          <div className="flex items-center gap-2">
-            <label htmlFor="wholesale-enabled" className="text-[10.5px] font-extrabold uppercase tracking-[.1em] text-espresso cursor-pointer">
-              Enable
-            </label>
-            <Switch id="wholesale-enabled" checked={wholesaleEnabled} onCheckedChange={setWholesaleEnabled} />
-          </div>
-        }
-      >
-        {!wholesaleEnabled ? (
-          <div className="flex flex-col items-center py-10 text-center">
-            <Store size={32} strokeWidth={1.5} className="text-fog mb-3" />
-            <p className="font-extrabold uppercase text-[13px] tracking-wide text-espresso">Wholesale Disabled</p>
-            <p className="text-[12px] text-muted-foreground mt-1">Enable the toggle to set up volume discounts.</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <FieldLabel htmlFor="wholesale-price">Base Wholesale Price</FieldLabel>
-                <MerninInput
-                  id="wholesale-price"
-                  type="number" step="0.01" min="0"
-                  value={wholesalePrice}
-                  onChange={(e) => setWholesalePrice(e.target.value)}
-                  placeholder="12.00"
-                  prefix={<DollarSign size={15} strokeWidth={2} />}
-                />
-                {wholesalePriceValue > 0 && (
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    Margin: {wholesaleMargin.toFixed(1)}% · Profit: ${(wholesalePriceValue - calculatedCogs).toFixed(2)}
-                  </p>
-                )}
-              </div>
-              <div>
-                <FieldLabel htmlFor="wholesale-min-qty">Min Order Quantity</FieldLabel>
-                <MerninInput
-                  id="wholesale-min-qty"
-                  type="number" min="1"
-                  value={wholesaleMinQty}
-                  onChange={(e) => setWholesaleMinQty(e.target.value)}
-                  placeholder="12"
-                />
-              </div>
-            </div>
-
-            {/* Price tiers */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <div className="text-[10.5px] font-extrabold uppercase tracking-[.1em] text-espresso">
-                  Volume Price Tiers
-                </div>
-                <Btn variant="outline" size="sm" onClick={addPriceTier}>
-                  <Plus size={12} strokeWidth={2.5} />
-                  Add Tier
-                </Btn>
-              </div>
-
-              {priceTiers.length === 0 ? (
-                <p className="text-[12px] text-muted-foreground text-center py-4 border-2 border-dashed border-fog rounded-[10px]">
-                  No price tiers configured.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {priceTiers.map((tier, idx) => {
-                    const tierMargin = tier.price > 0 ? ((tier.price - calculatedCogs) / tier.price) * 100 : 0;
-                    return (
-                      <div key={idx} className="flex items-center gap-3 rounded-[12px] border-[2.5px] border-espresso bg-cream p-3">
-                        <div className="flex-1 grid grid-cols-2 gap-3">
-                          <div>
-                            <FieldLabel>Min Qty</FieldLabel>
-                            <MerninInput type="number" min="1" value={tier.min_quantity} onChange={(e) => { const u = [...priceTiers]; u[idx] = { ...u[idx], min_quantity: parseInt(e.target.value) || 1 }; setPriceTiers(u); }} />
-                          </div>
-                          <div>
-                            <FieldLabel>Price / Unit</FieldLabel>
-                            <MerninInput type="number" step="0.01" min="0" value={tier.price} onChange={(e) => { const u = [...priceTiers]; u[idx] = { ...u[idx], price: parseFloat(e.target.value) || 0 }; setPriceTiers(u); }} prefix={<DollarSign size={15} strokeWidth={2} />} />
-                          </div>
-                        </div>
-                        <div className="text-right min-w-[64px]">
-                          <div className="text-[9.5px] font-extrabold uppercase tracking-wide text-muted-foreground">Margin</div>
-                          <div className={`text-[13px] font-extrabold mt-0.5 ${tierMargin >= 20 ? "text-matcha" : tierMargin >= 10 ? "text-honey" : "text-tomato"}`}>
-                            {tierMargin.toFixed(1)}%
-                          </div>
-                        </div>
-                        <button onClick={() => setPriceTiers(priceTiers.filter((_, i) => i !== idx))} className="w-8 h-8 inline-flex items-center justify-center rounded-full text-tomato hover:bg-tomato/10 transition-colors shrink-0">
-                          <Trash2 size={14} strokeWidth={2} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end pt-2 border-t-2 border-fog">
-              <Btn onClick={handleSaveWholesale} disabled={isWholesaleSaving}>
-                {isWholesaleSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} strokeWidth={2} />}
-                Save Wholesale Pricing
-              </Btn>
-            </div>
-          </div>
-        )}
-      </Panel>
-
-      {/* Add variant dialog */}
-      <Dialog open={isAddVariantDialogOpen} onOpenChange={setIsAddVariantDialogOpen}>
-        <DialogContent className="border-[3px] border-espresso rounded-[20px] shadow-flat-lg bg-chalk p-0 overflow-hidden gap-0">
-          <DialogHeader className="px-6 py-5 border-b-[3px] border-espresso bg-cream">
-            <DialogTitle className="font-extrabold text-[18px] uppercase tracking-[.06em] text-espresso">Add Variant</DialogTitle>
-            <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
-              Create a new variant and optionally copy COGS from an existing source.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="px-6 py-5 flex flex-col gap-4">
-            <div>
-              <FieldLabel htmlFor="new-variant-title">Variant Title *</FieldLabel>
-              <MerninInput id="new-variant-title" placeholder="e.g. 12oz Bag" value={newVariantTitle} onChange={(e) => setNewVariantTitle(e.target.value)} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <FieldLabel htmlFor="new-variant-sku">SKU (optional)</FieldLabel>
-                <MerninInput id="new-variant-sku" placeholder="SKU" value={newVariantSku} onChange={(e) => setNewVariantSku(e.target.value)} />
-              </div>
-              <div>
-                <FieldLabel htmlFor="new-variant-price">Price (optional)</FieldLabel>
-                <MerninInput id="new-variant-price" type="number" step="0.01" min="0" placeholder="0.00" value={newVariantPrice} onChange={(e) => setNewVariantPrice(e.target.value)} prefix={<DollarSign size={15} strokeWidth={2} />} />
-              </div>
-            </div>
-            <div>
-              <FieldLabel>Copy COGS From</FieldLabel>
-              <Select value={newVariantCopySource} onValueChange={setNewVariantCopySource}>
-                <SelectTrigger className="border-[2.5px] border-espresso rounded-[10px] h-10 text-[13px] font-bold shadow-[3px_3px_0_#1C0F05]">
-                  <SelectValue placeholder="Copy COGS from..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Don&apos;t copy COGS</SelectItem>
-                  {defaultSelectedComponents.length > 0 && <SelectItem value="product">Current product COGS</SelectItem>}
-                  {variants.map((v) => <SelectItem key={`copy-${v.id}`} value={`variant:${v.id}`}>Variant: {v.title}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter className="px-6 py-4 border-t-[3px] border-espresso bg-cream flex gap-2">
-            <Btn variant="outline" size="sm" onClick={() => setIsAddVariantDialogOpen(false)} disabled={isAddingVariant}>Cancel</Btn>
-            <Btn size="sm" onClick={handleAddVariant} disabled={isAddingVariant}>
-              {isAddingVariant && <Loader2 size={13} className="animate-spin" />}
-              Add Variant
-            </Btn>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AddVariantDialog
+        open={isAddVariantDialogOpen}
+        onOpenChange={setIsAddVariantDialogOpen}
+        newVariantTitle={newVariantTitle}
+        onNewVariantTitleChange={setNewVariantTitle}
+        newVariantSku={newVariantSku}
+        onNewVariantSkuChange={setNewVariantSku}
+        newVariantPrice={newVariantPrice}
+        onNewVariantPriceChange={setNewVariantPrice}
+        newVariantCopySource={newVariantCopySource}
+        onNewVariantCopySourceChange={setNewVariantCopySource}
+        defaultSelectedComponents={defaultSelectedComponents}
+        variants={variants}
+        onAddVariant={handleAddVariant}
+        isAddingVariant={isAddingVariant}
+      />
     </div>
   );
 }

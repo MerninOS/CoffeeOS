@@ -1,29 +1,54 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEffectiveOwnerId } from "@/lib/team";
+import { buildProductLookup, costBasis } from "@/lib/products/costing";
 import { ProductsClient } from "./products-client";
 
+/**
+ * CoffeeOS#69 Stage C — /products resolves costing through the SAME module
+ * /orders uses.
+ *
+ * What this replaced, and why it mattered:
+ *
+ *   total_cogs: productCogs[product.id] || averageVariantCogs || null
+ *
+ * That line did three wrong things at once. It averaged variants that disagree
+ * into one plausible-looking number — on the seeded fixture, Sumatra's $11.30
+ * and $29.64 became $20.47, a figure no invoice will ever use, while /orders
+ * had already dropped that product from margin entirely. It used `||` rather
+ * than `??`, so a product costed at exactly $0 fell through to the variant
+ * average. And it could not distinguish "no recipe" from "a $0 recipe", so the
+ * page rendered `—` for both.
+ *
+ * `buildProductLookup` answers the same question /orders asks, with the rule
+ * stated once: a variant-level figure counts as known only when EVERY variant
+ * is costed and all of them agree. `hasRecipe` is carried separately from
+ * `cogs` because recipe presence is not the same question as a positive total.
+ *
+ * The component rows are now NESTED under the owner-scoped product and variant
+ * queries rather than fetched as two unfiltered top-level selects. Same data,
+ * one less place relying on RLS alone.
+ */
 export default async function ProductsPage() {
   const supabase = await createClient();
   const { ownerId } = await getEffectiveOwnerId();
 
-  // Fetch products and calculate COGS from both product-level and variant-level components
-  const [productsResult, productComponentsResult, variantsResult, variantComponentsResult, settingsResult] = await Promise.all([
+  const [productsResult, variantsResult, settingsResult] = await Promise.all([
     supabase
       .from("products")
-      .select("id, shopify_id, title, description, sku, price, image_url, created_at")
+      .select(
+        `id, shopify_id, title, description, sku, price, image_url, created_at,
+         product_components ( quantity, components ( cost_per_unit ) )`
+      )
       .eq("user_id", ownerId!)
       .order("created_at", { ascending: false }),
     supabase
-      .from("product_components")
-      .select("product_id, quantity, components(cost_per_unit)"),
-    supabase
       .from("product_variants")
-      .select("id, product_id, title, sku, price")
+      .select(
+        `id, product_id, title, sku, price,
+         product_variant_components ( quantity, components ( cost_per_unit ) )`
+      )
       .eq("user_id", ownerId!)
       .order("created_at", { ascending: true }),
-    supabase
-      .from("product_variant_components")
-      .select("product_variant_id, quantity, components(cost_per_unit)"),
     supabase
       .from("shopify_settings")
       .select("store_domain")
@@ -32,6 +57,10 @@ export default async function ProductsPage() {
   ]);
 
   const products = productsResult.data || [];
+  const variantRows = variantsResult.data || [];
+
+  // The one implementation, shared with /orders.
+  const lookup = buildProductLookup(products, variantRows);
 
   const extractCostPerUnit = (value: unknown): number => {
     if (Array.isArray(value)) {
@@ -39,93 +68,71 @@ export default async function ProductsPage() {
     }
     return (value as { cost_per_unit?: number } | null)?.cost_per_unit || 0;
   };
-  
-  // Calculate COGS per product from product_components
-  const productCogs: Record<string, number> = {};
-  for (const pc of productComponentsResult.data || []) {
-    const cost = (pc.quantity || 0) * extractCostPerUnit(pc.components);
-    productCogs[pc.product_id] = (productCogs[pc.product_id] || 0) + cost;
-  }
 
+  /** Per-variant cost, for the variant column and the detail page. */
   const variantCogs: Record<string, number> = {};
-  for (const pvc of variantComponentsResult.data || []) {
-    const cost = (pvc.quantity || 0) * extractCostPerUnit(pvc.components);
-    variantCogs[pvc.product_variant_id] = (variantCogs[pvc.product_variant_id] || 0) + cost;
+  for (const variant of variantRows) {
+    const rows = (variant.product_variant_components || []) as Array<{
+      quantity: number | null;
+      components: unknown;
+    }>;
+    variantCogs[variant.id] = rows.reduce(
+      (sum, vc) => sum + (vc.quantity || 0) * extractCostPerUnit(vc.components),
+      0
+    );
   }
 
   const variantsByProduct: Record<
     string,
-    Array<{
-      id: string;
-      title: string;
-      sku: string | null;
-      price: number | null;
-      total_cogs: number | null;
-    }>
+    Array<{ id: string; title: string; sku: string | null; price: number | null; total_cogs: number | null }>
   > = {};
-
-  for (const variant of variantsResult.data || []) {
-    if (!variantsByProduct[variant.product_id]) {
-      variantsByProduct[variant.product_id] = [];
-    }
-
-    variantsByProduct[variant.product_id].push({
+  for (const variant of variantRows) {
+    (variantsByProduct[variant.product_id] ||= []).push({
       id: variant.id,
       title: variant.title,
       sku: variant.sku || null,
       price: variant.price,
-      total_cogs: variantCogs[variant.id] ?? null,
+      // A variant with no rows has no cost, which is NOT the same as costing 0.
+      total_cogs: (variant.product_variant_components || []).length > 0 ? variantCogs[variant.id] : null,
     });
   }
 
-  // Add total_cogs to each product
   const productsWithCogs = products.map((product) => {
     const productVariants = variantsByProduct[product.id] || [];
-    const variantCogsValues = productVariants
-      .map((variant) => variant.total_cogs || 0)
-      .filter((value) => value > 0);
-
-    const averageVariantCogs =
-      variantCogsValues.length > 0
-        ? variantCogsValues.reduce((sum, value) => sum + value, 0) / variantCogsValues.length
-        : null;
-
-    const variantMargins = productVariants
-      .map((variant) => {
-        if (!variant.price || !variant.total_cogs) return null;
-        return ((variant.price - variant.total_cogs) / variant.price) * 100;
-      })
-      .filter((margin): margin is number => margin !== null);
-
-    const averageVariantMargin =
-      variantMargins.length > 0
-        ? variantMargins.reduce((sum, margin) => sum + margin, 0) / variantMargins.length
-        : null;
+    const entry = lookup[product.id];
+    const hasRecipe = entry?.hasRecipe ?? false;
 
     const variantPrices = productVariants
-      .map((variant) => variant.price)
-      .filter((price): price is number => price !== null && price !== undefined);
+      .map((v) => v.price)
+      .filter((p): p is number => p !== null && p !== undefined);
+    const minSellingPrice = variantPrices.length > 0 ? Math.min(...variantPrices) : product.price ?? null;
 
-    const minVariantPrice =
-      variantPrices.length > 0
-        ? Math.min(...variantPrices)
+    // Margin is WITHHELD, not invented, when the cost is unknowable — and it is
+    // derived from the same price the row displays, so the two columns can no
+    // longer disagree. The old `average_margin` mean-averaged every variant's
+    // margin, letting a product with 12 variants outweigh one with 1.
+    const margin =
+      hasRecipe && minSellingPrice
+        ? ((minSellingPrice - entry.cogs) / minSellingPrice) * 100
         : null;
 
     return {
       ...product,
       variants: productVariants,
-      min_selling_price: minVariantPrice ?? product.price ?? null,
-      average_margin: averageVariantMargin,
-      total_cogs: productCogs[product.id] || averageVariantCogs || null,
+      min_selling_price: minSellingPrice,
+      // `null` now means exactly one thing: the cost is not knowable. A costed
+      // product reports its figure even when that figure is 0.
+      total_cogs: hasRecipe ? entry.cogs : null,
+      has_recipe: hasRecipe,
+      cost_basis: costBasis(product, variantRows),
+      average_margin: margin,
     };
   });
-
-  const isShopifyConfigured = !!settingsResult.data?.store_domain;
 
   return (
     <ProductsClient
       initialProducts={productsWithCogs}
-      isShopifyConfigured={isShopifyConfigured}
+      isShopifyConfigured={!!settingsResult.data?.store_domain}
     />
   );
 }

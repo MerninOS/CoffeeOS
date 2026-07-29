@@ -11,6 +11,11 @@ import { test, expect, type Page } from '@playwright/test'
 
 // Routes being converted, phase by phase. Detail routes are excluded: they need
 // seeded record IDs, which the seed script does not currently expose.
+//
+// EXCEPTION: /products/[id] — see PRODUCT_DETAIL below. CoffeeOS#69 converts it,
+// and Stage A's whole proof is "zero baseline movement", which asserts nothing
+// for a route with no baseline. It is reached by clicking through /products by
+// product NAME rather than by id, which the seed does fix.
 const DASHBOARD = [
   '/dashboard',
   '/orders',
@@ -71,6 +76,77 @@ test.describe('dashboard baselines (authenticated)', () => {
 
       await expect(page).toHaveScreenshot(snapshotName(route), { fullPage: true })
       expect(errors, `console errors on ${route}`).toEqual([])
+    })
+  }
+})
+
+/**
+ * Two products, because the detail page branches hard on whether a recipe
+ * exists: a costed product renders the COGS breakdown chart and a populated
+ * calculator, an uncosted one renders two different empty states. A baseline of
+ * only the first would let the refactor silently break the second.
+ *
+ * Titles, not ids — these are fixed by scripts/seed-demo-account.mjs. Clicking
+ * through by name also keeps the baseline stable if row ORDER changes, which an
+ * index-based `.first()` would not.
+ */
+const PRODUCT_DETAIL = [
+  { name: 'Yirgacheffe Light Roast 12oz', slug: 'costed' },
+  { name: 'Guatemala Huehuetenango 12oz', slug: 'uncosted' },
+]
+
+test.describe('product detail baselines (authenticated)', () => {
+  for (const { name, slug } of PRODUCT_DETAIL) {
+    test(`baseline /products/[id] (${slug})`, async ({ page }) => {
+      await page.goto('/products')
+      await expect(page).not.toHaveURL(/\/auth\//)
+
+      // Read the href and navigate rather than clicking. Two reasons, both
+      // learned the hard way:
+      //   1. The onboarding widget (`fixed bottom-4 right-4 z-50`) covers the
+      //      row at 375px and intercepts the click until it is dismissed. The
+      //      orders specs hide it — but hiding it would also remove it from
+      //      this screenshot, making these baselines inconsistent with the nine
+      //      routes above that DO capture it.
+      //   2. /products ships two renderings of every row (a desktop table and
+      //      an `md:hidden` card list), so the name matches twice. Both copies
+      //      point at the same product, so `.first()` is safe for reading an
+      //      attribute even though it is not safe for clicking. CoffeeOS#69
+      //      Criterion 21 deletes that duplication.
+      const link = page.getByRole('link', { name, exact: false }).first()
+      await link.waitFor({ timeout: 20_000 })
+      const href = await link.getAttribute('href')
+
+      // Prove the link resolves to a real detail route. Without this the test
+      // would happily baseline the list page again if the lookup drifted.
+      expect(href).toMatch(/^\/products\/[0-9a-f-]{36}$/)
+
+      // Visit once to make `next dev` COMPILE the route, and only start
+      // collecting console errors afterwards. The first hydration of a
+      // freshly-compiled route emits a useId mismatch (`aria-controls`
+      // `_R_2itmlb_` server vs `_R_6itmlb_` client, on the AppShell nav drawer)
+      // that never recurs once warm and does not exist in a production build.
+      // Verified: whichever detail test runs first in a cold run hits it, and
+      // both pass repeatedly afterwards.
+      //
+      // Deliberately a warm-up rather than a KNOWN_NOISE entry — an allowlist
+      // would suppress that same message for a genuine hydration bug introduced
+      // by the Stage B rewrite, which is what these baselines exist to catch.
+      await page.goto(href!)
+      await page.waitForLoadState('networkidle')
+
+      const errors = collectErrors(page)
+      await page.goto(href!)
+      await page.waitForLoadState('networkidle')
+
+      // The costed product renders a recharts donut, whose animation is
+      // JS-driven — `animations: 'disabled'` does not stop react-smooth. This
+      // relies on toHaveScreenshot's own stabilisation (it reshoots until two
+      // consecutive frames match) rather than a fixed sleep.
+      await expect(page).toHaveScreenshot(`_products_detail_${slug}.png`, {
+        fullPage: true,
+      })
+      expect(errors, `console errors on /products/[id] (${slug})`).toEqual([])
     })
   }
 })
