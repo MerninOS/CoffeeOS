@@ -5,7 +5,6 @@ import Image from "next/image";
 import { Badge, IconButton } from "@merninos/ui/instrument";
 import { Trash2 } from "lucide-react";
 import { mono, overline, money } from "@/lib/instrument/tokens";
-import { calcMargin } from "./margin";
 import type { Product } from "./types";
 
 /**
@@ -47,17 +46,33 @@ import type { Product } from "./types";
  * the staging exists to prevent.
  */
 
-/** Product | Variants | Min price | Unit COGS | Margin | actions */
-const GRID = "minmax(0,1fr) 88px 108px 116px 104px 44px";
+/** Product | Cost basis | Variants | Min price | Unit COGS | Margin | actions */
+const GRID = "minmax(0,1fr) 148px 80px 104px 112px 100px 44px";
 
 /**
  * 900px, not /orders' 1180px: this table carries five columns to its eight, and
  * 900 is also `--bp-compact`, where AppShell swaps the 236px nav rail for a
  * drawer — so above the breakpoint the row always has the full canvas.
  */
-const ROW = "flex flex-col min-[900px]:grid";
-const CELL = "flex items-center px-3 py-1.5 min-[900px]:py-0 min-[900px]:h-10";
-const CELL_R = `${CELL} justify-between min-[900px]:justify-end`;
+const ROW = "flex flex-col min-[1000px]:grid";
+const CELL = "flex items-center px-3 py-1.5 min-[1000px]:py-0 min-[1000px]:h-10";
+const CELL_R = `${CELL} justify-between min-[1000px]:justify-end`;
+
+/**
+ * `both` is the only tone that is not neutral: a product carrying BOTH a
+ * product-level and a variant-level recipe has one of them silently ignored by
+ * /orders costing, which is a thing the operator should be told about. The
+ * other three are statements of fact, not warnings.
+ *
+ * Badge drops unknown props, so the test id goes on a wrapping span — the same
+ * trap that ate three seams already in this ticket.
+ */
+const BASIS_LABEL: Record<string, string> = {
+  product: "Product recipe",
+  variant: "Per variant",
+  both: "Both — conflict",
+  none: "None",
+};
 
 const initials = (title: string) =>
   title
@@ -72,7 +87,7 @@ const initials = (title: string) =>
 function Figure({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className={CELL_R}>
-      <span style={overline} className="min-[900px]:hidden">
+      <span style={overline} className="min-[1000px]:hidden">
         {label}
       </span>
       {children}
@@ -101,7 +116,7 @@ export function ProductsWorksheetTable({
       {/* Header exists only where the row is a grid — a stacked row labels
           itself, so a header above it would say everything twice. */}
       <div
-        className="hidden min-[900px]:grid"
+        className="hidden min-[1000px]:grid"
         style={{
           gridTemplateColumns: GRID,
           ...overline,
@@ -111,6 +126,7 @@ export function ProductsWorksheetTable({
         }}
       >
         <div className="flex items-center px-3 h-[34px]">Product</div>
+        <div className="flex items-center px-3 h-[34px]">Cost basis</div>
         <div className="flex items-center justify-end px-3 h-[34px]">Variants</div>
         <div className="flex items-center justify-end px-3 h-[34px]">Min price</div>
         <div className="flex items-center justify-end px-3 h-[34px]">Unit COGS</div>
@@ -119,7 +135,11 @@ export function ProductsWorksheetTable({
       </div>
 
       {products.map((p, i) => {
-        const margin = p.average_margin ?? calcMargin(p.price, p.total_cogs);
+        // page.tsx now derives this from the SAME price this row displays and
+        // the classifier's cost, so the Margin and Min price columns can no
+        // longer disagree — they used to, whenever a variant was priced below
+        // `products.price`.
+        const margin = p.average_margin ?? null;
         const tone = margin === null ? null : margin >= 30 ? "success" : margin >= 15 ? "warning" : "danger";
         return (
           <div
@@ -127,7 +147,7 @@ export function ProductsWorksheetTable({
             // py-2 only while stacked. Above the breakpoint the row must be
             // exactly 40px — the design system's row metric — and the cells'
             // own `h-10` provides it, so extra row padding would break it.
-            className={`${ROW} py-2 min-[900px]:py-0`}
+            className={`${ROW} py-2 min-[1000px]:py-0`}
             style={{
               gridTemplateColumns: GRID,
               fontFamily: "var(--font-sans)",
@@ -202,6 +222,23 @@ export function ProductsWorksheetTable({
               </Link>
             </div>
 
+            <div className={CELL_R}>
+              <span style={overline} className="min-[1000px]:hidden">
+                Cost basis
+              </span>
+              {p.cost_basis === "none" ? (
+                <span style={{ ...figure, color: "var(--danger)" }} data-testid="row-basis">
+                  not set
+                </span>
+              ) : (
+                <span data-testid="row-basis">
+                  <Badge tone={p.cost_basis === "both" ? "warning" : "neutral"} variant="soft">
+                    {BASIS_LABEL[p.cost_basis ?? "none"]}
+                  </Badge>
+                </span>
+              )}
+            </div>
+
             <Figure label="Variants">
               <span style={figure}>{p.variants?.length ?? 0}</span>
             </Figure>
@@ -212,15 +249,32 @@ export function ProductsWorksheetTable({
               </span>
             </Figure>
 
+            {/* THE VOCABULARY, matching /orders exactly:
+                  --ink        a real figure
+                  --danger     `not set` — the cost is not knowable
+                A product costed at exactly $0 shows $0.00 in --ink, because it
+                HAS a recipe. `null` here means unknowable and nothing else. */}
             <Figure label="Unit COGS">
-              <span style={figure} data-testid="row-cogs">
-                {p.total_cogs ? money(p.total_cogs) : "—"}
-              </span>
+              {p.has_recipe ? (
+                <span style={figure} data-testid="row-cogs">
+                  {money(p.total_cogs ?? 0)}
+                </span>
+              ) : (
+                <span style={{ ...figure, color: "var(--danger)" }} data-testid="row-cogs">
+                  not set
+                </span>
+              )}
             </Figure>
 
+            {/* Withheld, never reddened. Profit and margin are wholly derived
+                from the number that is missing, so a figure here would not be
+                "uncertain", it would be invented. Red says "be careful"; an em
+                dash says "we do not know", which is the true statement. */}
             <Figure label="Margin">
               {margin === null ? (
-                <span style={{ ...figure, color: "var(--ink-subtle)" }}>—</span>
+                <span style={{ ...figure, color: "var(--ink-subtle)" }} data-testid="row-margin">
+                  —
+                </span>
               ) : (
                 <Badge tone={tone!} variant="soft" mono>
                   {margin.toFixed(1)}%
@@ -228,7 +282,7 @@ export function ProductsWorksheetTable({
               )}
             </Figure>
 
-            <div className={`${CELL} justify-end min-[900px]:justify-center`}>
+            <div className={`${CELL} justify-end min-[1000px]:justify-center`}>
               <IconButton
                 size="sm"
                 icon={<Trash2 size={14} strokeWidth={2} />}

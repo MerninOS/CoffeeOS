@@ -13,7 +13,6 @@ import {
 import { RefreshCw, Search, Package, Plus, Settings } from "lucide-react";
 import { syncShopifyProducts, deleteProduct, createProduct } from "./actions";
 import { mono, overline, sans } from "@/lib/instrument/tokens";
-import { calcMargin } from "./components/margin";
 import { ProductsWorksheetTable } from "./components/ProductsWorksheetTable";
 import { AddProductDialog, DeleteProductDialog } from "./components/ProductDialogs";
 import type { Product } from "./components/types";
@@ -37,15 +36,11 @@ import type { Product } from "./components/types";
  *  - one rendering for both viewports; the `md:hidden` duplicate is gone
  *    (Criterion 21).
  *
- * WHAT THIS STAGE DOES NOT CHANGE. The figures are still computed the way
- * page.tsx computes them today — `productCogs[id] || averageVariantCogs`, and a
- * truthiness test for "needs COGS". So `needingCogs` still counts a genuinely
- * $0-costed product as needing work, and disagreeing variants are still averaged
- * into one plausible number. Stage C swaps the data source to
- * lib/products/costing.ts, which is when this page can honestly say `not set`
- * and tell those cases apart. Restyling and re-deriving in one commit would make
- * a wrong pixel and a wrong number indistinguishable — the same reason Stage A
- * was split from Stage B.
+ * STAGE C: the figures are now resolved by lib/products/costing.ts, the same
+ * module /orders uses, so the two screens can no longer disagree about whether a
+ * product is costed. `not set` in `--danger` means the cost is not knowable;
+ * `—` in `--ink-subtle` means a figure derived from it is being withheld rather
+ * than invented. That vocabulary is /orders', verbatim.
  */
 type CostingFilter = "all" | "costed" | "uncosted";
 
@@ -69,8 +64,12 @@ export function ProductsClient({
   const [isCreating, setIsCreating] = useState(false);
   const [newProduct, setNewProduct] = useState({ title: "", description: "", sku: "", price: "" });
 
-  // Still the old predicate — see the note at the top of this file.
-  const isUncosted = (p: Product) => !p.total_cogs || p.total_cogs === 0;
+  // Recipe presence, not a positive total (Criterion 2). page.tsx resolves this
+  // through lib/products/costing.ts — the same module /orders uses — so a
+  // product costed entirely from zero-cost components counts as COSTED, and a
+  // product whose variants disagree counts as uncosted exactly as /orders
+  // already treats it.
+  const isUncosted = (p: Product) => !p.has_recipe;
 
   const filteredProducts = products
     .filter((p) =>
@@ -132,14 +131,18 @@ export function ProductsClient({
     setIsCreating(false);
   };
 
-  const allVariantMargins = products.flatMap((p) =>
-    (p.variants || [])
-      .map((v) => calcMargin(v.price, v.total_cogs))
-      .filter((m): m is number => m !== null)
-  );
+  // Mean over COSTED PRODUCTS, not over every variant flattened. The old
+  // version mean-averaged each variant's margin across the whole catalogue, so
+  // a product with 12 variants outweighed one with 1 — the same class of
+  // invented average that the COGS column just stopped doing. Uncosted products
+  // are excluded rather than counted as zero, which is why the label says so.
+  const costedMargins = products
+    .filter((p) => p.has_recipe)
+    .map((p) => p.average_margin)
+    .filter((m): m is number => m !== null && m !== undefined);
   const avgMargin =
-    allVariantMargins.length > 0
-      ? allVariantMargins.reduce((s, m) => s + m, 0) / allVariantMargins.length
+    costedMargins.length > 0
+      ? costedMargins.reduce((s, m) => s + m, 0) / costedMargins.length
       : 0;
   const variantCount = products.reduce((s, p) => s + (p.variants?.length || 0), 0);
   const needingCogs = products.filter(isUncosted).length;
@@ -236,7 +239,7 @@ export function ProductsClient({
               { label: "Costed", value: String(products.length - needingCogs) },
               { label: "Variants", value: String(variantCount) },
               {
-                label: "Avg margin · variants",
+                label: "Margin · costed",
                 value: avgMargin > 0 ? avgMargin.toFixed(1) : "—",
                 unit: avgMargin > 0 ? "%" : undefined,
               },

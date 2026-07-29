@@ -26,6 +26,16 @@ export interface Product {
   total_cogs?: number | null;
   min_selling_price?: number | null;
   average_margin?: number | null;
+  /**
+   * Whether the product carries a recipe AT ALL — the question
+   * lib/products/costing.ts answers, and deliberately NOT `total_cogs > 0`.
+   * A product costed entirely from zero-cost components has a recipe and a
+   * cost of 0; a product with none has neither.
+   */
+  has_recipe?: boolean;
+  /** Which rows exist: product | variant | both | none. A storage question,
+   *  separate from whether the cost is knowable. */
+  cost_basis?: "product" | "variant" | "both" | "none";
   variants?: ProductVariant[];
   image_url: string | null;
   created_at: string;
