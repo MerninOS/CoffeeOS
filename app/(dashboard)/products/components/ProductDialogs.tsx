@@ -19,8 +19,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Plus } from "lucide-react";
-import { Btn, MerninInput, MerninTextarea, FieldLabel } from "./primitives";
+import { Button, Field, Input, Textarea } from "@merninos/ui/instrument";
+import { sans } from "@/lib/instrument/tokens";
 
 export interface NewProduct {
   title: string;
@@ -30,14 +30,52 @@ export interface NewProduct {
 }
 
 /**
- * The two dialogs, moved out of products-client.tsx unchanged (CoffeeOS#69
- * Stage A). Both are Radix, and both portal to <body> — outside
- * [data-surface="app"] — so Stage B must set data-surface on the content roots
- * or every instrument token inside resolves to nothing (Criterion 22).
+ * Both dialogs, on instrument (CoffeeOS#69 Stage B).
  *
- * Kept as Radix rather than instrument's Modal in Stage B: instrument's Modal
- * renders no role="dialog", which these need to stay driveable from tests.
+ * `data-surface="app"` ON THE CONTENT ROOTS IS LOAD-BEARING, not defensive.
+ * Radix portals these to <body>, i.e. OUTSIDE the AppShell subtree that scopes
+ * the instrument token layer — so without it every `var(--token)` inside
+ * resolves to nothing and the dialog renders unstyled. It cost real time to find
+ * on /orders; Criterion 22 asserts it here.
+ *
+ * Radix is kept rather than instrument's Modal on purpose: instrument's Modal
+ * renders no `role="dialog"`, so it cannot be driven from a test.
  */
+
+const PANEL: React.CSSProperties = {
+  background: "var(--surface)",
+  border: "1px solid var(--hairline)",
+  borderRadius: "var(--r-lg)",
+  boxShadow: "var(--shadow-modal)",
+  padding: 0,
+  overflow: "hidden",
+  gap: 0,
+};
+
+const HEAD: React.CSSProperties = {
+  padding: "var(--space-5) var(--space-6)",
+  borderBottom: "1px solid var(--hairline)",
+  background: "var(--surface-sunken)",
+};
+
+const FOOT: React.CSSProperties = {
+  padding: "var(--space-4) var(--space-6)",
+  borderTop: "1px solid var(--hairline)",
+  background: "var(--surface-sunken)",
+  display: "flex",
+  gap: 8,
+  justifyContent: "flex-end",
+};
+
+const TITLE: React.CSSProperties = {
+  fontFamily: "var(--font-display)",
+  fontVariationSettings: "var(--display-settings)",
+  fontWeight: "var(--display-weight)" as unknown as number,
+  letterSpacing: "var(--display-tracking)",
+  fontSize: "var(--fs-title)",
+  textTransform: "uppercase",
+  color: "var(--ink)",
+};
 
 export function AddProductDialog({
   open,
@@ -46,6 +84,7 @@ export function AddProductDialog({
   onChange,
   onCreate,
   isCreating,
+  trigger,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -53,76 +92,80 @@ export function AddProductDialog({
   onChange: (next: NewProduct) => void;
   onCreate: () => void;
   isCreating: boolean;
+  trigger: React.ReactNode;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Btn variant="outline" size="sm">
-          <Plus size={14} strokeWidth={2.5} />
-          <span className="hidden sm:inline">Add Product</span>
-          <span className="sm:hidden">Add</span>
-        </Btn>
-      </DialogTrigger>
-      <DialogContent className="border-[3px] border-espresso rounded-[20px] shadow-flat-lg bg-chalk p-0 overflow-hidden gap-0">
-        <DialogHeader className="px-6 py-5 border-b-[3px] border-espresso bg-cream">
-          <DialogTitle className="font-extrabold text-[18px] uppercase tracking-[.06em] text-espresso">
-            Add New Product
-          </DialogTitle>
-          <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
-            Create a product manually without Shopify
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent data-surface="app" style={PANEL}>
+        <DialogHeader style={HEAD}>
+          <DialogTitle style={TITLE}>Add product</DialogTitle>
+          <DialogDescription
+            style={{ ...sans, fontSize: "var(--fs-caption)", color: "var(--ink-muted)", marginTop: 4 }}
+          >
+            Create a product by hand, without Shopify.
           </DialogDescription>
         </DialogHeader>
-        <div className="px-6 py-5 flex flex-col gap-4">
-          <div>
-            <FieldLabel htmlFor="title">Product Title *</FieldLabel>
-            <MerninInput
+        <div
+          style={{
+            padding: "var(--space-5) var(--space-6)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--gap-stack)",
+          }}
+        >
+          <Field label="Product title" htmlFor="title" required>
+            <Input
               id="title"
               value={value.title}
               onChange={(e) => onChange({ ...value, title: e.target.value })}
-              placeholder="e.g., Ethiopia Yirgacheffe 12oz"
+              placeholder="Ethiopia Yirgacheffe 12oz"
             />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <FieldLabel htmlFor="sku">SKU</FieldLabel>
-              <MerninInput
+          </Field>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--gap-stack)" }}>
+            <Field label="SKU" htmlFor="sku" optional>
+              <Input
                 id="sku"
+                mono
                 value={value.sku}
                 onChange={(e) => onChange({ ...value, sku: e.target.value })}
-                placeholder="COFFEE-ETH-12"
+                placeholder="ETH-YIR-12"
               />
-            </div>
-            <div>
-              <FieldLabel htmlFor="price">Selling Price ($) *</FieldLabel>
-              <MerninInput
+            </Field>
+            <Field label="Selling price" htmlFor="price" required>
+              <Input
                 id="price"
+                mono
                 type="number"
                 step="0.01"
                 value={value.price}
                 onChange={(e) => onChange({ ...value, price: e.target.value })}
                 placeholder="18.00"
               />
-            </div>
+            </Field>
           </div>
-          <div>
-            <FieldLabel htmlFor="description">Description</FieldLabel>
-            <MerninTextarea
+          <Field label="Description" htmlFor="description" optional>
+            <Textarea
               id="description"
+              rows={3}
               value={value.description}
               onChange={(e) => onChange({ ...value, description: e.target.value })}
-              placeholder="Product description..."
-              rows={3}
+              placeholder="Floral and citrus-forward single origin."
             />
-          </div>
+          </Field>
         </div>
-        <DialogFooter className="px-6 py-4 border-t-[3px] border-espresso bg-cream flex gap-2">
-          <Btn variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+        <DialogFooter style={FOOT}>
+          <Button variant="secondary" size="sm" onClick={() => onOpenChange(false)}>
             Cancel
-          </Btn>
-          <Btn size="sm" onClick={onCreate} disabled={isCreating || !value.title || !value.price}>
-            {isCreating && <Loader2 size={13} className="animate-spin" />}
-            Create Product
-          </Btn>
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={onCreate}
+            disabled={isCreating || !value.title || !value.price}
+          >
+            {isCreating ? "Creating…" : "Create product"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -142,29 +185,29 @@ export function DeleteProductDialog({
 }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="border-[3px] border-espresso rounded-[20px] shadow-flat-lg bg-chalk p-0 overflow-hidden gap-0">
-        <AlertDialogHeader className="px-6 py-5 border-b-[3px] border-espresso bg-cream">
-          <AlertDialogTitle className="font-extrabold text-[18px] uppercase tracking-[.06em] text-espresso">
-            Delete Product
-          </AlertDialogTitle>
-          <AlertDialogDescription className="text-[13px] text-muted-foreground mt-0.5">
-            This can&apos;t be undone. All associated COGS data will be removed.
+      <AlertDialogContent data-surface="app" style={PANEL}>
+        <AlertDialogHeader style={HEAD}>
+          <AlertDialogTitle style={TITLE}>Delete product</AlertDialogTitle>
+          <AlertDialogDescription
+            style={{ ...sans, fontSize: "var(--fs-caption)", color: "var(--ink-muted)", marginTop: 4 }}
+          >
+            This can&apos;t be undone. Its recipe and COGS data go with it.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="px-6 py-4 border-t-[3px] border-espresso bg-cream flex gap-2">
-          <AlertDialogCancel
-            disabled={isDeleting}
-            className="inline-flex items-center gap-2 font-extrabold uppercase tracking-[.08em] rounded-full h-[30px] px-3.5 text-[11px] bg-transparent text-espresso border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] hover:shadow-[4px_4px_0_#1C0F05] transition-all duration-100"
-          >
-            Cancel
+        <AlertDialogFooter style={FOOT}>
+          {/* Destructive fill is `--danger`, NOT `--brand`. Brand red is the live
+              register on this system and never fills a control (Criterion 6);
+              --danger is deliberately a darker, desaturated red so the two do not
+              read as the same signal. */}
+          <AlertDialogCancel disabled={isDeleting} asChild>
+            <Button variant="secondary" size="sm">
+              Cancel
+            </Button>
           </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={onConfirm}
-            disabled={isDeleting}
-            className="inline-flex items-center gap-2 font-extrabold uppercase tracking-[.08em] rounded-full h-[30px] px-3.5 text-[11px] bg-tomato text-cream border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] active:translate-x-[2.5px] active:translate-y-[2.5px] active:shadow-none transition-all duration-100"
-          >
-            {isDeleting && <Loader2 size={13} className="animate-spin" />}
-            Delete
+          <AlertDialogAction disabled={isDeleting} onClick={onConfirm} asChild>
+            <Button variant="destructive" size="sm">
+              {isDeleting ? "Deleting…" : "Delete product"}
+            </Button>
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
