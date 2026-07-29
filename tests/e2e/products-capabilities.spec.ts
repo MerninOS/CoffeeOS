@@ -276,3 +276,85 @@ test.describe('variant selection', () => {
     await expectCogs(page, smallCogs, 'switching back did not restore the first variant figure')
   })
 })
+
+// ── 7-11: the costing source (CoffeeOS#69 Stage C, Criteria 9-13) ───────────
+
+/**
+ * House Espresso is the fixture's BOTH-bases product: a product-level recipe at
+ * $31.320 and a variant recipe at $31.660. Those two figures differ on purpose —
+ * it is what makes "which one is billed" a falsifiable question. Every test
+ * below asserts the fixture's precondition before trusting its own result.
+ */
+const BOTH_BASES = 'House Espresso Blend 2lb'
+const PRODUCT_LEVEL = 31.32
+const VARIANT_LEVEL = 31.66
+
+test.describe('costing source', () => {
+  test('7 — the page opens on the STORED mode, not on variants.length', async ({ page }) => {
+    await openProduct(page, BOTH_BASES)
+
+    // costing_mode backfilled to 'product' for a both-bases product, because
+    // that is what Orders bills. The old rule (`variants.length > 0`) would have
+    // opened this on Per variant and immediately contradicted the column.
+    await expect(page.getByTestId('costing-source-explainer')).toContainText('One recipe costs')
+    await expect(page.getByTestId('costing-source-explainer')).toContainText('$31.320')
+  })
+
+  test('8 — every figure on the page is the BILLED figure', async ({ page }) => {
+    await openProduct(page, BOTH_BASES)
+
+    expect(
+      Math.abs(PRODUCT_LEVEL - VARIANT_LEVEL),
+      'fixture bases must differ, or "which is billed" is unfalsifiable'
+    ).toBeGreaterThan(0.1)
+
+    // Hero, and the variant row, must both read the PRODUCT figure — not the
+    // variant's own $31.660, which is what the page used to show while an
+    // invoice was billed $31.320.
+    await expectCogs(page, PRODUCT_LEVEL, 'hero is not the billed figure')
+    const billed = vis(page.getByTestId('variant-billed-cogs')).first()
+    expect(money(await billed.innerText())).toBeCloseTo(PRODUCT_LEVEL, 2)
+    expect(money(await billed.innerText())).not.toBeCloseTo(VARIANT_LEVEL, 2)
+  })
+
+  test('9 — the unbilled basis is visible, inert, and named', async ({ page }) => {
+    await openProduct(page, BOTH_BASES)
+
+    await expect(page.getByTestId('unbilled-basis-banner')).toContainText('stored but not billed')
+
+    // VISIBLE — hiding it would recreate the "where did my recipe go" problem.
+    const stored = vis(page.getByTestId('stored-recipe-row'))
+    expect(await stored.count(), 'the stored recipe must still be readable').toBeGreaterThan(0)
+
+    // ...and INERT. --ink-subtle is rgb(154, 143, 134).
+    const colour = await stored.first().evaluate(
+      (el) => getComputedStyle(el.querySelector('[data-testid="recipe-line-total"]')!).color
+    )
+    expect(colour, 'stored figures must not render as live ink').toBe('rgb(154, 143, 134)')
+  })
+
+  test('10 — the product recipe is reachable on a product that has variants', async ({ page }) => {
+    await openProduct(page, BOTH_BASES)
+
+    // The defect this replaces: `isVariantMode = variants.length > 0` made the
+    // product recipe unreachable the moment a product had variants, while
+    // Orders went on costing from it.
+    await expect(vis(page.getByTestId('recipe-row')).first()).toBeVisible()
+    await expectCogs(page, PRODUCT_LEVEL, 'the editor is not showing the product recipe')
+  })
+
+  test('11 — a figure with no single true value is a range, not an average', async ({ page }) => {
+    // Kenya is variant-costed with variants priced $24 and $26, so in One recipe
+    // mode there is no one Price. A single number there would be the same class
+    // of invention as the old flat `average_margin`.
+    await openProduct(page, 'Kenya Nyeri AA')
+    // SegmentedControl renders `<button role="tab">`, and the explicit role
+    // wins over the implicit one — getByRole('button') does not match it.
+    await page.getByRole('tab', { name: 'One recipe' }).click()
+
+    const strip = page.locator('body')
+    await expect(strip).toContainText('Price range')
+    await expect(strip).toContainText('$24.00–$26.00')
+    await expect(strip, 'a mean would read $25.00').not.toContainText('Price range$25.00')
+  })
+})

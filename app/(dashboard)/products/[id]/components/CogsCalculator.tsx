@@ -123,22 +123,12 @@ export function CogsCalculator({
             <span style={{ ...sans, fontSize: "var(--fs-caption)", color: "var(--ink-muted)" }}>
               Edits are local until saved.
             </span>
-            <Button
-              data-testid="recipe-save"
-              size="sm"
-              variant="primary"
-              iconLeft={
-                isSaving ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Save size={14} strokeWidth={2} />
-                )
-              }
-              onClick={onSaveComponents}
-              disabled={isSaving || (isVariantMode && !selectedVariantId)}
-            >
-              {isVariantMode ? "Save variant recipe" : "Save recipe"}
-            </Button>
+            {/* The Save button moved to the unsaved-changes bar in Stage C.
+                Two save affordances is one too many — and pinned to the bottom
+                of the viewport, the bar physically covered this one at 375px,
+                which is how the variant-save test started failing with
+                "<div> intercepts pointer events". One save, and it appears only
+                when there is something to save. */}
           </div>
         </div>
       )}

@@ -12,7 +12,7 @@ import {
   updateWholesalePricing,
 } from "./actions";
 import Link from "next/link";
-import { HeroMetric, InlineBanner, StatStrip } from "@merninos/ui/instrument";
+import { Button, HeroMetric, InlineBanner, StatStrip } from "@merninos/ui/instrument";
 import { ArrowLeft } from "lucide-react";
 import { mono, sans, money, money3 } from "@/lib/instrument/tokens";
 import { VariantsPanel } from "./components/VariantsPanel";
@@ -124,6 +124,55 @@ export function ProductDetailClient({
   );
   const [modeDirty, setModeDirty] = useState(false);
 
+  /**
+   * CoffeeOS#69 task 26 — which SCOPES have unsaved edits.
+   *
+   * Edits already survive a variant switch: `variantComponentMap` is keyed by
+   * variant id, so switching away and back returns the draft. What was missing
+   * is that nothing TOLD you a scope you can no longer see is still unsaved, and
+   * the per-section Save only ever wrote the scope on screen. A draft you cannot
+   * see and were never told about is lost work with extra steps.
+   *
+   * Compared against the rows the server sent, so returning a value to its
+   * original makes the scope clean again rather than staying dirty forever.
+   */
+  const initialByScope = useMemo(() => {
+    const map: Record<string, SelectedComponent[]> = {
+      product: initialProductComponents.map((pc) => ({
+        componentId: pc.component_id,
+        quantity: pc.quantity,
+      })),
+    };
+    for (const vc of initialVariantComponents) {
+      (map[vc.product_variant_id] ||= []).push({
+        componentId: vc.component_id,
+        quantity: vc.quantity,
+      });
+    }
+    for (const v of productVariants) map[v.id] ||= [];
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const sameRows = (a: SelectedComponent[], b: SelectedComponent[]) =>
+    a.length === b.length &&
+    a.every((r, i) => r.componentId === b[i].componentId && r.quantity === b[i].quantity);
+
+  const dirtyScopes = useMemo(() => {
+    const out: Array<{ id: string; label: string }> = [];
+    if (!sameRows(defaultSelectedComponents, initialByScope.product ?? [])) {
+      out.push({ id: "product", label: "Product recipe" });
+    }
+    for (const v of variants) {
+      const current = variantComponentMap[v.id];
+      if (current && !sameRows(current, initialByScope[v.id] ?? [])) {
+        out.push({ id: v.id, label: v.title });
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultSelectedComponents, variantComponentMap, variants, initialByScope]);
+
   // Wholesale
   const [wholesaleEnabled, setWholesaleEnabled] = useState(product.wholesale_enabled || false);
   const [wholesalePrice, setWholesalePrice] = useState(product.wholesale_price?.toString() || "");
@@ -199,10 +248,53 @@ export function ProductDetailClient({
     : variants.filter(variantHasOwnRecipe).length;
 
   const priceValue = parseFloat(sellingPrice) || 0;
+
   const margin = priceValue > 0 ? ((priceValue - calculatedCogs) / priceValue) * 100 : 0;
   const profit = priceValue - calculatedCogs;
   const wholesalePriceValue = parseFloat(wholesalePrice) || 0;
   const wholesaleMargin = wholesalePriceValue > 0 ? ((wholesalePriceValue - calculatedCogs) / wholesalePriceValue) * 100 : 0;
+
+  /**
+   * Criterion 13 — a figure with no single true value is a RANGE, not an
+   * average.
+   *
+   * In `One recipe` mode the variants can carry different prices, so there is no
+   * one Price, Profit or Margin for the product. Showing a single number there
+   * would be the same class of invention as the old `average_margin`, which
+   * mean-averaged every variant's margin across the catalogue. The per-variant
+   * truth lives in the costing-source table above; the strip states the spread.
+   */
+  const variantPrices = variants
+    .map((v) => v.price)
+    .filter((p): p is number => p !== null && p !== undefined);
+  const priceSpread =
+    !isVariantMode && variantPrices.length > 1
+      ? { lo: Math.min(...variantPrices), hi: Math.max(...variantPrices) }
+      : null;
+
+  const strip = priceSpread
+    ? [
+        { label: "Variants", value: String(variants.length) },
+        { label: "Components", value: String(selectedComponents.length) },
+        {
+          label: "Price range",
+          value: `${money(priceSpread.lo)}\u2013${money(priceSpread.hi)}`,
+        },
+        {
+          label: "Margin range",
+          value: `${(((priceSpread.lo - calculatedCogs) / priceSpread.lo) * 100).toFixed(1)}\u2013${(
+            ((priceSpread.hi - calculatedCogs) / priceSpread.hi) *
+            100
+          ).toFixed(1)}`,
+          unit: "%",
+        },
+      ]
+    : [
+        { label: isVariantMode ? "Variant price" : "Price", value: money(priceValue) },
+        { label: "Profit \u00b7 unit", value: money3(profit) },
+        { label: "Margin", value: margin.toFixed(1), unit: "%" },
+        { label: "Components", value: String(selectedComponents.length) },
+      ];
 
 
   const addComponent = () => {
@@ -223,6 +315,43 @@ export function ProductDetailClient({
     const r = await updateProductCostingMode(product.id, mode);
     if (!r.error) setModeDirty(false);
     return r.error ?? null;
+  };
+
+  /**
+   * Saves EVERY dirty scope, not just the one on screen.
+   *
+   * Sequential and stop-on-first-error: a partial failure leaves the remaining
+   * scopes dirty and names the one that failed, so the bar stays up and the
+   * operator knows exactly what did not land. Parallel writes would make "which
+   * one failed" unanswerable.
+   */
+  const handleSaveAll = async () => {
+    setIsSaving(true);
+    setMessage(null);
+
+    const modeError = await persistModeIfDirty();
+    if (modeError) {
+      setMessage({ type: "error", text: modeError });
+      setIsSaving(false);
+      return;
+    }
+
+    for (const scope of dirtyScopes) {
+      const rows =
+        scope.id === "product" ? defaultSelectedComponents : variantComponentMap[scope.id] ?? [];
+      const result =
+        scope.id === "product"
+          ? await updateProductComponents(product.id, rows)
+          : await updateProductVariantComponents(product.id, scope.id, rows);
+      if (result.error) {
+        setMessage({ type: "error", text: `${scope.label}: ${result.error}` });
+        setIsSaving(false);
+        return;
+      }
+    }
+
+    setMessage({ type: "success", text: "Saved." });
+    setIsSaving(false);
   };
 
   const handleSaveComponents = async () => {
@@ -314,7 +443,17 @@ export function ProductDetailClient({
   };
 
   return (
-    <div style={{ maxWidth: "var(--content-max)", margin: "0 auto", padding: "var(--space-6)" }}>
+    <div
+      style={{
+        maxWidth: "var(--content-max)",
+        margin: "0 auto",
+        padding: "var(--space-6)",
+        // Clear the fixed unsaved-changes bar. Without this it sits on top of
+        // the last section's Save button at narrow widths, which is how the
+        // variant-save test started timing out on "visible, enabled and stable".
+        paddingBottom: 112,
+      }}
+    >
       {/* Header */}
       <div style={{ marginBottom: "var(--space-5)" }}>
         <Link
@@ -393,12 +532,7 @@ export function ProductDetailClient({
         </div>
         <div style={{ flex: "1 1 460px", minWidth: 0 }}>
           <StatStrip
-            stats={[
-              { label: isVariantMode ? "Variant price" : "Price", value: money(priceValue) },
-              { label: "Profit \u00b7 unit", value: money3(profit) },
-              { label: "Margin", value: margin.toFixed(1), unit: "%" },
-              { label: "Components", value: String(selectedComponents.length) },
-            ]}
+            stats={strip}
           />
         </div>
       </div>
@@ -497,6 +631,57 @@ export function ProductDetailClient({
         onSaveWholesale={handleSaveWholesale}
         isWholesaleSaving={isWholesaleSaving}
       />
+
+      {/* Unsaved-changes bar. Edits already survived a variant switch — the
+          draft map is keyed by variant — but nothing told you a scope you can no
+          longer SEE still had unsaved work, and the per-section Save only wrote
+          the scope on screen. This names every dirty scope and saves them all.
+          Same visual contract as DataTable's bulk bar. */}
+      {(dirtyScopes.length > 0 || modeDirty) && (
+        <div
+          data-testid="unsaved-bar"
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: 20,
+            zIndex: "var(--z-bulkbar)" as unknown as number,
+            transform: "translateX(-50%)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              padding: "10px 12px 10px 16px",
+              background: "var(--ink)",
+              color: "var(--on-ink)",
+              borderRadius: "var(--r-md)",
+              boxShadow: "var(--shadow-modal)",
+            }}
+          >
+            <span style={{ ...mono, fontSize: "var(--fs-label)" }}>
+              {[
+                modeDirty ? `costing source \u2192 ${mode === "product" ? "one recipe" : "per variant"}` : null,
+                dirtyScopes.length > 0
+                  ? `${dirtyScopes.length} unsaved ${dirtyScopes.length === 1 ? "recipe" : "recipes"}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" \u00b7 ")}
+            </span>
+            <Button
+              data-testid="recipe-save"
+              size="sm"
+              variant="secondary"
+              onClick={handleSaveAll}
+              disabled={isSaving}
+            >
+              {isSaving ? "Saving\u2026" : "Save all"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <AddVariantDialog
         open={isAddVariantDialogOpen}

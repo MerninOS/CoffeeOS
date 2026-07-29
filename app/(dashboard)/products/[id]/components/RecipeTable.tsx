@@ -240,11 +240,25 @@ export function RecipeTable({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent data-surface="app" style={SELECT_CONTENT}>
-                      {availableComponents.map((c) => (
-                        <SelectItem key={c.id} value={c.id} style={SELECT_ITEM}>
-                          {c.name} ({c.unit})
-                        </SelectItem>
-                      ))}
+                      {/* Components already used by ANOTHER row are excluded
+                          (CoffeeOS#69 task 27). `product_components` has
+                          UNIQUE(product_id, component_id), and the picker used
+                          to let you select a duplicate — which then failed on
+                          save with a raw Postgres constraint message in the
+                          toast. Quantity is how you express "two of these".
+                          The row's OWN component stays listed, or the Select
+                          would have no value to show. */}
+                      {availableComponents
+                        .filter(
+                          (c) =>
+                            c.id === sc.componentId ||
+                            !selectedComponents.some((other) => other.componentId === c.id)
+                        )
+                        .map((c) => (
+                          <SelectItem key={c.id} value={c.id} style={SELECT_ITEM}>
+                            {c.name} ({c.unit})
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
