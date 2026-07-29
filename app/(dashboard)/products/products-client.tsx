@@ -1,214 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import Image from "next/image";
 import { syncShopifyProducts, deleteProduct, createProduct } from "./actions";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  RefreshCw,
-  Search,
-  Package,
-  AlertCircle,
-  Trash2,
-  ExternalLink,
-  Loader2,
-  Plus,
-  ChevronDown,
-  Settings,
-} from "lucide-react";
+import { RefreshCw, Search, Package, AlertCircle, Loader2, Settings } from "lucide-react";
+import { Btn } from "./components/primitives";
+import { calcMargin } from "./components/margin";
+import { ProductsTable } from "./components/ProductsTable";
+import { ProductsMobileList } from "./components/ProductsMobileList";
+import { AddProductDialog, DeleteProductDialog } from "./components/ProductDialogs";
+import type { Product } from "./components/types";
 
-// ─── Primitives ──────────────────────────────────────────────────────────────
-
-function Btn({
-  variant = "primary",
-  size = "md",
-  onClick,
-  disabled,
-  asChild,
-  href,
-  children,
-  type = "button",
-  className = "",
-}: {
-  variant?: "primary" | "outline" | "ghost" | "danger";
-  size?: "sm" | "md";
-  onClick?: () => void;
-  disabled?: boolean;
-  asChild?: boolean;
-  href?: string;
-  children: React.ReactNode;
-  type?: "button" | "submit";
-  className?: string;
-}) {
-  const base =
-    "inline-flex items-center gap-2 font-extrabold uppercase tracking-[.08em] rounded-full transition-all duration-100 cursor-pointer whitespace-nowrap select-none";
-  const sizes = { sm: "h-[30px] px-3.5 text-[11px]", md: "h-[38px] px-5 text-[12px]" };
-  const variants = {
-    primary:
-      "bg-tomato text-cream border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2.5px] active:translate-y-[2.5px] active:shadow-none disabled:opacity-50 disabled:pointer-events-none",
-    outline:
-      "bg-transparent text-espresso border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2.5px] active:translate-y-[2.5px] active:shadow-none disabled:opacity-50 disabled:pointer-events-none",
-    ghost:
-      "bg-transparent text-espresso border-[2.5px] border-transparent hover:bg-fog/50 disabled:opacity-50 disabled:pointer-events-none",
-    danger:
-      "bg-tomato text-cream border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] active:translate-x-[2.5px] active:translate-y-[2.5px] active:shadow-none disabled:opacity-50 disabled:pointer-events-none",
-  };
-  const cls = `${base} ${sizes[size]} ${variants[variant]} ${className}`;
-  if (href) {
-    return (
-      <Link href={href} className={cls}>
-        {children}
-      </Link>
-    );
-  }
-  return (
-    <button type={type} onClick={onClick} disabled={disabled} className={cls}>
-      {children}
-    </button>
-  );
-}
-
-function Pill({
-  variant,
-  children,
-}: {
-  variant: "matcha" | "sun" | "tomato" | "sky" | "fog" | "espresso";
-  children: React.ReactNode;
-}) {
-  const styles: Record<string, string> = {
-    matcha: "bg-matcha text-cream",
-    sun: "bg-sun text-espresso",
-    tomato: "bg-tomato text-cream",
-    sky: "bg-sky text-espresso",
-    fog: "bg-fog text-espresso",
-    espresso: "bg-espresso text-cream",
-  };
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full border-2 border-espresso text-[10px] font-extrabold tracking-[.1em] uppercase ${styles[variant]}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-function MerninInput({
-  id,
-  value,
-  onChange,
-  placeholder,
-  type = "text",
-  step,
-}: {
-  id?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  placeholder?: string;
-  type?: string;
-  step?: string;
-}) {
-  return (
-    <input
-      id={id}
-      type={type}
-      step={step}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className="w-full bg-chalk border-[3px] border-espresso rounded-[10px] px-3.5 py-2.5 font-body text-[14px] text-espresso shadow-[3px_3px_0_#1C0F05] outline-none placeholder:text-muted-foreground focus:-translate-x-[1px] focus:-translate-y-[1px] focus:shadow-[4px_4px_0_#E8442A] focus:border-tomato transition-all duration-100"
-    />
-  );
-}
-
-function MerninTextarea({
-  id,
-  value,
-  onChange,
-  placeholder,
-  rows = 3,
-}: {
-  id?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-  placeholder?: string;
-  rows?: number;
-}) {
-  return (
-    <textarea
-      id={id}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      rows={rows}
-      className="w-full bg-chalk border-[3px] border-espresso rounded-[10px] px-3.5 py-2.5 font-body text-[14px] text-espresso shadow-[3px_3px_0_#1C0F05] outline-none placeholder:text-muted-foreground focus:-translate-x-[1px] focus:-translate-y-[1px] focus:shadow-[4px_4px_0_#E8442A] focus:border-tomato transition-all duration-100 resize-none"
-    />
-  );
-}
-
-function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
-  return (
-    <label
-      htmlFor={htmlFor}
-      className="block text-[10.5px] font-extrabold uppercase tracking-[.1em] text-espresso mb-1.5"
-    >
-      {children}
-    </label>
-  );
-}
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface ProductVariant {
-  id: string;
-  title: string;
-  sku: string | null;
-  price: number | null;
-  total_cogs: number | null;
-}
-
-interface Product {
-  id: string;
-  shopify_id: string | null;
-  title: string;
-  description: string | null;
-  sku: string | null;
-  price: number | null;
-  total_cogs?: number | null;
-  min_selling_price?: number | null;
-  average_margin?: number | null;
-  variants?: ProductVariant[];
-  image_url: string | null;
-  created_at: string;
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-
+/**
+ * CoffeeOS#69 Stage A: this component was 766 lines. The primitives, the two row
+ * renderings, the variant dropdown, the margin helpers and both dialogs moved
+ * into ./components with their markup BYTE-IDENTICAL. Nothing was improved on
+ * the way out — Stage A's proof is that the visual baselines do not move, and a
+ * broken behaviour is only distinguishable from a changed pixel if exactly one
+ * of them can happen at a time.
+ *
+ * What is left here is what actually belongs here: server-action handlers, the
+ * page's own state, and composition.
+ *
+ * Behaviour preserved deliberately, and changed in later stages:
+ *  - the stat tiles count over `products`, NOT `filteredProducts`, so searching
+ *    moves the panel subheader and not the figures
+ *  - `needingCogs` is a truthiness test on the total, so a genuinely $0-COGS
+ *    product is reported as needing work (Criterion 2)
+ *  - `avgMargin` means-averages every variant of every product flattened, so a
+ *    product with 12 variants outweighs one with 1 (Criterion 13's sibling)
+ *  - sync and create both hard-reload the window
+ */
 export function ProductsClient({
   initialProducts,
   isShopifyConfigured,
@@ -219,7 +40,9 @@ export function ProductsClient({
   const [products, setProducts] = useState(initialProducts);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [syncMessage, setSyncMessage] = useState<{ type: "success" | "error"; text: string } | null>(
+    null
+  );
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -282,66 +105,6 @@ export function ProductsClient({
     setIsCreating(false);
   };
 
-  const calcMargin = (price: number | null, cogs: number | null | undefined) => {
-    if (!price || !cogs) return null;
-    return ((price - cogs) / price) * 100;
-  };
-
-  const marginPill = (margin: number | null) => {
-    if (margin === null) return <span className="text-muted-foreground">—</span>;
-    const variant = margin >= 30 ? "matcha" : margin >= 15 ? "sun" : "tomato";
-    return <Pill variant={variant}>{margin.toFixed(1)}%</Pill>;
-  };
-
-  const renderVariantDropdown = (product: Product) => {
-    const variants = product.variants || [];
-    if (variants.length === 0)
-      return <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-wide">No variants</span>;
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button className="inline-flex items-center gap-1.5 h-[28px] px-3 rounded-full border-[2px] border-espresso text-espresso text-[11px] font-extrabold uppercase tracking-[.08em] bg-transparent hover:bg-fog/40 transition-colors">
-            {variants.length} variant{variants.length !== 1 ? "s" : ""}
-            <ChevronDown size={12} strokeWidth={2.5} />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-80 border-[2px] border-espresso rounded-[12px] shadow-flat-md bg-chalk p-0 overflow-hidden">
-          <DropdownMenuLabel className="px-4 py-3 border-b-2 border-espresso font-extrabold text-[11px] uppercase tracking-[.1em] bg-cream">
-            Variant COGS & Margin
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator className="hidden" />
-          <div className="max-h-80 overflow-y-auto p-3 space-y-2">
-            {variants.map((variant) => {
-              const margin = calcMargin(variant.price, variant.total_cogs);
-              return (
-                <div key={variant.id} className="rounded-[10px] border-[2px] border-espresso bg-cream p-3">
-                  <p className="text-[13px] font-bold text-espresso">{variant.title}</p>
-                  {variant.sku && (
-                    <p className="font-mono text-[10px] text-muted-foreground mt-0.5">{variant.sku}</p>
-                  )}
-                  <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
-                    <div>
-                      <p className="text-muted-foreground font-bold uppercase tracking-wide text-[9px]">Price</p>
-                      <p className="font-bold text-espresso">{variant.price ? `$${variant.price.toFixed(2)}` : "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground font-bold uppercase tracking-wide text-[9px]">COGS</p>
-                      <p className="font-bold text-espresso">{variant.total_cogs ? `$${variant.total_cogs.toFixed(2)}` : "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground font-bold uppercase tracking-wide text-[9px]">Margin</p>
-                      <div className="mt-0.5">{marginPill(margin)}</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
-  };
-
   // Stats
   const allVariantMargins = products.flatMap((p) =>
     (p.variants || [])
@@ -368,87 +131,16 @@ export function ProductsClient({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Btn variant="outline" size="sm">
-                <Plus size={14} strokeWidth={2.5} />
-                <span className="hidden sm:inline">Add Product</span>
-                <span className="sm:hidden">Add</span>
-              </Btn>
-            </DialogTrigger>
-            <DialogContent className="border-[3px] border-espresso rounded-[20px] shadow-flat-lg bg-chalk p-0 overflow-hidden gap-0">
-              <DialogHeader className="px-6 py-5 border-b-[3px] border-espresso bg-cream">
-                <DialogTitle className="font-extrabold text-[18px] uppercase tracking-[.06em] text-espresso">
-                  Add New Product
-                </DialogTitle>
-                <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
-                  Create a product manually without Shopify
-                </DialogDescription>
-              </DialogHeader>
-              <div className="px-6 py-5 flex flex-col gap-4">
-                <div>
-                  <FieldLabel htmlFor="title">Product Title *</FieldLabel>
-                  <MerninInput
-                    id="title"
-                    value={newProduct.title}
-                    onChange={(e) => setNewProduct({ ...newProduct, title: e.target.value })}
-                    placeholder="e.g., Ethiopia Yirgacheffe 12oz"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <FieldLabel htmlFor="sku">SKU</FieldLabel>
-                    <MerninInput
-                      id="sku"
-                      value={newProduct.sku}
-                      onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })}
-                      placeholder="COFFEE-ETH-12"
-                    />
-                  </div>
-                  <div>
-                    <FieldLabel htmlFor="price">Selling Price ($) *</FieldLabel>
-                    <MerninInput
-                      id="price"
-                      type="number"
-                      step="0.01"
-                      value={newProduct.price}
-                      onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-                      placeholder="18.00"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <FieldLabel htmlFor="description">Description</FieldLabel>
-                  <MerninTextarea
-                    id="description"
-                    value={newProduct.description}
-                    onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                    placeholder="Product description..."
-                    rows={3}
-                  />
-                </div>
-              </div>
-              <DialogFooter className="px-6 py-4 border-t-[3px] border-espresso bg-cream flex gap-2">
-                <Btn variant="outline" size="sm" onClick={() => setIsAddDialogOpen(false)}>
-                  Cancel
-                </Btn>
-                <Btn
-                  size="sm"
-                  onClick={handleCreateProduct}
-                  disabled={isCreating || !newProduct.title || !newProduct.price}
-                >
-                  {isCreating && <Loader2 size={13} className="animate-spin" />}
-                  Create Product
-                </Btn>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <AddProductDialog
+            open={isAddDialogOpen}
+            onOpenChange={setIsAddDialogOpen}
+            value={newProduct}
+            onChange={setNewProduct}
+            onCreate={handleCreateProduct}
+            isCreating={isCreating}
+          />
 
-          <Btn
-            onClick={handleSync}
-            disabled={!isShopifyConfigured || isSyncing}
-            size="sm"
-          >
+          <Btn onClick={handleSync} disabled={!isShopifyConfigured || isSyncing} size="sm">
             {isSyncing ? (
               <Loader2 size={13} className="animate-spin" />
             ) : (
@@ -494,9 +186,7 @@ export function ProductsClient({
           <div className="font-extrabold text-[42px] leading-none mt-1.5 text-espresso">
             {avgMargin > 0 ? `${avgMargin.toFixed(1)}%` : "—"}
           </div>
-          <p className="text-[10.5px] text-muted-foreground mt-1.5">
-            Across {variantCount} variants
-          </p>
+          <p className="text-[10.5px] text-muted-foreground mt-1.5">Across {variantCount} variants</p>
         </div>
       </div>
 
@@ -564,203 +254,19 @@ export function ProductsClient({
           </div>
         ) : (
           <>
-            {/* Mobile cards */}
-            <div className="md:hidden divide-y-2 divide-fog">
-              {filteredProducts.map((product) => {
-                const margin = product.average_margin ?? calcMargin(product.price, product.total_cogs);
-                return (
-                  <div key={product.id} className="p-4 flex flex-col gap-3">
-                    <div className="flex items-start gap-3">
-                      {product.image_url ? (
-                        <Image
-                          src={product.image_url}
-                          alt={product.title}
-                          width={44}
-                          height={44}
-                          className="shrink-0 rounded-[10px] border-[2px] border-espresso object-cover"
-                        />
-                      ) : (
-                        <div className="w-11 h-11 shrink-0 rounded-[10px] border-[2px] border-espresso bg-fog flex items-center justify-center">
-                          <Package size={18} className="text-muted-foreground" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <Link
-                          href={`/products/${product.id}`}
-                          className="font-bold text-[14px] text-espresso hover:text-tomato transition-colors leading-snug"
-                        >
-                          {product.title}
-                        </Link>
-                        {product.sku && (
-                          <p className="font-mono text-[10px] text-muted-foreground mt-0.5">
-                            {product.sku}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Btn variant="ghost" size="sm" href={`/products/${product.id}`} className="!px-2 !h-8">
-                          <ExternalLink size={14} strokeWidth={2} />
-                        </Btn>
-                        <button
-                          onClick={() => setDeleteId(product.id)}
-                          className="inline-flex items-center justify-center w-8 h-8 rounded-full border-[2px] border-transparent text-tomato hover:bg-tomato/10 transition-colors"
-                        >
-                          <Trash2 size={14} strokeWidth={2} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-[12px]">
-                      <div>
-                        <span className="text-[9.5px] font-extrabold uppercase tracking-wide text-muted-foreground">
-                          Min Price
-                        </span>
-                        <p className="font-bold text-espresso mt-0.5">
-                          {product.min_selling_price != null
-                            ? `$${product.min_selling_price.toFixed(2)}`
-                            : "—"}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-[9.5px] font-extrabold uppercase tracking-wide text-muted-foreground">
-                          COGS
-                        </span>
-                        <p className="font-bold text-espresso mt-0.5">
-                          {product.total_cogs ? `$${product.total_cogs.toFixed(2)}` : "—"}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-[9.5px] font-extrabold uppercase tracking-wide text-muted-foreground">
-                          Avg Margin
-                        </span>
-                        <div className="mt-0.5">{marginPill(margin)}</div>
-                      </div>
-                    </div>
-                    <div>{renderVariantDropdown(product)}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Desktop table */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full border-collapse text-[13px]">
-                <thead>
-                  <tr className="border-b-2 border-espresso bg-cream/60">
-                    {["Product", "SKU", "Min Price", "COGS", "Avg Margin", "Variants", ""].map(
-                      (h, i) => (
-                        <th
-                          key={i}
-                          className={`py-3 px-4 text-[9.5px] font-extrabold uppercase tracking-[.1em] text-muted-foreground ${
-                            i > 1 ? "text-right" : "text-left"
-                          } ${i === 6 ? "w-20" : ""}`}
-                        >
-                          {h}
-                        </th>
-                      )
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredProducts.map((product, idx) => {
-                    const margin =
-                      product.average_margin ?? calcMargin(product.price, product.total_cogs);
-                    return (
-                      <tr
-                        key={product.id}
-                        className={`border-b border-dashed border-fog last:border-0 hover:bg-cream/60 transition-colors ${
-                          idx % 2 === 0 ? "" : "bg-chalk/40"
-                        }`}
-                      >
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-3">
-                            {product.image_url ? (
-                              <Image
-                                src={product.image_url}
-                                alt={product.title}
-                                width={36}
-                                height={36}
-                                className="rounded-[8px] border-[2px] border-espresso object-cover shrink-0"
-                              />
-                            ) : (
-                              <div className="w-9 h-9 shrink-0 rounded-[8px] border-[2px] border-espresso bg-fog flex items-center justify-center">
-                                <Package size={15} className="text-muted-foreground" />
-                              </div>
-                            )}
-                            <Link
-                              href={`/products/${product.id}`}
-                              className="font-bold text-espresso hover:text-tomato transition-colors"
-                            >
-                              {product.title}
-                            </Link>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 font-mono text-[12px] text-muted-foreground">
-                          {product.sku || "—"}
-                        </td>
-                        <td className="py-3 px-4 text-right font-bold text-espresso">
-                          {product.min_selling_price != null
-                            ? `$${product.min_selling_price.toFixed(2)}`
-                            : "—"}
-                        </td>
-                        <td className="py-3 px-4 text-right font-bold text-espresso">
-                          {product.total_cogs ? `$${product.total_cogs.toFixed(2)}` : "—"}
-                        </td>
-                        <td className="py-3 px-4 text-right">{marginPill(margin)}</td>
-                        <td className="py-3 px-4 text-right">
-                          {renderVariantDropdown(product)}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center justify-end gap-1">
-                            <Btn variant="ghost" size="sm" href={`/products/${product.id}`} className="!px-2 !h-8">
-                              <ExternalLink size={14} strokeWidth={2} />
-                            </Btn>
-                            <button
-                              onClick={() => setDeleteId(product.id)}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-full border-[2px] border-transparent text-tomato hover:bg-tomato/10 transition-colors"
-                            >
-                              <Trash2 size={14} strokeWidth={2} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <ProductsMobileList products={filteredProducts} onDelete={setDeleteId} />
+            <ProductsTable products={filteredProducts} onDelete={setDeleteId} />
           </>
         )}
       </div>
 
       {/* Delete confirm */}
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent className="border-[3px] border-espresso rounded-[20px] shadow-flat-lg bg-chalk p-0 overflow-hidden gap-0">
-          <AlertDialogHeader className="px-6 py-5 border-b-[3px] border-espresso bg-cream">
-            <AlertDialogTitle className="font-extrabold text-[18px] uppercase tracking-[.06em] text-espresso">
-              Delete Product
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-[13px] text-muted-foreground mt-0.5">
-              This can&apos;t be undone. All associated COGS data will be removed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="px-6 py-4 border-t-[3px] border-espresso bg-cream flex gap-2">
-            <AlertDialogCancel
-              disabled={isDeleting}
-              className="inline-flex items-center gap-2 font-extrabold uppercase tracking-[.08em] rounded-full h-[30px] px-3.5 text-[11px] bg-transparent text-espresso border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] hover:shadow-[4px_4px_0_#1C0F05] transition-all duration-100"
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="inline-flex items-center gap-2 font-extrabold uppercase tracking-[.08em] rounded-full h-[30px] px-3.5 text-[11px] bg-tomato text-cream border-[2.5px] border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-[1.5px] hover:-translate-y-[1.5px] active:translate-x-[2.5px] active:translate-y-[2.5px] active:shadow-none transition-all duration-100"
-            >
-              {isDeleting && <Loader2 size={13} className="animate-spin" />}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteProductDialog
+        open={!!deleteId}
+        onOpenChange={() => setDeleteId(null)}
+        onConfirm={handleDelete}
+        isDeleting={isDeleting}
+      />
     </div>
   );
 }
