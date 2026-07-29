@@ -11,6 +11,21 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? 'github' : 'list',
 
+  // These specs drive a real `next dev` against a live Supabase, so a run can
+  // lose a test to a network round-trip that simply took too long. With retries
+  // at 0 that landed as a hard failure, which made a red run and a green run
+  // mean the same thing: measured over four runs of the same four specs, clean
+  // main gave 48/0 then 47/1, and a branch that only moved a pure function gave
+  // 46/2 then 45/3 — a DIFFERENT test failing each time, none reproducible in
+  // isolation. A suite with that much noise cannot gate anything, and CoffeeOS#69
+  // asks it to gate two: "Stage A moves no pixel" and the six behavioural COGS
+  // tests written before the Stage B rewrite.
+  //
+  // One retry, not more. It separates a transient timeout from a real
+  // regression without hiding a test that fails half the time — that still
+  // shows up, as `flaky`, which is the signal we actually want.
+  retries: 1,
+
   use: {
     baseURL: 'http://localhost:3000',
     storageState: 'tests/e2e/.auth/storageState.json',
