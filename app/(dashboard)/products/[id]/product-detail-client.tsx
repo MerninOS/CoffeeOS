@@ -8,6 +8,7 @@ import {
   updateProductPrice,
   updateProductVariantPrice,
   updateProductVariantComponents,
+  updateProductCostingMode,
   updateWholesalePricing,
 } from "./actions";
 import Link from "next/link";
@@ -15,6 +16,9 @@ import { HeroMetric, InlineBanner, StatStrip } from "@merninos/ui/instrument";
 import { ArrowLeft } from "lucide-react";
 import { mono, sans, money, money3 } from "@/lib/instrument/tokens";
 import { VariantsPanel } from "./components/VariantsPanel";
+import { CostingSource, StoredRecipesHeading } from "./components/CostingSource";
+import { RecipeTable } from "./components/RecipeTable";
+import { Section } from "./components/Section";
 import { ProductDetailsPanel } from "./components/ProductDetailsPanel";
 import { CogsCalculator } from "./components/CogsCalculator";
 import { WholesalePanel } from "./components/WholesalePanel";
@@ -107,6 +111,19 @@ export function ProductDetailClient({
   );
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  /**
+   * CoffeeOS#69 Criterion 9 — the page opens on the STORED costing_mode, not on
+   * `variants.length > 0`. A product carrying both bases backfilled to
+   * 'product', which is what Orders bills, so it opens on One recipe.
+   *
+   * `modeDirty` keeps the toggle out of the database until an explicit Save:
+   * flipping it re-costs every order line for this product.
+   */
+  const [mode, setMode] = useState<"product" | "variant">(
+    product.costing_mode === "variant" ? "variant" : "product"
+  );
+  const [modeDirty, setModeDirty] = useState(false);
+
   // Wholesale
   const [wholesaleEnabled, setWholesaleEnabled] = useState(product.wholesale_enabled || false);
   const [wholesalePrice, setWholesalePrice] = useState(product.wholesale_price?.toString() || "");
@@ -116,13 +133,20 @@ export function ProductDetailClient({
   );
   const [isWholesaleSaving, setIsWholesaleSaving] = useState(false);
 
-  const isVariantMode = variants.length > 0;
+  // The toggle is the authority. This used to be `variants.length > 0`, which
+  // is what made a product's own recipe unreachable the moment it had variants.
+  const isVariantMode = mode === "variant";
   const selectedVariant = variants.find((v) => v.id === selectedVariantId) || null;
+
+  const variantOwnRows = (variantId: string) => variantComponentMap[variantId] ?? null;
 
   const selectedComponents = useMemo(() => {
     if (!isVariantMode) return defaultSelectedComponents;
-    if (!selectedVariantId) return [];
-    return variantComponentMap[selectedVariantId] || [];
+    if (!selectedVariantId) return defaultSelectedComponents;
+    // Inherit rather than show an empty editor: a variant with no rows of its
+    // own is costed from the product recipe, which is exactly what
+    // lib/products/costing.ts bills for it.
+    return variantComponentMap[selectedVariantId] ?? defaultSelectedComponents;
   }, [isVariantMode, defaultSelectedComponents, selectedVariantId, variantComponentMap]);
 
   const setSelectedComponents = (components: SelectedComponent[]) => {
@@ -144,6 +168,36 @@ export function ProductDetailClient({
     [selectedComponents, availableComponents]
   );
 
+  const totalOf = (rows: SelectedComponent[]) =>
+    rows.reduce((sum, sc) => {
+      const comp = availableComponents.find((c) => c.id === sc.componentId);
+      return comp ? sum + sc.quantity * comp.cost_per_unit : sum;
+    }, 0);
+
+  const productRecipeCogs = useMemo(
+    () => totalOf(defaultSelectedComponents),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [defaultSelectedComponents, availableComponents]
+  );
+
+  const variantHasOwnRecipe = (v: ProductVariant) => (variantOwnRows(v.id)?.length ?? 0) > 0;
+
+  /**
+   * THE BILLED FIGURE — one expression, read by the hero, the variant table and
+   * the wholesale tiers. Three separate COGS implementations already exist in
+   * this codebase; adding a mode switch on top of that is how a page ends up
+   * showing four numbers for one cost.
+   */
+  const billedFor = (v: ProductVariant) =>
+    isVariantMode && variantHasOwnRecipe(v) ? totalOf(variantOwnRows(v.id)!) : productRecipeCogs;
+
+  /** How many recipes are stored on the basis that is NOT being billed. */
+  const storedUnusedCount = isVariantMode
+    ? defaultSelectedComponents.length > 0
+      ? 1
+      : 0
+    : variants.filter(variantHasOwnRecipe).length;
+
   const priceValue = parseFloat(sellingPrice) || 0;
   const margin = priceValue > 0 ? ((priceValue - calculatedCogs) / priceValue) * 100 : 0;
   const profit = priceValue - calculatedCogs;
@@ -164,9 +218,29 @@ export function ProductDetailClient({
     setSelectedComponents(updated);
   };
 
+  const persistModeIfDirty = async () => {
+    if (!modeDirty) return null;
+    const r = await updateProductCostingMode(product.id, mode);
+    if (!r.error) setModeDirty(false);
+    return r.error ?? null;
+  };
+
   const handleSaveComponents = async () => {
     if (isVariantMode && !selectedVariantId) { setMessage({ type: "error", text: "Select a variant first" }); return; }
     setIsSaving(true); setMessage(null);
+
+    // The costing-source choice rides along with the recipe save rather than
+    // firing on the toggle — flipping it re-costs every order line for this
+    // product, so it needs an explicit, deliberate Save. Sequential and
+    // stop-on-first-error: if the mode write fails there is no point writing
+    // rows against a basis that did not take.
+    const modeError = await persistModeIfDirty();
+    if (modeError) {
+      setMessage({ type: "error", text: modeError });
+      setIsSaving(false);
+      return;
+    }
+
     const result = isVariantMode
       ? await updateProductVariantComponents(product.id, selectedVariantId, selectedComponents)
       : await updateProductComponents(product.id, selectedComponents);
@@ -329,6 +403,21 @@ export function ProductDetailClient({
         </div>
       </div>
 
+      <CostingSource
+        mode={mode}
+        onModeChange={(next) => {
+          setMode(next);
+          setModeDirty(true);
+        }}
+        variants={variants}
+        selectedVariantId={selectedVariantId}
+        onSelectVariant={setSelectedVariantId}
+        productRecipeCogs={productRecipeCogs}
+        billedFor={billedFor}
+        variantHasOwnRecipe={variantHasOwnRecipe}
+        storedUnusedCount={storedUnusedCount}
+      />
+
       <VariantsPanel
         variants={variants}
         selectedVariantId={selectedVariantId}
@@ -360,6 +449,37 @@ export function ProductDetailClient({
         onUpdateComponent={updateComponent}
         onSaveComponents={handleSaveComponents}
       />
+
+      {storedUnusedCount > 0 && (
+        <Section
+          title={isVariantMode ? "Stored product recipe" : "Stored variant recipes"}
+          note="Not billed while the current costing source is selected. Kept so switching does not lose work."
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+            {isVariantMode ? (
+              <div>
+                <StoredRecipesHeading title="Product recipe" sku={product.sku} />
+                <RecipeTable
+                  availableComponents={availableComponents}
+                  selectedComponents={defaultSelectedComponents}
+                  inert
+                />
+              </div>
+            ) : (
+              variants.filter(variantHasOwnRecipe).map((v) => (
+                <div key={v.id}>
+                  <StoredRecipesHeading title={v.title} sku={v.sku} />
+                  <RecipeTable
+                    availableComponents={availableComponents}
+                    selectedComponents={variantOwnRows(v.id) ?? []}
+                    inert
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </Section>
+      )}
 
       <WholesalePanel
         wholesaleEnabled={wholesaleEnabled}

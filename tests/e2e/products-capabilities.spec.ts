@@ -204,8 +204,8 @@ test.describe('recipes persist', () => {
     // different server action from test 4.
     await openProduct(page, 'Kenya Nyeri AA')
 
-    await expect(page.getByTestId('variant-pill'), 'fixture should carry two variants').toHaveCount(2)
-    const pill = page.locator('[data-testid="variant-pill"][data-variant-sku="KEN-NYERI-12"]')
+    await expect(page.getByTestId('variant-basis-row'), 'fixture should carry two variants').toHaveCount(2)
+    const pill = page.locator('[data-testid="variant-basis-row"][data-variant-sku="KEN-NYERI-12"]')
     await pill.click()
 
     const before = await readCogs(page)
@@ -249,8 +249,10 @@ test.describe('variant selection', () => {
   test('6 — switching variant shows that variant\'s COGS, not the other one\'s', async ({ page }) => {
     await openProduct(page, 'Sumatra Mandheling')
 
-    const small = page.locator('[data-testid="variant-pill"][data-variant-sku="SUM-MAND-12"]')
-    const large = page.locator('[data-testid="variant-pill"][data-variant-sku="SUM-MAND-2LB"]')
+    // Selection moved from a pill row to the costing-source table in Stage C —
+    // the same act, a different element. The ASSERTIONS below are unchanged.
+    const small = page.locator('[data-testid="variant-basis-row"][data-variant-sku="SUM-MAND-12"]')
+    const large = page.locator('[data-testid="variant-basis-row"][data-variant-sku="SUM-MAND-2LB"]')
     await expect(small).toHaveCount(1)
     await expect(large).toHaveCount(1)
 

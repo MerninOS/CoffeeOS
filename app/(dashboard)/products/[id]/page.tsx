@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/team";
 import { ProductDetailClient } from "./product-detail-client";
 
 interface ProductDetailPageProps {
@@ -9,12 +10,20 @@ interface ProductDetailPageProps {
 export default async function ProductDetailPage({ params }: ProductDetailPageProps) {
   const { id } = await params;
   const supabase = await createClient();
+  const { ownerId } = await getEffectiveOwnerId();
 
-  // Fetch product with all fields (including wholesale fields)
+  // Fetch product with all fields (including wholesale fields and, since
+  // CoffeeOS#69, `costing_mode`).
+  //
+  // The `.eq("user_id", …)` is new. This query used to fetch by id alone and
+  // rely entirely on RLS — unlike the sibling list page, which has always
+  // filtered. Not a hole while RLS holds, but there was no defence in depth and
+  // no test proving it; the file is being edited anyway, so it costs nothing.
   const { data: product, error } = await supabase
     .from("products")
     .select("*")
     .eq("id", id)
+    .eq("user_id", ownerId!)
     .single();
 
   if (error) {
@@ -30,6 +39,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   const { data: components } = await supabase
     .from("components")
     .select("*")
+    .eq("user_id", ownerId!)
     .order("name");
 
   // Fetch product's current components

@@ -55,6 +55,12 @@ export interface Product {
   wholesale_price: number | null;
   wholesale_minimum_qty: number | null;
   wholesale_enabled: boolean | null;
+  /**
+   * Which recipe basis is BILLED — 'product' or 'variant' (CoffeeOS#69,
+   * migration 023). Stored rather than inferred, so the operator's intent and
+   * what an invoice uses can no longer diverge silently.
+   */
+  costing_mode?: "product" | "variant" | null;
 }
 
 export interface WholesaleTier {

@@ -483,3 +483,35 @@ export async function updateWholesalePricing(
 
   return { success: true };
 }
+
+/**
+ * Set which recipe basis a product is billed from (CoffeeOS#69).
+ *
+ * Deliberately its own action rather than a field on the recipe save: flipping
+ * this re-costs every order line for the product, so it is a consequential
+ * write and the UI defers it to an explicit Save rather than firing it on a
+ * click. A stray toggle should not silently change historic margin.
+ *
+ * It writes ONLY the column. Neither basis's rows are touched — the unselected
+ * one stays stored and is rendered inert, so switching back loses nothing.
+ */
+export async function updateProductCostingMode(
+  productId: string,
+  mode: "product" | "variant",
+) {
+  const supabase = await createClient();
+  const { ownerId } = await getEffectiveOwnerId();
+
+  const { error } = await supabase
+    .from("products")
+    .update({ costing_mode: mode })
+    .eq("id", productId)
+    .eq("user_id", ownerId!);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/products/${productId}`);
+  revalidatePath("/products");
+  revalidatePath("/dashboard");
+  return { success: true };
+}

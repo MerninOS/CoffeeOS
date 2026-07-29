@@ -117,11 +117,24 @@ export function RecipeTable({
   selectedComponents,
   onRemoveComponent,
   onUpdateComponent,
+  inert = false,
+  testId,
 }: {
   availableComponents: Component[];
   selectedComponents: SelectedComponent[];
-  onRemoveComponent: (i: number) => void;
-  onUpdateComponent: (i: number, field: keyof SelectedComponent, value: string | number) => void;
+  onRemoveComponent?: (i: number) => void;
+  onUpdateComponent?: (i: number, field: keyof SelectedComponent, value: string | number) => void;
+  /**
+   * A recipe that is STORED BUT NOT BILLED (CoffeeOS#69). Figures render
+   * `--ink-subtle`, the footer says "Stored total" rather than "Unit COGS", and
+   * the controls are gone — it is readable, and unmistakably not the live one.
+   *
+   * The billed and the stored recipe render through this ONE component on
+   * purpose: two components would be two chances for the same rows to total
+   * differently.
+   */
+  inert?: boolean;
+  testId?: string;
 }) {
   const lines: Line[] = selectedComponents.map((sc, index) => {
     const comp = availableComponents.find((c) => c.id === sc.componentId);
@@ -145,7 +158,11 @@ export function RecipeTable({
     .map(([type, groupLines]) => ({ type, lines: groupLines }))
     .sort((a, b) => a.lines[a.lines.length - 1].index - b.lines[b.lines.length - 1].index);
 
-  const figure: React.CSSProperties = { ...mono, fontSize: "var(--fs-data)" };
+  const figure: React.CSSProperties = {
+    ...mono,
+    fontSize: "var(--fs-data)",
+    color: inert ? "var(--ink-subtle)" : "var(--ink)",
+  };
   const lastIndex = lines.length - 1;
 
   return (
@@ -200,7 +217,7 @@ export function RecipeTable({
             return (
               <div
                 key={index}
-                data-testid="recipe-row"
+                data-testid={inert ? "stored-recipe-row" : "recipe-row"}
                 // py-2 only while stacked. Above the breakpoint the row is
                 // exactly 40px — the design system's row metric — supplied by
                 // the cells' own `h-10`, so extra row padding would break it.
@@ -215,8 +232,9 @@ export function RecipeTable({
               >
                 <div className={`${CELL} min-w-0`}>
                   <Select
+                    disabled={inert}
                     value={sc.componentId}
-                    onValueChange={(v) => onUpdateComponent(index, "componentId", v)}
+                    onValueChange={(v) => onUpdateComponent?.(index, "componentId", v)}
                   >
                     <SelectTrigger style={SELECT_TRIGGER}>
                       <SelectValue />
@@ -238,13 +256,14 @@ export function RecipeTable({
                       exactly how these ids vanished once before. */}
                   <Input
                     data-testid="recipe-qty"
+                    readOnly={inert}
                     size="sm"
                     mono
                     type="number"
                     min="0"
                     step="0.01"
                     value={sc.quantity}
-                    onChange={(e) => onUpdateComponent(index, "quantity", parseFloat(e.target.value) || 0)}
+                    onChange={(e) => onUpdateComponent?.(index, "quantity", parseFloat(e.target.value) || 0)}
                     style={{ width: 88, textAlign: "right" }}
                   />
                 </Figure>
@@ -297,13 +316,15 @@ export function RecipeTable({
                 </Figure>
 
                 <div className={`${CELL} justify-end min-[900px]:justify-center`}>
-                  <IconButton
-                    data-testid="recipe-remove"
-                    size="sm"
-                    icon={<Trash2 size={14} strokeWidth={2} />}
-                    aria-label={`Remove ${comp?.name ?? "component"}`}
-                    onClick={() => onRemoveComponent(index)}
-                  />
+                  {!inert && (
+                    <IconButton
+                      data-testid="recipe-remove"
+                      size="sm"
+                      icon={<Trash2 size={14} strokeWidth={2} />}
+                      aria-label={`Remove ${comp?.name ?? "component"}`}
+                      onClick={() => onRemoveComponent?.(index)}
+                    />
+                  )}
                 </div>
               </div>
             );
@@ -323,7 +344,7 @@ export function RecipeTable({
         }}
       >
         <div className={CELL}>
-          <span style={{ ...overline, color: "var(--ink)" }}>Unit COGS</span>
+          <span style={{ ...overline, color: "var(--ink)" }}>{inert ? "Stored total" : "Unit COGS"}</span>
         </div>
         <div className="hidden min-[900px]:block" />
         <div className="hidden min-[900px]:block" />

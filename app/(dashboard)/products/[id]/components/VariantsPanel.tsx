@@ -11,7 +11,10 @@ import type { ProductVariant } from "./types";
  * unchanged — a pill row selects the variant whose recipe the rest of the page
  * edits — and only the styling moved.
  *
- * `variant-pill` and `data-variant-sku` are THE contract for
+ * Selection moved to CostingSource in Stage C; this panel now only adds and
+ * removes variants.
+ *
+ * `data-variant-sku` was THE contract for
  * products-capabilities.spec.ts test 6, which proves the page shows the SELECTED
  * variant's cost rather than some blend of both. They stay on a hand-rolled
  * <button> precisely so nothing can swallow them.
@@ -70,40 +73,9 @@ export function VariantsPanel({
         />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {variants.map((v) => {
-              const selected = v.id === selectedVariantId;
-              return (
-                <button
-                  key={v.id}
-                  type="button"
-                  data-testid="variant-pill"
-                  data-variant-sku={v.sku ?? ""}
-                  aria-pressed={selected}
-                  onClick={() => onSelectVariant(v.id)}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    height: 28,
-                    padding: "0 12px",
-                    cursor: "pointer",
-                    borderRadius: "var(--r-sm)",
-                    background: selected ? "var(--brand-soft)" : "var(--surface)",
-                    border: `1px solid ${selected ? "var(--brand-border)" : "var(--hairline-strong)"}`,
-                    boxShadow: selected ? "inset 2px 0 0 var(--brand)" : "none",
-                    fontFamily: "var(--font-sans)",
-                    fontSize: "var(--fs-body)",
-                    fontWeight: selected
-                      ? ("var(--fw-medium)" as unknown as number)
-                      : ("var(--fw-regular)" as unknown as number),
-                    color: "var(--ink)",
-                  }}
-                >
-                  {v.title}
-                </button>
-              );
-            })}
-          </div>
+          {/* The pill row moved to CostingSource in Stage C, which selects a
+              variant AND shows what each one is billed. Two selectors for one
+              thing is worse than one. */}
 
           {selectedVariant && (
             <div
