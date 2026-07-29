@@ -16,8 +16,9 @@
 -- product's resolved COGS changes when this runs. That is deliberate and it is
 -- what spec Criterion 7 asserts: a column that changes nothing on arrival needs
 -- no kill switch, and the follow-up that makes it AUTHORITATIVE over /orders is
--- where a flag will earn its place. Nothing reads this column on /orders — the
--- spec's Criterion 14 greps to keep it that way.
+-- where a flag will earn its place. Nothing reads this column on /orders today
+-- (verified by grep, not by a test — an earlier version of this comment claimed
+-- an enforcing test that does not exist; adding one is a follow-up).
 --
 -- THE RULE, stated once and mirrored as a pure function in
 -- lib/products/costing.ts `backfillCostingMode` (unit-tested there):

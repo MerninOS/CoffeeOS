@@ -64,10 +64,10 @@ export function CostingSource({
   variants: ProductVariant[];
   selectedVariantId: string;
   onSelectVariant: (id: string) => void;
-  productRecipeCogs: number;
+  productRecipeCogs: number | null;
   /** THE billed figure. One expression, shared with the hero and the wholesale
    *  tiers, so the page cannot show three numbers for one cost. */
-  billedFor: (v: ProductVariant) => number;
+  billedFor: (v: ProductVariant) => number | null;
   variantHasOwnRecipe: (v: ProductVariant) => boolean;
   storedUnusedCount: number;
 }) {
@@ -99,8 +99,10 @@ export function CostingSource({
           data-testid="costing-source-explainer"
         >
           {productMode
-            ? `One recipe costs all ${variants.length} variant${variants.length === 1 ? "" : "s"} at ${money3(productRecipeCogs)}.`
-            : "Each variant carries its own recipe. A variant with none inherits the product recipe."}
+            ? productRecipeCogs === null
+              ? "There is no product-level recipe yet, so nothing can be costed in this mode. Add one, or switch to Per variant."
+              : `One recipe costs all ${variants.length} variant${variants.length === 1 ? "" : "s"} at ${money3(productRecipeCogs)}.`
+            : "Each variant carries its own recipe. A variant with none inherits the product recipe — if there is one."}
         </p>
       </div>
 
@@ -116,7 +118,7 @@ export function CostingSource({
           >
             {productMode
               ? "They are shown below in grey. Switch to Per variant to bill from them, or delete them so the two cannot drift."
-              : `The product-level recipe (${money3(productRecipeCogs)}) is kept but ignored while variants carry their own.`}
+              : `The product-level recipe${productRecipeCogs === null ? "" : ` (${money3(productRecipeCogs)})`} is kept but ignored while variants carry their own.`}
           </InlineBanner>
         </div>
       )}
@@ -150,7 +152,10 @@ export function CostingSource({
 
           {variants.map((v, i) => {
             const cogs = billedFor(v);
-            const vm = v.price ? ((v.price - cogs) / v.price) * 100 : null;
+            // Margin is WITHHELD when the cost is unknowable — it is wholly
+            // derived from the missing number, so a figure would be invented,
+            // not merely uncertain.
+            const vm = v.price && cogs !== null ? ((v.price - cogs) / v.price) * 100 : null;
             const selected = !productMode && v.id === selectedVariantId;
             const own = variantHasOwnRecipe(v);
             const figure: React.CSSProperties = { ...mono, fontSize: "var(--fs-data)" };
@@ -214,8 +219,11 @@ export function CostingSource({
                   <span style={overline} className="min-[900px]:hidden">
                     Billed COGS
                   </span>
-                  <span style={figure} data-testid="variant-billed-cogs">
-                    {money3(cogs)}
+                  <span
+                    style={cogs === null ? { ...figure, color: "var(--danger)" } : figure}
+                    data-testid="variant-billed-cogs"
+                  >
+                    {cogs === null ? "not set" : money3(cogs)}
                   </span>
                 </div>
 

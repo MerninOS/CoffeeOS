@@ -35,24 +35,28 @@ import type { Product } from "./types";
  *  - 40px rows, 34px sunken header, hairline rules, NO zebra.
  *  - `--brand` never fills a control.
  *
- * STILL ON THE OLD SEMANTICS, DELIBERATELY. `total_cogs` is whatever page.tsx
- * computed — still `productCogs[id] || averageVariantCogs` — so `—` continues
- * to mean "no recipe", "$0 recipe" and "no price" indistinguishably, and
- * disagreeing variants are still averaged into one plausible number. On the
- * seeded fixture that shows up as Sumatra reading $20.47, the mean of its two
- * variants' $11.30 and $29.64, a figure no invoice will ever use. Stage C swaps
- * the source to lib/products/costing.ts, which is when this column can say
- * `not set` (Criteria 1-4). Changing a number and a pixel in one commit is what
- * the staging exists to prevent.
+ * THE THREE-STATE CONTRACT (Criteria 1-4). page.tsx resolves costing through
+ * lib/products/costing.ts, the same module /orders uses, so this column means:
+ *
+ *   has_recipe && cogs > 0   ->  the figure, in --ink
+ *   has_recipe && cogs === 0 ->  $0.00 in --ink. A product costed entirely from
+ *                                zero-cost components IS costed; testing
+ *                                `cogs > 0` would tell the operator forever to
+ *                                add components they already added
+ *   !has_recipe              ->  `not set` in --danger — not knowable, which is
+ *                                a different statement from "zero"
+ *
+ * Margin is withheld as `—` in --ink-subtle rather than reddened: it is wholly
+ * derived from the missing number, so a figure would be invented, not uncertain.
  */
 
 /** Product | Cost basis | Variants | Min price | Unit COGS | Margin | actions */
 const GRID = "minmax(0,1fr) 148px 80px 104px 112px 100px 44px";
 
 /**
- * 900px, not /orders' 1180px: this table carries five columns to its eight, and
- * 900 is also `--bp-compact`, where AppShell swaps the 236px nav rail for a
- * drawer — so above the breakpoint the row always has the full canvas.
+ * 1000px, not /orders' 1180px: this table carries six columns to its eight.
+ * (An earlier revision said 900 and cited `--bp-compact`; the classes below are
+ * the truth, and the cost-basis column is what pushed it up.)
  */
 const ROW = "flex flex-col min-[1000px]:grid";
 const CELL = "flex items-center px-3 py-1.5 min-[1000px]:py-0 min-[1000px]:h-10";

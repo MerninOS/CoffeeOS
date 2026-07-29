@@ -500,15 +500,27 @@ export async function updateProductCostingMode(
   mode: "product" | "variant",
 ) {
   const supabase = await createClient();
-  const { ownerId } = await getEffectiveOwnerId();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
 
-  const { error } = await supabase
+  // Matches every sibling action in this file. Without it the auth error was
+  // swallowed and `ownerId!` asserted — PostgREST does not treat `.eq(col, null)`
+  // as a wildcard so nothing leaked, but the update silently affected zero rows
+  // and still returned success, masking an authorization failure.
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
+  }
+
+  const { data, error } = await supabase
     .from("products")
     .update({ costing_mode: mode })
     .eq("id", productId)
-    .eq("user_id", ownerId!);
+    .eq("user_id", ownerId)
+    .select("id");
 
   if (error) return { error: error.message };
+  // A zero-row update means the product is not this owner's. Reporting success
+  // there would tell the operator their costing source changed when it did not.
+  if (!data || data.length === 0) return { error: "Product not found" };
 
   revalidatePath(`/products/${productId}`);
   revalidatePath("/products");

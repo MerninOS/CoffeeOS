@@ -37,7 +37,6 @@ export function CogsCalculator({
   onAddComponent,
   onRemoveComponent,
   onUpdateComponent,
-  onSaveComponents,
 }: {
   availableComponents: Component[];
   selectedComponents: SelectedComponent[];
@@ -47,7 +46,6 @@ export function CogsCalculator({
   onAddComponent: () => void;
   onRemoveComponent: (i: number) => void;
   onUpdateComponent: (i: number, field: keyof SelectedComponent, value: string | number) => void;
-  onSaveComponents: () => void;
 }) {
   const nothingLeftToAdd =
     availableComponents.length === 0 || selectedComponents.length >= availableComponents.length;

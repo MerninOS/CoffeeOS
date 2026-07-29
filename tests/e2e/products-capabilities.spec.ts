@@ -358,3 +358,46 @@ test.describe('costing source', () => {
     await expect(strip, 'a mean would read $25.00').not.toContainText('Price range$25.00')
   })
 })
+
+// ── 12-13: the cases test 8 never opened (review, blocking finding 1) ───────
+
+/**
+ * Test 8 asserted "every figure on the page is the BILLED figure" while only
+ * ever opening House Espresso — the one basis (`both`) where the product rule,
+ * the variant rule and the naive fallback all coincide. Kenya, Sumatra and
+ * Costa Rica were never opened on the detail page by any test, which is exactly
+ * why `billedFor` shipped inventing $0.000 for them.
+ *
+ * A test that only exercises the case where every rule agrees cannot tell you
+ * which rule is implemented.
+ */
+test.describe('the detail page agrees with the list', () => {
+  test('12 — a variant with no recipe reads not set, never $0.000', async ({ page }) => {
+    // Costa Rica: 12oz is costed, `Sample 4oz` deliberately has no rows, and
+    // there is no product-level recipe to inherit. buildProductLookup poisons
+    // the product; /products says `not set`; /orders drops it from margin.
+    await openProduct(page, 'Costa Rica Tarrazu')
+
+    const rows = page.locator('[data-testid="variant-basis-row"][data-variant-sku="CRI-TARRAZU-4OZ"]')
+    await expect(rows).toHaveCount(1)
+    const billed = rows.getByTestId('variant-billed-cogs')
+    await expect(billed, 'an uncostable variant must not report a cost of zero').toHaveText('not set')
+    await expect(billed).not.toHaveText('$0.000')
+  })
+
+  test('13 — One recipe with no product recipe says so instead of costing $0', async ({ page }) => {
+    // Kenya is variant-basis with NO product-level recipe. Switching to One
+    // recipe used to report "One recipe costs all 2 variants at $0.000", show
+    // $0.000 / 100.0% on every row, and let that mode be saved.
+    await openProduct(page, 'Kenya Nyeri AA')
+    await page.getByRole('tab', { name: 'One recipe' }).click()
+
+    await expect(page.getByTestId('costing-source-explainer')).toContainText('no product-level recipe')
+    await expect(page.getByTestId('costing-source-explainer')).not.toContainText('$0.000')
+    await expect(page.getByTestId('stat-total-cogs')).toHaveText('not set')
+
+    for (const t of await vis(page.getByTestId('variant-billed-cogs')).allInnerTexts()) {
+      expect(t, 'no variant may report a cost of zero here').toBe('not set')
+    }
+  })
+})

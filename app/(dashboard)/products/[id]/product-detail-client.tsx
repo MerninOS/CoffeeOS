@@ -237,8 +237,38 @@ export function ProductDetailClient({
    * this codebase; adding a mode switch on top of that is how a page ends up
    * showing four numbers for one cost.
    */
-  const billedFor = (v: ProductVariant) =>
-    isVariantMode && variantHasOwnRecipe(v) ? totalOf(variantOwnRows(v.id)!) : productRecipeCogs;
+  const hasProductRecipe = defaultSelectedComponents.length > 0;
+
+  /**
+   * Returns `null` when the cost is NOT KNOWABLE — the same three-state
+   * vocabulary the list uses, and the fix for the review's first blocking
+   * finding.
+   *
+   * The previous version fell back to `productRecipeCogs` unconditionally, which
+   * on a variant-basis product means falling back to ZERO. It rendered
+   * `$0.000 / 100.0% margin` for Costa Rica's deliberately-empty 4oz variant —
+   * on a product `buildProductLookup` poisons and /orders drops from margin —
+   * and let Kenya be switched to One recipe where every figure read `$0.000`
+   * and the mode could be SAVED.
+   *
+   * A cost of zero and a cost we cannot compute are not the same statement, and
+   * this page was making the second one look like the first.
+   */
+  const billedFor = (v: ProductVariant): number | null => {
+    if (!isVariantMode) return hasProductRecipe ? productRecipeCogs : null;
+    if (variantHasOwnRecipe(v)) return totalOf(variantOwnRows(v.id)!);
+    // Inherits — but only if there is something to inherit.
+    return hasProductRecipe ? productRecipeCogs : null;
+  };
+
+  /** The figure for the CURRENT selection: hero, wholesale, everything. */
+  const billedSelection: number | null = !isVariantMode
+    ? hasProductRecipe
+      ? productRecipeCogs
+      : null
+    : selectedVariant
+      ? billedFor(selectedVariant)
+      : null;
 
   /** How many recipes are stored on the basis that is NOT being billed. */
   const storedUnusedCount = isVariantMode
@@ -354,28 +384,20 @@ export function ProductDetailClient({
     setIsSaving(false);
   };
 
-  const handleSaveComponents = async () => {
-    if (isVariantMode && !selectedVariantId) { setMessage({ type: "error", text: "Select a variant first" }); return; }
-    setIsSaving(true); setMessage(null);
-
-    // The costing-source choice rides along with the recipe save rather than
-    // firing on the toggle — flipping it re-costs every order line for this
-    // product, so it needs an explicit, deliberate Save. Sequential and
-    // stop-on-first-error: if the mode write fails there is no point writing
-    // rows against a basis that did not take.
-    const modeError = await persistModeIfDirty();
-    if (modeError) {
-      setMessage({ type: "error", text: modeError });
-      setIsSaving(false);
-      return;
-    }
-
-    const result = isVariantMode
-      ? await updateProductVariantComponents(product.id, selectedVariantId, selectedComponents)
-      : await updateProductComponents(product.id, selectedComponents);
-    setMessage(result.error ? { type: "error", text: result.error } : { type: "success", text: isVariantMode ? "Variant COGS saved." : "Components saved." });
-    setIsSaving(false);
-  };
+  /**
+   * `handleSaveComponents` is GONE (CoffeeOS#69 review, blocking finding 2).
+   *
+   * It saved `selectedComponents`, which in Per variant mode falls back to the
+   * PRODUCT recipe for display when a variant has no rows of its own. Saving
+   * that persisted the product recipe into a variant scope the operator never
+   * edited: cost_basis flipped to `both`, a "Stored variant recipes" section
+   * appeared, and two independently editable copies of one recipe began to
+   * drift — the exact failure the migration comment warns about.
+   *
+   * `handleSaveAll` is the only write path now. It iterates `dirtyScopes`, which
+   * skips a variant whose draft map entry is `undefined`, so an untouched
+   * inheriting variant is never written.
+   */
 
   const handleAddVariant = async () => {
     const title = newVariantTitle.trim();
@@ -526,7 +548,14 @@ export function ProductDetailClient({
             // wrapping the whole metric would put the label and note inside the
             // element the specs parse a number out of. `value` is a ReactNode,
             // so the seam sits on exactly the figure.
-            value={<span data-testid="stat-total-cogs">{money3(calculatedCogs)}</span>}
+            value={
+              <span
+                data-testid="stat-total-cogs"
+                style={billedSelection === null ? { color: "var(--danger)" } : undefined}
+              >
+                {billedSelection === null ? "not set" : money3(billedSelection)}
+              </span>
+            }
             note={isVariantMode && selectedVariant ? selectedVariant.title : "all units"}
           />
         </div>
@@ -546,7 +575,7 @@ export function ProductDetailClient({
         variants={variants}
         selectedVariantId={selectedVariantId}
         onSelectVariant={setSelectedVariantId}
-        productRecipeCogs={productRecipeCogs}
+        productRecipeCogs={hasProductRecipe ? productRecipeCogs : null}
         billedFor={billedFor}
         variantHasOwnRecipe={variantHasOwnRecipe}
         storedUnusedCount={storedUnusedCount}
@@ -581,7 +610,6 @@ export function ProductDetailClient({
         onAddComponent={addComponent}
         onRemoveComponent={removeComponent}
         onUpdateComponent={updateComponent}
-        onSaveComponents={handleSaveComponents}
       />
 
       {storedUnusedCount > 0 && (
