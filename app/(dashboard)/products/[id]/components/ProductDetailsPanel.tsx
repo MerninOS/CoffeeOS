@@ -1,25 +1,26 @@
 "use client";
 
 import Image from "next/image";
-import { DollarSign, Loader2, Package, Save } from "lucide-react";
-import { Btn, FieldLabel, MerninInput, Panel } from "./primitives";
+import { Field, IconButton, Input } from "@merninos/ui/instrument";
+import { Loader2, Package, Save } from "lucide-react";
+import { mono, sans } from "@/lib/instrument/tokens";
+import { Section } from "./Section";
 import type { Product, ProductVariant } from "./types";
 
 /**
- * Product image, the selected-variant mini card and the price editor, moved out
- * of product-detail-client.tsx unchanged (CoffeeOS#69 Stage A). Class strings,
- * icon sizes and stroke widths are byte-identical.
+ * Product image, the selected-variant line and the price editor, on instrument
+ * (CoffeeOS#69 Stage B). Retokenized only — no figure and no handler changed.
  *
  * `sellingPrice` deliberately stays owned by the parent: a `useEffect` there
  * re-seeds it from the selected variant whenever the variant changes, and that
  * effect must not be split away from the state it drives.
  *
  * Preserved as-is:
- *  - the price `<input>` is uncontrolled-ish in spirit — it holds a raw string
- *    and only validates on save, so a typo sits in the field looking committed
- *  - the save button is icon-only with no accessible name (`<Save>` renders a
- *    bare svg), so screen readers announce it as an unlabelled button
- *  - `priority={false}` is passed explicitly even though it is the default
+ *  - the price field holds a raw string and only validates on save, so a typo
+ *    sits in the field looking committed
+ *  - the save control is icon-only. It now carries an `aria-label` via
+ *    instrument's `IconButton`, which requires one — the loud version rendered a
+ *    bare <svg> in a button and announced as unlabelled.
  */
 export function ProductDetailsPanel({
   product,
@@ -38,71 +39,117 @@ export function ProductDetailsPanel({
   onUpdatePrice: () => void;
   isPriceUpdating: boolean;
 }) {
+  const priceLabel = isVariantMode ? "Variant price" : "Selling price";
+
   return (
-    <Panel title="Product Details">
-      <div className="flex flex-col gap-4">
-        <div className="relative w-full overflow-hidden rounded-[12px] border-[3px] border-espresso bg-fog aspect-[4/3] sm:aspect-square">
+    <Section title="Product">
+      {/* A ROW, not a stack. This block used to be half of a two-column grid
+          beside the COGS donut; with the donut gone it became full width, and a
+          `width:100%` square image expanded to ~800px of empty canvas with a
+          28px icon adrift in the middle. The thumbnail is a fixed 140px now and
+          the fields sit beside it. */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "flex-start",
+          gap: "var(--space-5)",
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            flex: "0 0 140px",
+            width: 140,
+            aspectRatio: "1 / 1",
+            overflow: "hidden",
+            borderRadius: "var(--r-md)",
+            border: "1px solid var(--hairline)",
+            background: "var(--surface-sunken)",
+          }}
+        >
           {product.image_url ? (
             <Image
               src={product.image_url}
               alt={product.title}
               fill
-              sizes="(min-width: 1024px) 50vw, 100vw"
-              className="object-cover"
-              priority={false}
+              sizes="(min-width: 1024px) 300px, 100vw"
+              style={{ objectFit: "cover" }}
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <Package size={36} strokeWidth={1.5} className="text-muted-foreground" />
+            <div
+              style={{
+                display: "flex",
+                height: "100%",
+                width: "100%",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--ink-subtle)",
+              }}
+            >
+              <Package size={28} strokeWidth={1.5} />
             </div>
           )}
         </div>
 
+        <div
+          style={{
+            flex: "1 1 320px",
+            minWidth: 240,
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-4)",
+          }}
+        >
         {isVariantMode && selectedVariant && (
-          <div className="rounded-[10px] border-[2px] border-fog bg-cream p-3">
-            <div className="text-[10px] font-extrabold uppercase tracking-wide text-muted-foreground">
-              Selected Variant
-            </div>
-            <div className="font-bold text-[14px] text-espresso mt-0.5">{selectedVariant.title}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ ...sans, fontWeight: "var(--fw-medium)" as unknown as number }}>
+              {selectedVariant.title}
+            </span>
             {selectedVariant.sku && (
-              <div className="font-mono text-[11px] text-muted-foreground">{selectedVariant.sku}</div>
+              <span style={{ ...mono, fontSize: "var(--fs-overline)", color: "var(--ink-subtle)" }}>
+                {selectedVariant.sku}
+              </span>
             )}
           </div>
         )}
 
-        <div>
-          <FieldLabel htmlFor="sellingPrice">
-            {isVariantMode ? "Variant Price" : "Selling Price"}
-          </FieldLabel>
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <MerninInput
-                id="sellingPrice"
-                type="number"
-                step="0.01"
-                min="0"
-                value={sellingPrice}
-                onChange={(e) => onSellingPriceChange(e.target.value)}
-                placeholder="0.00"
-                prefix={<DollarSign size={15} strokeWidth={2} />}
-              />
-            </div>
-            <Btn
+        <Field
+          label={priceLabel}
+          htmlFor="sellingPrice"
+          help={isVariantMode ? "Updates apply to the selected variant." : undefined}
+        >
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <Input
+              id="sellingPrice"
+              mono
+              type="number"
+              step="0.01"
+              min="0"
+              value={sellingPrice}
+              onChange={(e) => onSellingPriceChange(e.target.value)}
+              placeholder="0.00"
+              leading={<span style={{ ...mono, fontSize: "var(--fs-body)" }}>$</span>}
+              style={{ flex: 1, minWidth: 0 }}
+            />
+            <IconButton
+              size="md"
+              variant="outline"
+              aria-label={`Save ${priceLabel.toLowerCase()}`}
+              icon={
+                isPriceUpdating ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Save size={14} strokeWidth={2} />
+                )
+              }
               onClick={onUpdatePrice}
               disabled={isPriceUpdating || (isVariantMode && !selectedVariant)}
-              size="icon"
-              variant="outline"
-            >
-              {isPriceUpdating ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} strokeWidth={2} />}
-            </Btn>
+            />
           </div>
-          {isVariantMode && (
-            <p className="mt-1.5 text-[11px] text-muted-foreground">
-              Updates apply to the selected variant.
-            </p>
-          )}
+        </Field>
         </div>
       </div>
-    </Panel>
+    </Section>
   );
 }

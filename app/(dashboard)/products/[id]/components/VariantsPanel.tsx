@@ -1,24 +1,33 @@
 "use client";
 
-import { Loader2, Plus } from "lucide-react";
-import { Btn, Panel } from "./primitives";
+import { Button, EmptyState } from "@merninos/ui/instrument";
+import { Layers, Loader2, Plus } from "lucide-react";
+import { mono, overline, sans } from "@/lib/instrument/tokens";
+import { Section } from "./Section";
 import type { ProductVariant } from "./types";
 
 /**
- * The variant picker — pill row, selected-variant strip and Remove Variant —
- * moved out of product-detail-client.tsx unchanged (CoffeeOS#69 Stage A). Every
- * class string is byte-identical.
+ * The variant picker on instrument (CoffeeOS#69 Stage B). Behaviour is
+ * unchanged — a pill row selects the variant whose recipe the rest of the page
+ * edits — and only the styling moved.
  *
- * Preserved as-is and revisited in later stages:
- *  - the pill row is a bare `<button>` list with no `role="tablist"`, no
- *    `aria-selected` and no roving focus, so the selected variant is conveyed by
- *    colour alone
- *  - the strip's left-hand text says "Select a variant to edit its COGS."
- *    whenever the selected variant has no SKU — but the strip only renders when
- *    a variant IS selected, so that copy is unreachable-as-written and instead
- *    reads as a stale instruction on any SKU-less variant
- *  - Remove Variant is a `window.confirm` in the parent, not a dialog; Stage B
- *    leaves that alone too so the pixel diff stays clean
+ * `variant-pill` and `data-variant-sku` are THE contract for
+ * products-capabilities.spec.ts test 6, which proves the page shows the SELECTED
+ * variant's cost rather than some blend of both. They stay on a hand-rolled
+ * <button> precisely so nothing can swallow them.
+ *
+ * SELECTED-STATE STYLING. `--brand-soft` with an inset `--brand` edge, not a
+ * `--brand` fill: brand red is the live register on this system and never fills
+ * a control (Criterion 6). The soft tint plus the hard inset edge is enough to
+ * read as chosen at a glance while keeping the saturated red for "needs you".
+ *
+ * Preserved as-is, and worth fixing later:
+ *  - the pill row is a bare <button> list with no `role="tablist"`, no
+ *    `aria-selected` and no roving focus. The selected pill now carries
+ *    `aria-pressed`, which is the one accessibility affordance added here
+ *    because it costs nothing and the alternative is conveying selection by
+ *    colour alone.
+ *  - Remove variant is still a `window.confirm` in the parent, not a dialog
  */
 export function VariantsPanel({
   variants,
@@ -38,59 +47,102 @@ export function VariantsPanel({
   isRemovingVariant: boolean;
 }) {
   return (
-    <Panel
+    <Section
       title="Variants"
-      subtitle="Add variants, then edit COGS per variant."
+      note={variants.length > 0 ? "Each variant carries its own recipe." : undefined}
       action={
-        <Btn variant="outline" size="sm" onClick={onOpenAddVariant}>
-          <Plus size={13} strokeWidth={2.5} />
-          Add Variant
-        </Btn>
+        <Button
+          size="sm"
+          variant="secondary"
+          iconLeft={<Plus size={14} strokeWidth={2} />}
+          onClick={onOpenAddVariant}
+        >
+          Add variant
+        </Button>
       }
     >
       {variants.length === 0 ? (
-        <p className="text-[13px] text-muted-foreground">
-          No variants yet. Add one to get started.
-        </p>
+        <EmptyState
+          compact
+          icon={<Layers size={20} strokeWidth={1.5} />}
+          title="No variants"
+          description="This product is costed at product level. Add a variant when two sizes cost different amounts."
+        />
       ) : (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-2">
-            {variants.map((v) => (
-              <button
-                key={v.id}
-                type="button"
-                data-testid="variant-pill"
-                data-variant-sku={v.sku ?? ""}
-                onClick={() => onSelectVariant(v.id)}
-                className={`inline-flex items-center h-[30px] px-4 rounded-full border-[2.5px] text-[11px] font-extrabold uppercase tracking-[.08em] transition-all duration-100 ${
-                  v.id === selectedVariantId
-                    ? "bg-tomato text-cream border-espresso shadow-[3px_3px_0_#1C0F05]"
-                    : "bg-transparent text-espresso border-espresso hover:bg-fog/40"
-                }`}
-              >
-                {v.title}
-              </button>
-            ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {variants.map((v) => {
+              const selected = v.id === selectedVariantId;
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  data-testid="variant-pill"
+                  data-variant-sku={v.sku ?? ""}
+                  aria-pressed={selected}
+                  onClick={() => onSelectVariant(v.id)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    height: 28,
+                    padding: "0 12px",
+                    cursor: "pointer",
+                    borderRadius: "var(--r-sm)",
+                    background: selected ? "var(--brand-soft)" : "var(--surface)",
+                    border: `1px solid ${selected ? "var(--brand-border)" : "var(--hairline-strong)"}`,
+                    boxShadow: selected ? "inset 2px 0 0 var(--brand)" : "none",
+                    fontFamily: "var(--font-sans)",
+                    fontSize: "var(--fs-body)",
+                    fontWeight: selected
+                      ? ("var(--fw-medium)" as unknown as number)
+                      : ("var(--fw-regular)" as unknown as number),
+                    color: "var(--ink)",
+                  }}
+                >
+                  {v.title}
+                </button>
+              );
+            })}
           </div>
+
           {selectedVariant && (
-            <div className="flex items-center justify-between rounded-[10px] border-[2px] border-dashed border-fog bg-cream p-3">
-              <span className="text-[12px] text-muted-foreground font-bold">
-                {selectedVariant.sku ? `SKU: ${selectedVariant.sku}` : "Select a variant to edit its COGS."}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+                padding: "8px 12px",
+                background: "var(--surface-sunken)",
+                border: "1px solid var(--hairline)",
+                borderRadius: "var(--r-md)",
+              }}
+            >
+              <span style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+                <span style={overline}>Editing</span>
+                <span style={{ ...sans, fontWeight: "var(--fw-medium)" as unknown as number }}>
+                  {selectedVariant.title}
+                </span>
+                <span style={{ ...mono, fontSize: "var(--fs-overline)", color: "var(--ink-subtle)" }}>
+                  {selectedVariant.sku || "no SKU"}
+                </span>
               </span>
-              <Btn
-                variant="ghost"
+              <Button
                 size="sm"
+                variant="tertiary"
                 onClick={onRemoveVariant}
-                disabled={!selectedVariant || isRemovingVariant}
-                className="text-tomato hover:bg-tomato/10 !border-transparent"
+                disabled={isRemovingVariant}
+                iconLeft={
+                  isRemovingVariant ? <Loader2 size={13} className="animate-spin" /> : undefined
+                }
               >
-                {isRemovingVariant && <Loader2 size={12} className="animate-spin" />}
-                Remove Variant
-              </Btn>
+                Remove variant
+              </Button>
             </div>
           )}
         </div>
       )}
-    </Panel>
+    </Section>
   );
 }

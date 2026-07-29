@@ -10,12 +10,12 @@ import {
   updateProductVariantComponents,
   updateWholesalePricing,
 } from "./actions";
-import { ArrowLeft, AlertCircle } from "lucide-react";
-import { Btn } from "./components/primitives";
+import Link from "next/link";
+import { HeroMetric, InlineBanner, StatStrip } from "@merninos/ui/instrument";
+import { ArrowLeft } from "lucide-react";
+import { mono, sans, money, money3 } from "@/lib/instrument/tokens";
 import { VariantsPanel } from "./components/VariantsPanel";
-import { StatsRow } from "./components/StatsRow";
 import { ProductDetailsPanel } from "./components/ProductDetailsPanel";
-import { CogsBreakdown } from "./components/CogsBreakdown";
 import { CogsCalculator } from "./components/CogsCalculator";
 import { WholesalePanel } from "./components/WholesalePanel";
 import { AddVariantDialog } from "./components/AddVariantDialog";
@@ -150,18 +150,6 @@ export function ProductDetailClient({
   const wholesalePriceValue = parseFloat(wholesalePrice) || 0;
   const wholesaleMargin = wholesalePriceValue > 0 ? ((wholesalePriceValue - calculatedCogs) / wholesalePriceValue) * 100 : 0;
 
-  const cogsBreakdown = useMemo(() => {
-    const map = new Map<string, { name: string; value: number }>();
-    for (const sc of selectedComponents) {
-      const comp = availableComponents.find((c) => c.id === sc.componentId);
-      if (!comp) continue;
-      const value = sc.quantity * comp.cost_per_unit;
-      if (value <= 0) continue;
-      const prev = map.get(comp.id);
-      map.set(comp.id, { name: comp.name, value: (prev?.value ?? 0) + value });
-    }
-    return Array.from(map.values()).sort((a, b) => b.value - a.value);
-  }, [selectedComponents, availableComponents]);
 
   const addComponent = () => {
     const unused = availableComponents.find((c) => !selectedComponents.some((sc) => sc.componentId === c.id));
@@ -252,33 +240,95 @@ export function ProductDetailClient({
   };
 
   return (
-    <div className="flex flex-col gap-5 p-6 mb-20">
-      {/* Back + title */}
-      <div className="flex items-start gap-4">
-        <Btn variant="outline" size="sm" href="/products">
-          <ArrowLeft size={13} strokeWidth={2.5} />
-          Products
-        </Btn>
-      </div>
-
-      <div>
-        <h1 className="text-[28px] md:text-[36px] font-extrabold uppercase tracking-tight leading-none text-espresso">
+    <div style={{ maxWidth: "var(--content-max)", margin: "0 auto", padding: "var(--space-6)" }}>
+      {/* Header */}
+      <div style={{ marginBottom: "var(--space-5)" }}>
+        <Link
+          href="/products"
+          style={{
+            ...sans,
+            fontSize: "var(--fs-caption)",
+            color: "var(--ink-muted)",
+            textDecoration: "none",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            marginBottom: 8,
+          }}
+        >
+          <ArrowLeft size={14} strokeWidth={2} />
+          All products
+        </Link>
+        <h1
+          style={{
+            fontFamily: "var(--font-display)",
+            fontVariationSettings: "var(--display-settings)",
+            fontWeight: "var(--display-weight)" as unknown as number,
+            letterSpacing: "var(--display-tracking)",
+            fontSize: "var(--fs-display)",
+            textTransform: "uppercase",
+            color: "var(--ink)",
+            margin: 0,
+          }}
+        >
           {product.title}
         </h1>
-        {product.sku && (
-          <p className="font-mono text-[12px] text-muted-foreground mt-1">SKU: {product.sku}</p>
-        )}
+        <p style={{ ...mono, fontSize: "var(--fs-caption)", color: "var(--ink-subtle)", marginTop: 6, marginBottom: 0 }}>
+          {[product.sku, `${variants.length} variant${variants.length === 1 ? "" : "s"}`]
+            .filter(Boolean)
+            .join(" \u00b7 ")}
+        </p>
       </div>
 
-      {/* Toast */}
       {message && (
-        <div data-testid="detail-toast" className={`flex items-center gap-2.5 rounded-[12px] border-[2.5px] p-3 text-[13px] font-bold ${message.type === "error" ? "border-tomato bg-tomato/10 text-tomato" : "border-matcha bg-matcha/10 text-matcha"}`}>
-          <AlertCircle size={15} strokeWidth={2.5} />
-          {message.text}
+        <div style={{ marginBottom: "var(--space-4)" }} data-testid="detail-toast">
+          <InlineBanner
+            tone={message.type === "error" ? "danger" : "success"}
+            onDismiss={() => setMessage(null)}
+          >
+            {message.text}
+          </InlineBanner>
         </div>
       )}
 
-      {/* Variants */}
+      {/* One hero + one ruled strip. Replaces four equal stat tiles — the
+          worksheet model has exactly one figure at display scale (Criterion 18).
+          The donut that used to sit beside these is gone: share is read off the
+          recipe table now, which also means no chart needs a colour ramp this
+          product has no data for. */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "var(--space-6)",
+          alignItems: "end",
+          marginBottom: "var(--space-2)",
+        }}
+      >
+        <div style={{ flex: "0 0 280px" }}>
+          <HeroMetric
+            label="Unit COGS"
+            // The test id goes on the VALUE, not the component: HeroMetric
+            // destructures its props and would drop a data-testid silently, and
+            // wrapping the whole metric would put the label and note inside the
+            // element the specs parse a number out of. `value` is a ReactNode,
+            // so the seam sits on exactly the figure.
+            value={<span data-testid="stat-total-cogs">{money3(calculatedCogs)}</span>}
+            note={isVariantMode && selectedVariant ? selectedVariant.title : "all units"}
+          />
+        </div>
+        <div style={{ flex: "1 1 460px", minWidth: 0 }}>
+          <StatStrip
+            stats={[
+              { label: isVariantMode ? "Variant price" : "Price", value: money(priceValue) },
+              { label: "Profit \u00b7 unit", value: money3(profit) },
+              { label: "Margin", value: margin.toFixed(1), unit: "%" },
+              { label: "Components", value: String(selectedComponents.length) },
+            ]}
+          />
+        </div>
+      </div>
+
       <VariantsPanel
         variants={variants}
         selectedVariantId={selectedVariantId}
@@ -289,33 +339,16 @@ export function ProductDetailClient({
         isRemovingVariant={isRemovingVariant}
       />
 
-      {/* Stats row */}
-      <StatsRow
+      <ProductDetailsPanel
+        product={product}
         isVariantMode={isVariantMode}
-        priceValue={priceValue}
-        calculatedCogs={calculatedCogs}
-        profit={profit}
-        margin={margin}
+        selectedVariant={selectedVariant}
+        sellingPrice={sellingPrice}
+        onSellingPriceChange={setSellingPrice}
+        onUpdatePrice={handleUpdatePrice}
+        isPriceUpdating={isPriceUpdating}
       />
 
-      {/* Product info + COGS chart */}
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* Product Details */}
-        <ProductDetailsPanel
-          product={product}
-          isVariantMode={isVariantMode}
-          selectedVariant={selectedVariant}
-          sellingPrice={sellingPrice}
-          onSellingPriceChange={setSellingPrice}
-          onUpdatePrice={handleUpdatePrice}
-          isPriceUpdating={isPriceUpdating}
-        />
-
-        {/* COGS Breakdown */}
-        <CogsBreakdown calculatedCogs={calculatedCogs} cogsBreakdown={cogsBreakdown} />
-      </div>
-
-      {/* COGS Calculator */}
       <CogsCalculator
         availableComponents={availableComponents}
         selectedComponents={selectedComponents}
@@ -328,7 +361,6 @@ export function ProductDetailClient({
         onSaveComponents={handleSaveComponents}
       />
 
-      {/* Wholesale Pricing */}
       <WholesalePanel
         wholesaleEnabled={wholesaleEnabled}
         onWholesaleEnabledChange={setWholesaleEnabled}
@@ -346,7 +378,6 @@ export function ProductDetailClient({
         isWholesaleSaving={isWholesaleSaving}
       />
 
-      {/* Add variant dialog */}
       <AddVariantDialog
         open={isAddVariantDialogOpen}
         onOpenChange={setIsAddVariantDialogOpen}

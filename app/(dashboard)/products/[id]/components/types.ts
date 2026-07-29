@@ -43,6 +43,13 @@ export interface Product {
   title: string;
   description: string | null;
   sku: string | null;
+  /**
+   * Type-only addition (CoffeeOS#69 Stage B). page.tsx already does
+   * `select("*")`, so this field has always been present at runtime — the header
+   * caption reads it to say whether a product came from Shopify or was created
+   * by hand. Nothing is fetched that was not fetched before.
+   */
+  shopify_id?: string | null;
   price: number | null;
   image_url: string | null;
   wholesale_price: number | null;

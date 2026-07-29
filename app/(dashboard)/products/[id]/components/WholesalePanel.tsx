@@ -1,32 +1,46 @@
 "use client";
 
-import { Switch } from "@/components/ui/switch";
-import { DollarSign, Loader2, Plus, Save, Store, Trash2 } from "lucide-react";
-import { Btn, FieldLabel, MerninInput, Panel } from "./primitives";
+import { Badge, Button, EmptyState, Field, IconButton, Input, Switch } from "@merninos/ui/instrument";
+import { Loader2, Plus, Save, Store, Trash2 } from "lucide-react";
+import { mono, overline, sans, money3 } from "@/lib/instrument/tokens";
+import { Section } from "./Section";
 
 /**
- * The wholesale block — enable switch, base price / min qty fields, the volume
- * tier list and the save footer — moved out of product-detail-client.tsx
- * unchanged (CoffeeOS#69 Stage A).
+ * Wholesale pricing on instrument (CoffeeOS#69 Stage B): the enable switch moves
+ * into the Section's action slot, the base fields become `Field` + `Input`, and
+ * the stack of bordered tier cards becomes a worksheet table with the same
+ * metrics as RecipeTable — 34px header cells, 40px body rows, hairline rules, no
+ * zebra, ONE rendering for both viewports.
  *
- * The tier row's two inline `onChange` bodies are copied across character for
- * character, including the `const u = [...priceTiers]` copy-then-splice shape.
- * They are not hoisted into named handlers, because a named handler would have
- * to close over `priceTiers` differently and Stage A is not the place to
- * discover whether that matters.
+ * PRECISION, AND THE ONE INCONSISTENCY THIS COMMIT DOES FIX
+ *
+ * The loud page rendered its "Profit: $…" line at TWO decimals while every other
+ * money figure on the same screen used three, so the page disagreed with itself
+ * about what a cent was. Unit economics on this page are three decimals on
+ * purpose: `components.cost_per_unit` is `DECIMAL(18,8)` and a line at
+ * $0.085/each rounds to $0.09 at two, which makes a five-line recipe visibly
+ * disagree with its own total. Profit and price-per-unit here are unit
+ * economics, so they go through `money3` like the rest. This is the whole of the
+ * numeric change in this file — no threshold, no computation and no handler
+ * moved.
  *
  * Preserved as-is:
- *  - the "Profit: $…" line is `toFixed(2)` while every other money figure on
- *    this page is `fmt`'s THREE decimals — the same screen disagrees with itself
- *  - the tier margin thresholds are 20/10 (matcha/honey/tomato), NOT the 30/15
- *    used by the stat tiles and the list page's MarginPill; three sets of
- *    thresholds now exist for the same concept
+ *  - the tier margin thresholds are 20/10, NOT the 30/15 the hero strip and the
+ *    list page use. Three threshold sets for one concept still exist.
+ *  - the two inline tier `onChange` bodies keep their copy-then-splice shape
  *  - tiers key on array index, so deleting a middle tier remounts the rest
  *  - nothing validates that tiers ascend by `min_quantity` or descend by price,
  *    and nothing stops two tiers sharing a `min_quantity`
  *  - `parseInt(wholesaleMinQty) || 1` in the parent silently rewrites a blank or
  *    zero minimum to 1 on save without telling the user
  */
+
+/** Min qty | Tier | Price/unit | Margin | remove */
+const GRID = "110px minmax(0,1fr) 150px 120px 40px";
+const ROW = "flex flex-col min-[900px]:grid";
+const CELL = "flex items-center px-3 py-1.5 min-[900px]:py-0 min-[900px]:h-10";
+const CELL_R = `${CELL} justify-between min-[900px]:justify-end`;
+
 export function WholesalePanel({
   wholesaleEnabled,
   onWholesaleEnabledChange,
@@ -58,100 +72,214 @@ export function WholesalePanel({
   onSaveWholesale: () => void;
   isWholesaleSaving: boolean;
 }) {
-  // Local alias so the three moved inline handlers below stay byte-identical to
+  // Local alias so the two moved inline handlers below stay recognisable against
   // what they were when `setPriceTiers` was this file's own useState setter.
   const setPriceTiers = onPriceTiersChange;
+  const figure: React.CSSProperties = { ...mono, fontSize: "var(--fs-data)" };
+
   return (
-    <Panel
-      title="Wholesale Pricing"
-      subtitle="Set up volume discounts for wholesale customers"
+    <Section
+      title="Wholesale"
+      note={wholesaleEnabled ? "Volume tiers quoted against the unit COGS above." : undefined}
       action={
-        <div className="flex items-center gap-2">
-          <label htmlFor="wholesale-enabled" className="text-[10.5px] font-extrabold uppercase tracking-[.1em] text-espresso cursor-pointer">
-            Enable
-          </label>
-          <Switch id="wholesale-enabled" checked={wholesaleEnabled} onCheckedChange={onWholesaleEnabledChange} />
-        </div>
+        <Switch
+          id="wholesale-enabled"
+          label="Enabled"
+          checked={wholesaleEnabled}
+          onChange={(e) => onWholesaleEnabledChange(e.target.checked)}
+        />
       }
     >
       {!wholesaleEnabled ? (
-        <div className="flex flex-col items-center py-10 text-center">
-          <Store size={32} strokeWidth={1.5} className="text-fog mb-3" />
-          <p className="font-extrabold uppercase text-[13px] tracking-wide text-espresso">Wholesale Disabled</p>
-          <p className="text-[12px] text-muted-foreground mt-1">Enable the toggle to set up volume discounts.</p>
-        </div>
+        <EmptyState
+          compact
+          icon={<Store size={20} strokeWidth={1.5} />}
+          title="Wholesale off"
+          description="Turn it on to set a base wholesale price and volume tiers for this product."
+        />
       ) : (
-        <div className="flex flex-col gap-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <FieldLabel htmlFor="wholesale-price">Base Wholesale Price</FieldLabel>
-              <MerninInput
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-5)" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: "var(--gap-stack)",
+              maxWidth: 620,
+            }}
+          >
+            <Field
+              label="Base wholesale price"
+              htmlFor="wholesale-price"
+              help={
+                wholesalePriceValue > 0
+                  ? // Three decimals, like every other unit-economics figure on
+                    // this page. See the precision note at the top of the file.
+                    `Margin ${wholesaleMargin.toFixed(1)}% · profit ${money3(
+                      wholesalePriceValue - calculatedCogs
+                    )}`
+                  : undefined
+              }
+            >
+              <Input
                 id="wholesale-price"
-                type="number" step="0.01" min="0"
+                mono
+                type="number"
+                step="0.01"
+                min="0"
                 value={wholesalePrice}
                 onChange={(e) => onWholesalePriceChange(e.target.value)}
                 placeholder="12.00"
-                prefix={<DollarSign size={15} strokeWidth={2} />}
+                leading={<span style={{ ...mono, fontSize: "var(--fs-body)" }}>$</span>}
               />
-              {wholesalePriceValue > 0 && (
-                <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  Margin: {wholesaleMargin.toFixed(1)}% · Profit: ${(wholesalePriceValue - calculatedCogs).toFixed(2)}
-                </p>
-              )}
-            </div>
-            <div>
-              <FieldLabel htmlFor="wholesale-min-qty">Min Order Quantity</FieldLabel>
-              <MerninInput
+            </Field>
+            <Field label="Min order quantity" htmlFor="wholesale-min-qty">
+              <Input
                 id="wholesale-min-qty"
-                type="number" min="1"
+                mono
+                type="number"
+                min="1"
                 value={wholesaleMinQty}
                 onChange={(e) => onWholesaleMinQtyChange(e.target.value)}
                 placeholder="12"
               />
-            </div>
+            </Field>
           </div>
 
-          {/* Price tiers */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div className="text-[10.5px] font-extrabold uppercase tracking-[.1em] text-espresso">
-                Volume Price Tiers
-              </div>
-              <Btn variant="outline" size="sm" onClick={onAddPriceTier}>
-                <Plus size={12} strokeWidth={2.5} />
-                Add Tier
-              </Btn>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <span style={{ ...overline, color: "var(--ink-muted)" }}>Volume tiers</span>
+              <Button
+                size="sm"
+                variant="secondary"
+                iconLeft={<Plus size={14} strokeWidth={2} />}
+                onClick={onAddPriceTier}
+              >
+                Add tier
+              </Button>
             </div>
 
             {priceTiers.length === 0 ? (
-              <p className="text-[12px] text-muted-foreground text-center py-4 border-2 border-dashed border-fog rounded-[10px]">
-                No price tiers configured.
-              </p>
+              <EmptyState
+                compact
+                title="No tiers"
+                description="Without a tier, every wholesale order is billed at the base price."
+              />
             ) : (
-              <div className="flex flex-col gap-2">
+              <div
+                style={{
+                  border: "1px solid var(--hairline)",
+                  borderRadius: "var(--r-md)",
+                  overflow: "hidden",
+                  background: "var(--surface)",
+                }}
+              >
+                <div
+                  className="hidden min-[900px]:grid"
+                  style={{
+                    gridTemplateColumns: GRID,
+                    ...overline,
+                    color: "var(--ink-muted)",
+                    background: "var(--surface-sunken)",
+                    borderBottom: "1px solid var(--hairline-strong)",
+                  }}
+                >
+                  <div className="flex items-center px-3 h-[34px]">Min qty</div>
+                  <div className="flex items-center px-3 h-[34px]">Tier</div>
+                  <div className="flex items-center justify-end px-3 h-[34px]">Price / unit</div>
+                  <div className="flex items-center justify-end px-3 h-[34px]">Margin</div>
+                  <div className="h-[34px]" />
+                </div>
+
                 {priceTiers.map((tier, idx) => {
-                  const tierMargin = tier.price > 0 ? ((tier.price - calculatedCogs) / tier.price) * 100 : 0;
+                  const tierMargin =
+                    tier.price > 0 ? ((tier.price - calculatedCogs) / tier.price) * 100 : 0;
+                  const tone = tierMargin >= 20 ? "success" : tierMargin >= 10 ? "warning" : "danger";
                   return (
-                    <div key={idx} className="flex items-center gap-3 rounded-[12px] border-[2.5px] border-espresso bg-cream p-3">
-                      <div className="flex-1 grid grid-cols-2 gap-3">
-                        <div>
-                          <FieldLabel>Min Qty</FieldLabel>
-                          <MerninInput type="number" min="1" value={tier.min_quantity} onChange={(e) => { const u = [...priceTiers]; u[idx] = { ...u[idx], min_quantity: parseInt(e.target.value) || 1 }; setPriceTiers(u); }} />
-                        </div>
-                        <div>
-                          <FieldLabel>Price / Unit</FieldLabel>
-                          <MerninInput type="number" step="0.01" min="0" value={tier.price} onChange={(e) => { const u = [...priceTiers]; u[idx] = { ...u[idx], price: parseFloat(e.target.value) || 0 }; setPriceTiers(u); }} prefix={<DollarSign size={15} strokeWidth={2} />} />
-                        </div>
+                    <div
+                      key={idx}
+                      className={`${ROW} py-2 min-[900px]:py-0`}
+                      style={{
+                        gridTemplateColumns: GRID,
+                        fontFamily: "var(--font-sans)",
+                        fontSize: "var(--fs-body)",
+                        color: "var(--ink)",
+                        borderBottom:
+                          idx < priceTiers.length - 1 ? "1px solid var(--hairline)" : "none",
+                      }}
+                    >
+                      <div className={CELL_R}>
+                        <span style={overline} className="min-[900px]:hidden">
+                          Min qty
+                        </span>
+                        <Input
+                          size="sm"
+                          mono
+                          type="number"
+                          min="1"
+                          value={tier.min_quantity}
+                          onChange={(e) => {
+                            const u = [...priceTiers];
+                            u[idx] = { ...u[idx], min_quantity: parseInt(e.target.value) || 1 };
+                            setPriceTiers(u);
+                          }}
+                          aria-label={`Tier ${idx + 1} minimum quantity`}
+                          style={{ width: 88, textAlign: "right" }}
+                        />
                       </div>
-                      <div className="text-right min-w-[64px]">
-                        <div className="text-[9.5px] font-extrabold uppercase tracking-wide text-muted-foreground">Margin</div>
-                        <div className={`text-[13px] font-extrabold mt-0.5 ${tierMargin >= 20 ? "text-matcha" : tierMargin >= 10 ? "text-honey" : "text-tomato"}`}>
+
+                      <div className={CELL}>
+                        <span style={{ ...sans, color: "var(--ink-muted)" }}>
+                          Tier {idx + 1} · {tier.min_quantity}+ units
+                        </span>
+                      </div>
+
+                      <div className={CELL_R}>
+                        <span style={overline} className="min-[900px]:hidden">
+                          Price / unit
+                        </span>
+                        <Input
+                          size="sm"
+                          mono
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={tier.price}
+                          onChange={(e) => {
+                            const u = [...priceTiers];
+                            u[idx] = { ...u[idx], price: parseFloat(e.target.value) || 0 };
+                            setPriceTiers(u);
+                          }}
+                          aria-label={`Tier ${idx + 1} price per unit`}
+                          leading={<span style={{ ...mono, fontSize: "var(--fs-body)" }}>$</span>}
+                          style={{ width: 118, textAlign: "right" }}
+                        />
+                      </div>
+
+                      <div className={CELL_R}>
+                        <span style={overline} className="min-[900px]:hidden">
+                          Margin
+                        </span>
+                        <Badge tone={tone} variant="soft" mono>
                           {tierMargin.toFixed(1)}%
-                        </div>
+                        </Badge>
                       </div>
-                      <button onClick={() => setPriceTiers(priceTiers.filter((_, i) => i !== idx))} className="w-8 h-8 inline-flex items-center justify-center rounded-full text-tomato hover:bg-tomato/10 transition-colors shrink-0">
-                        <Trash2 size={14} strokeWidth={2} />
-                      </button>
+
+                      <div className={`${CELL} justify-end min-[900px]:justify-center`}>
+                        <IconButton
+                          size="sm"
+                          icon={<Trash2 size={14} strokeWidth={2} />}
+                          aria-label={`Remove tier ${idx + 1}`}
+                          onClick={() => setPriceTiers(priceTiers.filter((_, i) => i !== idx))}
+                        />
+                      </div>
                     </div>
                   );
                 })}
@@ -159,14 +287,25 @@ export function WholesalePanel({
             )}
           </div>
 
-          <div className="flex justify-end pt-2 border-t-2 border-fog">
-            <Btn onClick={onSaveWholesale} disabled={isWholesaleSaving}>
-              {isWholesaleSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} strokeWidth={2} />}
-              Save Wholesale Pricing
-            </Btn>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <Button
+              size="sm"
+              variant="primary"
+              iconLeft={
+                isWholesaleSaving ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Save size={14} strokeWidth={2} />
+                )
+              }
+              onClick={onSaveWholesale}
+              disabled={isWholesaleSaving}
+            >
+              Save wholesale
+            </Button>
           </div>
         </div>
       )}
-    </Panel>
+    </Section>
   );
 }
