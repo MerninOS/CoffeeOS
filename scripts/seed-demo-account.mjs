@@ -160,6 +160,11 @@ async function clearDemoData(admin, ownerId) {
 
   if (productIds.length > 0) {
     await admin.from("product_components").delete().in("product_id", productIds);
+    // product_variants cascades to product_variant_components, and products
+    // cascades to product_variants — but deleting explicitly keeps the teardown
+    // readable and independent of whether a given environment has the 021
+    // constraints applied.
+    await admin.from("product_variants").delete().in("product_id", productIds);
     await admin.from("wholesale_price_tiers").delete().in("product_id", productIds);
     await admin.from("products").delete().in("id", productIds);
   }
@@ -357,9 +362,45 @@ async function seedDemoData(admin, ownerId) {
         price: 22,
         variant_id: "gid://shopify/ProductVariant/10000000044",
       },
+      // ── The variant-costed products (CoffeeOS#69) ──────────────────────────
+      //
+      // Until these existed, this fixture had NO product_variants at all, so the
+      // entire variant costing path was unreachable by any test. That is how
+      // CoffeeOS#85 reached production: variant-costed products were read as
+      // uncosted and dropped from margin — on the production account that took
+      // covered revenue to $0.00 of $261.80 over 30 days — and no fixture could
+      // reproduce it.
+      //
+      // The three below, plus the variants added to House Espresso, give the
+      // fixture all four cost bases. Spec Criteria 7 and 8 assert against a
+      // fixture containing every one of them, and are vacuous without.
+      {
+        user_id: ownerId,
+        shopify_id: "gid://shopify/Product/1000000005",
+        title: "Kenya Nyeri AA",
+        description: "Costed per variant, and the variants agree.",
+        sku: "KEN-NYERI",
+        price: 24,
+      },
+      {
+        user_id: ownerId,
+        shopify_id: "gid://shopify/Product/1000000006",
+        title: "Sumatra Mandheling",
+        description: "Variants disagree on cost — deliberately unknowable.",
+        sku: "SUM-MAND",
+        price: 20,
+      },
+      {
+        user_id: ownerId,
+        shopify_id: "gid://shopify/Product/1000000007",
+        title: "Costa Rica Tarrazu",
+        description: "One variant costed, one with no recipe at all.",
+        sku: "CRI-TARRAZU",
+        price: 21,
+      },
     ])
     .select("id,title");
-  if (productsError || !products || products.length < 4) {
+  if (productsError || !products || products.length < 7) {
     throw new Error(`Failed to insert products: ${productsError?.message || "unknown error"}`);
   }
 
@@ -385,6 +426,100 @@ async function seedDemoData(admin, ownerId) {
   ]);
   if (productComponentsError) {
     throw new Error(`Failed to insert product components: ${productComponentsError.message}`);
+  }
+
+  // ── Variant-level recipes (CoffeeOS#69) ────────────────────────────────────
+  //
+  // The rule these exercise lives in lib/products/costing.ts and is stricter
+  // than "product recipe wins": a variant-level figure only counts as KNOWN when
+  // every variant is costed and all of them agree. Anything else stays uncosted
+  // rather than guessing, because order_line_items.shopify_variant_id is null
+  // for 432 of 436 rows on production — a line item cannot be matched to the
+  // variant that actually sold, so a cost that depends on which one sold is not
+  // knowable.
+  //
+  // The four bases after this block:
+  //
+  //   product   Yirgacheffe, Cold Brew    product rows only
+  //   variant   Kenya, Sumatra, Costa Rica variant rows only
+  //   both      House Espresso             product rows AND variant rows
+  //   none      Guatemala Huehuetenango    neither
+  //
+  // ...and within `variant`, the three outcomes that matter:
+  //
+  //   Kenya       two variants, identical cost   -> COSTED at that cost
+  //   Sumatra     two variants, different costs  -> UNCOSTED (they disagree)
+  //   Costa Rica  one costed, one with no rows   -> UNCOSTED (one empty poisons)
+  const kenyaProduct = products.find((p) => p.title.includes("Kenya"));
+  const sumatraProduct = products.find((p) => p.title.includes("Sumatra"));
+  const costaRicaProduct = products.find((p) => p.title.includes("Costa Rica"));
+  if (!kenyaProduct || !sumatraProduct || !costaRicaProduct) {
+    throw new Error("Missing one or more variant-costed products.");
+  }
+
+  const { data: variants, error: variantsError } = await admin
+    .from("product_variants")
+    .insert([
+      // Agreeing pair — same components, same quantities, so one knowable cost.
+      { product_id: kenyaProduct.id, user_id: ownerId, title: "12oz", sku: "KEN-NYERI-12", price: 24, shopify_variant_id: "gid://shopify/ProductVariant/10000000051" },
+      { product_id: kenyaProduct.id, user_id: ownerId, title: "12oz Decaf", sku: "KEN-NYERI-12-DECAF", price: 26, shopify_variant_id: "gid://shopify/ProductVariant/10000000052" },
+
+      // Disagreeing pair — a 12oz and a 2lb cannot cost the same, and nothing
+      // records which one an order sold.
+      { product_id: sumatraProduct.id, user_id: ownerId, title: "12oz", sku: "SUM-MAND-12", price: 20, shopify_variant_id: "gid://shopify/ProductVariant/10000000061" },
+      { product_id: sumatraProduct.id, user_id: ownerId, title: "2lb", sku: "SUM-MAND-2LB", price: 46, shopify_variant_id: "gid://shopify/ProductVariant/10000000062" },
+
+      // One costed, one deliberately left with no rows.
+      { product_id: costaRicaProduct.id, user_id: ownerId, title: "12oz", sku: "CRI-TARRAZU-12", price: 21, shopify_variant_id: "gid://shopify/ProductVariant/10000000071" },
+      { product_id: costaRicaProduct.id, user_id: ownerId, title: "Sample 4oz", sku: "CRI-TARRAZU-4OZ", price: 8, shopify_variant_id: "gid://shopify/ProductVariant/10000000072" },
+
+      // `both`: House Espresso already has a PRODUCT-level recipe above. Adding
+      // a variant recipe must NOT change what it costs — product level wins —
+      // which is exactly what makes the 023 migration's backfill provably
+      // figure-preserving for this case.
+      { product_id: espressoProduct.id, user_id: ownerId, title: "2lb Whole Bean", sku: "HOUSE-ESP-2LB-WB", price: 42, shopify_variant_id: "gid://shopify/ProductVariant/10000000081" },
+    ])
+    .select("id,title,sku");
+  if (variantsError || !variants || variants.length < 7) {
+    throw new Error(`Failed to insert product variants: ${variantsError?.message || "unknown error"}`);
+  }
+
+  const variantBySku = Object.fromEntries(variants.map((v) => [v.sku, v.id]));
+  const needVariant = (sku) => {
+    const id = variantBySku[sku];
+    if (!id) throw new Error(`Missing seeded variant ${sku}`);
+    return id;
+  };
+
+  const { error: variantComponentsError } = await admin
+    .from("product_variant_components")
+    .insert([
+      // Kenya — identical recipes, so the two agree to the cent.
+      { product_variant_id: needVariant("KEN-NYERI-12"), component_id: roastedCoffeeComponent.id, quantity: 340 },
+      { product_variant_id: needVariant("KEN-NYERI-12"), component_id: bagComponent.id, quantity: 1 },
+      { product_variant_id: needVariant("KEN-NYERI-12"), component_id: labelComponent.id, quantity: 1 },
+      { product_variant_id: needVariant("KEN-NYERI-12-DECAF"), component_id: roastedCoffeeComponent.id, quantity: 340 },
+      { product_variant_id: needVariant("KEN-NYERI-12-DECAF"), component_id: bagComponent.id, quantity: 1 },
+      { product_variant_id: needVariant("KEN-NYERI-12-DECAF"), component_id: labelComponent.id, quantity: 1 },
+
+      // Sumatra — a 12oz and a 2lb, so the costs differ by design.
+      { product_variant_id: needVariant("SUM-MAND-12"), component_id: roastedCoffeeComponent.id, quantity: 340 },
+      { product_variant_id: needVariant("SUM-MAND-12"), component_id: bagComponent.id, quantity: 1 },
+      { product_variant_id: needVariant("SUM-MAND-2LB"), component_id: roastedCoffeeComponent.id, quantity: 900 },
+      { product_variant_id: needVariant("SUM-MAND-2LB"), component_id: bagComponent.id, quantity: 2 },
+
+      // Costa Rica — only the 12oz is costed. CRI-TARRAZU-4OZ gets nothing, on
+      // purpose: one empty variant makes the whole product unknowable.
+      { product_variant_id: needVariant("CRI-TARRAZU-12"), component_id: roastedCoffeeComponent.id, quantity: 340 },
+      { product_variant_id: needVariant("CRI-TARRAZU-12"), component_id: bagComponent.id, quantity: 1 },
+
+      // House Espresso — the ignored basis. Priced differently from its
+      // product-level recipe so a test can PROVE which one is billed.
+      { product_variant_id: needVariant("HOUSE-ESP-2LB-WB"), component_id: roastedCoffeeComponent.id, quantity: 950 },
+      { product_variant_id: needVariant("HOUSE-ESP-2LB-WB"), component_id: bagComponent.id, quantity: 3 },
+    ]);
+  if (variantComponentsError) {
+    throw new Error(`Failed to insert variant components: ${variantComponentsError.message}`);
   }
 
   const { data: sessions, error: sessionsError } = await admin
