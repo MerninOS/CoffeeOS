@@ -57,6 +57,7 @@ export function CogsCalculator({
       subtitle="Add cost components to calculate total COGS"
       action={
         <Btn
+          data-testid="recipe-add"
           onClick={onAddComponent}
           disabled={availableComponents.length === 0 || selectedComponents.length >= availableComponents.length}
           size="sm"
@@ -88,7 +89,7 @@ export function CogsCalculator({
               const comp = availableComponents.find((c) => c.id === sc.componentId);
               const lineTotal = comp ? sc.quantity * comp.cost_per_unit : 0;
               return (
-                <div key={idx} className="rounded-[12px] border-[2.5px] border-espresso bg-cream p-3">
+                <div key={idx} data-testid="recipe-row" className="rounded-[12px] border-[2.5px] border-espresso bg-cream p-3">
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="flex-1">
                       <FieldLabel>Component</FieldLabel>
@@ -103,19 +104,19 @@ export function CogsCalculator({
                         </SelectContent>
                       </Select>
                     </div>
-                    <button onClick={() => onRemoveComponent(idx)} className="w-8 h-8 mt-5 inline-flex items-center justify-center rounded-full text-tomato hover:bg-tomato/10 transition-colors">
+                    <button data-testid="recipe-remove" onClick={() => onRemoveComponent(idx)} className="w-8 h-8 mt-5 inline-flex items-center justify-center rounded-full text-tomato hover:bg-tomato/10 transition-colors">
                       <Trash2 size={14} strokeWidth={2} />
                     </button>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <FieldLabel>Quantity</FieldLabel>
-                      <MerninInput type="number" min="0" step="0.01" value={sc.quantity} onChange={(e) => onUpdateComponent(idx, "quantity", parseFloat(e.target.value) || 0)} />
+                      <MerninInput data-testid="recipe-qty" type="number" min="0" step="0.01" value={sc.quantity} onChange={(e) => onUpdateComponent(idx, "quantity", parseFloat(e.target.value) || 0)} />
                     </div>
                     <div className="rounded-[10px] bg-fog/50 border-[2px] border-fog p-3">
                       <div className="text-[9.5px] font-extrabold uppercase tracking-wide text-muted-foreground">Line total</div>
-                      <div className="font-extrabold text-[15px] text-espresso mt-0.5 tabular-nums">{fmt(lineTotal)}</div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">{comp ? `${fmt(comp.cost_per_unit)}/${comp.unit}` : "—"}</div>
+                      <div data-testid="recipe-line-total" className="font-extrabold text-[15px] text-espresso mt-0.5 tabular-nums">{fmt(lineTotal)}</div>
+                      <div data-testid="recipe-unit-cost" className="text-[10px] text-muted-foreground mt-0.5">{comp ? `${fmt(comp.cost_per_unit)}/${comp.unit}` : "—"}</div>
                     </div>
                   </div>
                 </div>
@@ -138,7 +139,7 @@ export function CogsCalculator({
                   const comp = availableComponents.find((c) => c.id === sc.componentId);
                   const lineTotal = comp ? sc.quantity * comp.cost_per_unit : 0;
                   return (
-                    <tr key={idx} className="border-b border-dashed border-fog last:border-0">
+                    <tr key={idx} data-testid="recipe-row" className="border-b border-dashed border-fog last:border-0">
                       <td className="py-3 pr-4">
                         <Select value={sc.componentId} onValueChange={(v) => onUpdateComponent(idx, "componentId", v)}>
                           <SelectTrigger className="border-[2px] border-espresso rounded-[8px] h-9 text-[12px] font-bold">
@@ -153,17 +154,18 @@ export function CogsCalculator({
                       </td>
                       <td className="py-3 pr-4">
                         <input
+                          data-testid="recipe-qty"
                           type="number" min="0" step="0.01" value={sc.quantity}
                           onChange={(e) => onUpdateComponent(idx, "quantity", parseFloat(e.target.value) || 0)}
                           className="w-24 bg-chalk border-[2px] border-espresso rounded-[8px] px-3 py-2 text-[13px] font-bold text-espresso outline-none focus:border-tomato text-right tabular-nums"
                         />
                       </td>
-                      <td className="py-3 text-right font-mono text-[12px] text-muted-foreground">
+                      <td data-testid="recipe-unit-cost" className="py-3 text-right font-mono text-[12px] text-muted-foreground">
                         {comp ? `${fmt(comp.cost_per_unit)}/${comp.unit}` : "—"}
                       </td>
-                      <td className="py-3 text-right font-bold text-espresso tabular-nums">{fmt(lineTotal)}</td>
+                      <td data-testid="recipe-line-total" className="py-3 text-right font-bold text-espresso tabular-nums">{fmt(lineTotal)}</td>
                       <td className="py-3 pl-3">
-                        <button onClick={() => onRemoveComponent(idx)} className="w-7 h-7 inline-flex items-center justify-center rounded-full text-tomato hover:bg-tomato/10 transition-colors">
+                        <button data-testid="recipe-remove" onClick={() => onRemoveComponent(idx)} className="w-7 h-7 inline-flex items-center justify-center rounded-full text-tomato hover:bg-tomato/10 transition-colors">
                           <Trash2 size={13} strokeWidth={2} />
                         </button>
                       </td>
@@ -175,7 +177,7 @@ export function CogsCalculator({
           </div>
 
           <div className="flex justify-end pt-2 border-t-2 border-fog">
-            <Btn onClick={onSaveComponents} disabled={isSaving || (isVariantMode && !selectedVariantId)}>
+            <Btn data-testid="recipe-save" onClick={onSaveComponents} disabled={isSaving || (isVariantMode && !selectedVariantId)}>
               {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} strokeWidth={2} />}
               {isVariantMode ? "Save Variant COGS" : "Save Components"}
             </Btn>

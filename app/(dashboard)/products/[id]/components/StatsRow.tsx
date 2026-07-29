@@ -46,20 +46,23 @@ export function StatsRow({
           label: isVariantMode ? "Variant Price" : "Selling Price",
           value: fmt(priceValue),
           sub: null as React.ReactNode,
+          testId: "stat-price",
         },
-        { label: "Total COGS", value: fmt(calculatedCogs), sub: null },
+        { label: "Total COGS", value: fmt(calculatedCogs), sub: null, testId: "stat-total-cogs" },
         {
           label: "Profit / Unit",
           value: fmt(profit),
           sub: null,
           color: profit >= 0 ? "text-matcha" : "text-tomato",
+          testId: "stat-profit",
         },
         {
           label: "Profit Margin",
           value: `${margin.toFixed(1)}%`,
           sub: marginPill(margin),
+          testId: "stat-margin",
         },
-      ].map(({ label, value, sub, color }) => (
+      ].map(({ label, value, sub, color, testId }) => (
         <div
           key={label}
           className="bg-chalk border-[3px] border-espresso rounded-[14px] p-4 shadow-flat-md"
@@ -67,7 +70,10 @@ export function StatsRow({
           <div className="text-[10.5px] font-extrabold tracking-[.12em] uppercase text-muted-foreground">
             {label}
           </div>
-          <div className={`font-extrabold text-[28px] leading-none mt-1.5 ${color || "text-espresso"}`}>
+          <div
+            data-testid={testId}
+            className={`font-extrabold text-[28px] leading-none mt-1.5 ${color || "text-espresso"}`}
+          >
             {value}
           </div>
           {sub && <div className="mt-2">{sub}</div>}

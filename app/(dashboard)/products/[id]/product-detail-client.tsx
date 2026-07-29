@@ -272,7 +272,7 @@ export function ProductDetailClient({
 
       {/* Toast */}
       {message && (
-        <div className={`flex items-center gap-2.5 rounded-[12px] border-[2.5px] p-3 text-[13px] font-bold ${message.type === "error" ? "border-tomato bg-tomato/10 text-tomato" : "border-matcha bg-matcha/10 text-matcha"}`}>
+        <div data-testid="detail-toast" className={`flex items-center gap-2.5 rounded-[12px] border-[2.5px] p-3 text-[13px] font-bold ${message.type === "error" ? "border-tomato bg-tomato/10 text-tomato" : "border-matcha bg-matcha/10 text-matcha"}`}>
           <AlertCircle size={15} strokeWidth={2.5} />
           {message.text}
         </div>

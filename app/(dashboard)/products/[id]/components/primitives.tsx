@@ -28,6 +28,7 @@ import Link from "next/link";
  */
 
 export function Btn({
+  "data-testid": testId,
   variant = "primary",
   size = "md",
   onClick,
@@ -37,6 +38,10 @@ export function Btn({
   type = "button",
   className = "",
 }: {
+  /** Forwarded to the rendered element. Destructuring components
+   *  silently DROP unknown props, so a data-testid passed without this would
+   *  vanish with no error — a test seam that disappears is worse than none. */
+  "data-testid"?: string;
   variant?: "primary" | "outline" | "ghost" | "icon-ghost";
   size?: "sm" | "md" | "icon";
   onClick?: () => void;
@@ -71,7 +76,7 @@ export function Btn({
       </Link>
     );
   return (
-    <button type={type} onClick={onClick} disabled={disabled} className={cls}>
+    <button type={type} data-testid={testId} onClick={onClick} disabled={disabled} className={cls}>
       {children}
     </button>
   );
@@ -122,6 +127,7 @@ export function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: 
 }
 
 export function MerninInput({
+  "data-testid": testId,
   id,
   value,
   onChange,
@@ -131,6 +137,10 @@ export function MerninInput({
   min,
   prefix,
 }: {
+  /** Forwarded to the rendered element. Destructuring components
+   *  silently DROP unknown props, so a data-testid passed without this would
+   *  vanish with no error — a test seam that disappears is worse than none. */
+  "data-testid"?: string;
   id?: string;
   value: string | number;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -148,6 +158,7 @@ export function MerninInput({
         </div>
       )}
       <input
+      data-testid={testId}
         id={id}
         type={type}
         step={step}

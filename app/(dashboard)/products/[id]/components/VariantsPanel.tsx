@@ -59,6 +59,8 @@ export function VariantsPanel({
               <button
                 key={v.id}
                 type="button"
+                data-testid="variant-pill"
+                data-variant-sku={v.sku ?? ""}
                 onClick={() => onSelectVariant(v.id)}
                 className={`inline-flex items-center h-[30px] px-4 rounded-full border-[2.5px] text-[11px] font-extrabold uppercase tracking-[.08em] transition-all duration-100 ${
                   v.id === selectedVariantId
