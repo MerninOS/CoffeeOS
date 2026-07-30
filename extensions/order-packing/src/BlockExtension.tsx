@@ -259,6 +259,32 @@ function money(n: number | null | undefined): string {
   return `$${n.toFixed(2)}`;
 }
 
+/**
+ * Coerce a value out of a NumberField's `onChange`.
+ *
+ * `NumberField`'s onChange is TYPED `(value: number) => void`, but at runtime it
+ * delivers a STRING. UI extensions run on a separate thread and props cross that
+ * boundary serialized, so the declared type is not enforced on what actually
+ * arrives. TypeScript therefore cannot catch this — the annotation compiles
+ * cleanly and lies.
+ *
+ * This shipped a real production bug: every numeric field the operator TYPES
+ * into sent a string, and the API rejected it with 400 "Invalid request body"
+ * (the routes require `typeof x === "number"`, deliberately — the strictness is
+ * what surfaced this). It was invisible for packing quantities because the
+ * prefilled suggestion arrives from the server as real numbers, so saving
+ * without editing a quantity worked; only shipping, which must always be typed,
+ * failed every time.
+ *
+ * Coerce at the boundary — every NumberField onChange must route through here.
+ * Returns undefined for anything non-numeric so callers keep their "empty"
+ * state rather than storing NaN.
+ */
+function numberFromField(value: unknown): number | undefined {
+  const n = typeof value === "number" ? value : Number(String(value ?? "").trim());
+  return Number.isFinite(n) ? n : undefined;
+}
+
 function costabilityReason(costability: Costability): string {
   switch (costability) {
     case "unlinked":
@@ -600,7 +626,11 @@ function PackingBlock({
               value={line.quantity}
               min={0}
               disabled={savingPacking}
-              onChange={(value: number) => updateQuantity(line.componentId, value)}
+              onChange={(value) => {
+                // See numberFromField: this arrives as a string at runtime.
+                const n = numberFromField(value);
+                if (n !== undefined) updateQuantity(line.componentId, n);
+              }}
             />
             <Button
               variant="tertiary"
@@ -684,7 +714,7 @@ function PackingBlock({
               value={newCost}
               min={0}
               disabled={savingPacking}
-              onChange={(v: number) => setNewCost(v)}
+              onChange={(v) => setNewCost(numberFromField(v))}
             />
             <Button
               variant="primary"
@@ -735,7 +765,7 @@ function PackingBlock({
               label="What you paid for shipping"
               value={shippingPaid}
               min={0}
-              onChange={(v: number) => setShippingPaid(v)}
+              onChange={(v) => setShippingPaid(numberFromField(v))}
             />
             <Button variant="secondary" onPress={handleSaveShipping} disabled={shippingSaving || shippingPaid === undefined}>
               {shippingSaving ? "Saving…" : "Save"}
