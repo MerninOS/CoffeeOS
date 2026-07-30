@@ -3,6 +3,7 @@ api_version = "2024-10"
 [[extensions]]
 name = "CoffeeOS Order Packing"
 handle = "order-packing"
+uid = "966bb89c-a5cf-a673-b0c8-c82ec22e449c7a5239af"
 type = "ui_extension"
 
   [[extensions.targeting]]
