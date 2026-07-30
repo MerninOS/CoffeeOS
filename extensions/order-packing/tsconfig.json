@@ -1,0 +1,30 @@
+{
+  "//": [
+    "Standalone tsconfig for the admin block extension.",
+    "",
+    "This directory is NOT a pnpm workspace member — the repo root's",
+    "pnpm-workspace.yaml is a settings file with no `packages:` key, and adding",
+    "one would change dependency resolution for the whole Next.js app. So this",
+    "extension installs with `pnpm install --ignore-workspace` and type-checks",
+    "against its own node_modules, independently of the root tsconfig.",
+    "",
+    "moduleResolution `bundler` is required: @shopify/ui-extensions-react ships",
+    "its admin surface behind an `exports` subpath map, which `node` resolution",
+    "cannot follow."
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["react"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}
