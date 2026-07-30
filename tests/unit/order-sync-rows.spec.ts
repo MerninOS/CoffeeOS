@@ -53,6 +53,8 @@ test('maps line items and links known shopify products', () => {
     quantity: 2,
     price: 10,
     total_price: 20,
+    shopify_variant_id: null,
+    variant_title: null,
   })
 })
 

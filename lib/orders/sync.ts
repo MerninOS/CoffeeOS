@@ -23,6 +23,22 @@ export interface LineItemRow {
   total_price: number;
 }
 
+// Postgrest errors carry code/details/hint alongside message — the fields
+// that actually explain a constraint violation. The returned `{ error }`
+// stays a plain string (callers union-match on it), but log the full object
+// here, where it is available, so a failure is diagnosable from the logs.
+function logSupabaseError(
+  context: string,
+  error: { message: string; code?: string; details?: string | null; hint?: string | null }
+) {
+  console.error(context, {
+    message: error.message,
+    code: error.code,
+    details: error.details,
+    hint: error.hint,
+  });
+}
+
 export function buildLineItemRows(
   order: ShopifyOrder,
   productMap: Map<string, string>
@@ -88,7 +104,10 @@ export async function upsertShopifyOrder(
       .from("orders")
       .update(orderFields)
       .eq("id", existingOrder.id);
-    if (error) return { error: error.message };
+    if (error) {
+      logSupabaseError("Order update error:", error);
+      return { error: error.message };
+    }
     orderId = existingOrder.id;
   } else {
     const { data: newOrder, error } = await supabase
@@ -96,19 +115,35 @@ export async function upsertShopifyOrder(
       .insert({ user_id: ownerId, shopify_order_id: shopifyOrderId, ...orderFields })
       .select("id")
       .single();
-    if (error || !newOrder) return { error: error?.message || "Order insert failed" };
+    if (error || !newOrder) {
+      if (error) logSupabaseError("Order insert error:", error);
+      return { error: error?.message || "Order insert failed" };
+    }
     orderId = newOrder.id;
   }
 
-  // Delete-and-reinsert matches the existing sync behavior exactly.
-  await supabase.from("order_line_items").delete().eq("order_id", orderId);
+  // Delete-then-reinsert shape matches the existing sync behavior; unlike the
+  // old fire-and-forget version, both halves now check for errors — a failed
+  // delete must not be followed by an insert, or the order ends up with
+  // duplicate line items.
+  const { error: deleteError } = await supabase
+    .from("order_line_items")
+    .delete()
+    .eq("order_id", orderId);
+  if (deleteError) {
+    logSupabaseError("Line item delete error:", deleteError);
+    return { error: deleteError.message };
+  }
 
   const rows = buildLineItemRows(order, productMap);
   if (rows.length > 0) {
     const { error } = await supabase
       .from("order_line_items")
       .insert(rows.map((item) => ({ order_id: orderId, ...item })));
-    if (error) return { error: error.message };
+    if (error) {
+      logSupabaseError("Line item insert error:", error);
+      return { error: error.message };
+    }
   }
 
   return { orderId };
