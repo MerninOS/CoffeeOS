@@ -138,20 +138,25 @@ type ComponentType = (typeof COMPONENT_TYPES)[number];
 const API_BASE = "https://coffeeos.io/api/shopify/block";
 
 /**
- * ASSUMPTION TO VERIFY ON A DEV STORE: admin UI extensions are documented to
- * attach a verified Shopify session token to `fetch` calls made to the app's
- * own domain (the domain configured as `application_url` in
- * shopify.app.toml, here coffeeos.io) automatically — no manual header
- * wiring needed. That's why this is a plain `fetch` and not something
- * pulled off the extension API object.
+ * The caller MUST pass a freshly-fetched Shopify session token.
  *
- * lib/shopify-block/auth.ts requires a bearer token and 401s without one
- * ("Missing bearer token"). If requests come back 401 on a real dev store,
- * that assumption was wrong for the installed @shopify/ui-extensions-react
- * version (2024.10.2, pinned in package.json next to this file) — switch to
- * whatever authenticated-fetch mechanism that version's admin API object
- * exposes (check its type defs; historically this has been surfaced off the
- * object `useApi(TARGET)` returns) instead of raw `fetch`.
+ * Admin UI extensions run in their own sandboxed iframe and do NOT get a
+ * session token attached automatically — unlike App Bridge's authenticatedFetch
+ * in the main embedded-app frame. The token has to be pulled off the extension
+ * API object (`sessionToken.get()` from `useApi(TARGET)`) and set as a header
+ * here. An earlier revision of this file assumed the opposite and sent no
+ * Authorization header at all, which meant every request 401'd:
+ * lib/shopify-block/auth.ts rejects a missing bearer token outright
+ * ("Missing bearer token"). Do not "simplify" this back to a bare `fetch`.
+ *
+ * Tokens are short-lived (~60s), so each call site fetches a fresh one
+ * immediately before its request rather than caching one at mount.
+ *
+ * STILL UNVERIFIED on a dev store: that `sessionToken.get()` is the exact
+ * shape the installed @shopify/ui-extensions-react (2024.10.2, pinned in
+ * package.json next to this file) exposes. If it is named differently there,
+ * the fix is the equivalent accessor on the object `useApi(TARGET)` returns —
+ * the mechanism above is right regardless of what the accessor is called.
  */
 async function blockFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
