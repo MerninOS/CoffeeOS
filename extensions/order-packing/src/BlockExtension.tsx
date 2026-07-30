@@ -395,6 +395,25 @@ function PackingBlock({
     return state.library.filter((c) => !usedIds.has(c.id));
   }, [state, lines]);
 
+  // Real production orders carry more than one shipping-flavored custom
+  // cost under different names — e.g. "Mernin Shipping" $6.00 AND "Suurup
+  // Shipping" $6.07 on the same order — which findShippingCustomCost's
+  // exact `lower(description) === "shipping"` match (by design) does not
+  // touch. Surface those here as read-only context so the operator isn't
+  // shown an empty field as if nothing were recorded, without touching the
+  // exact-match matcher itself (loosening that back to a substring match
+  // reintroduces the "Shipping insurance" false-positive it was written to
+  // prevent). These are display-only: never summed into any total shown by
+  // this block, and never editable here — there is no route to edit an
+  // arbitrary custom cost, only to upsert the one named exactly "Shipping".
+  const unrecognizedShippingCosts = useMemo(() => {
+    if (!state) return [];
+    return state.customCosts.filter((c) => {
+      const lower = c.description.toLowerCase();
+      return lower.includes("shipping") && lower !== "shipping";
+    });
+  }, [state]);
+
   function updateQuantity(componentId: string, quantity: number) {
     setDirty(true);
     if (quantity <= 0) {
@@ -686,6 +705,24 @@ function PackingBlock({
 
         <BlockStack gap="tight">
           <Text fontWeight="bold">Shipping</Text>
+
+          {unrecognizedShippingCosts.length > 0 && (
+            <BlockStack gap="tight">
+              <Banner tone="warning" title="This order already has other shipping costs">
+                <Text>
+                  They're already counted in this order's COGS. Saving the field below adds a
+                  new, separate "Shipping" cost — it won't update or replace these.
+                </Text>
+              </Banner>
+              {unrecognizedShippingCosts.map((c) => (
+                <InlineStack key={c.id} gap="base" blockAlignment="center">
+                  <Text>{c.description}</Text>
+                  <Text tone="subdued">{money(c.amount)}</Text>
+                </InlineStack>
+              ))}
+            </BlockStack>
+          )}
+
           <InlineStack gap="base" blockAlignment="center">
             <NumberField
               label="What you paid for shipping"
