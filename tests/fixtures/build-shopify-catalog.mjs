@@ -22,10 +22,6 @@ import { writeFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Fixed, never derived from the clock — a fixture that changes between runs
-// cannot be asserted against.
-const UPDATED_AT = "2026-07-01T12:00:00Z";
-
 const variant = (id, title, price, sku) => ({
   id: `gid://shopify/ProductVariant/${id}`,
   title,
@@ -41,7 +37,6 @@ const product = (id, title, handle, description, variants) => ({
   description,
   vendor: "Mernin' Coffee Roasters",
   productType: "Coffee",
-  updatedAt: UPDATED_AT,
   imageUrl: null,
   variants,
 });

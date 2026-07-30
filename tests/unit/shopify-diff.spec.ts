@@ -39,7 +39,6 @@ const shopifyProduct = (overrides: Partial<ShopifyProduct> = {}): ShopifyProduct
   description: 'Floral and citrus-forward single origin.',
   vendor: "Mernin' Coffee Roasters",
   productType: 'Coffee',
-  updatedAt: '2026-07-01T12:00:00Z',
   images: { edges: [] },
   variants: { edges: [], pageInfo: { hasNextPage: false, endCursor: '0' } },
   ...overrides,

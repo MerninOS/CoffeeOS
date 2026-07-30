@@ -7,7 +7,6 @@
       "description": "Costed per variant, and the variants agree.",
       "vendor": "Mernin' Coffee Roasters",
       "productType": "Coffee",
-      "updatedAt": "2026-07-01T12:00:00Z",
       "imageUrl": null,
       "variants": [
         {
@@ -33,7 +32,6 @@
       "description": "Variants disagree on cost — deliberately unknowable.",
       "vendor": "Mernin' Coffee Roasters",
       "productType": "Coffee",
-      "updatedAt": "2026-07-01T12:00:00Z",
       "imageUrl": null,
       "variants": [
         {
@@ -52,7 +50,6 @@
       "description": "One variant costed, one with no recipe at all.",
       "vendor": "Mernin' Coffee Roasters",
       "productType": "Coffee",
-      "updatedAt": "2026-07-01T12:00:00Z",
       "imageUrl": null,
       "variants": [
         {
@@ -85,7 +82,6 @@
       "description": "Small-lot, jasmine and bergamot.",
       "vendor": "Mernin' Coffee Roasters",
       "productType": "Coffee",
-      "updatedAt": "2026-07-01T12:00:00Z",
       "imageUrl": null,
       "variants": [
         {
@@ -104,7 +100,6 @@
       "description": "The one the operator does not want in CoffeeOS.",
       "vendor": "Mernin' Coffee Roasters",
       "productType": "Coffee",
-      "updatedAt": "2026-07-01T12:00:00Z",
       "imageUrl": null,
       "variants": [
         {
@@ -123,7 +118,6 @@
       "description": "One hundred and twenty little bags.",
       "vendor": "Mernin' Coffee Roasters",
       "productType": "Coffee",
-      "updatedAt": "2026-07-01T12:00:00Z",
       "imageUrl": null,
       "variants": [
         {

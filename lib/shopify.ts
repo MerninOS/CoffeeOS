@@ -13,7 +13,6 @@ export interface ShopifyProduct {
   description: string;
   vendor: string;
   productType: string;
-  updatedAt: string;
   images: {
     edges: Array<{
       node: {
@@ -65,7 +64,6 @@ const PRODUCTS_QUERY = `
           description
           vendor
           productType
-          updatedAt
           images(first: 1) {
             edges {
               node {

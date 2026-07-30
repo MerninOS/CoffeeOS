@@ -170,7 +170,16 @@ function CandidateRow({
   onToggle: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const changeCount = candidate.diffs.length + candidate.variantDiffs.length;
+  // Must match the rows FieldDiffTable renders, which flattens a changed variant
+  // into one row per field. Counting each VariantDiff as one made a variant whose
+  // title and price both moved read "Show 1 change" above a two-row table.
+  const changeCount =
+    candidate.diffs.length +
+    candidate.variantDiffs.reduce(
+      (total, variantDiff) =>
+        total + (variantDiff.kind === "changed" ? variantDiff.diffs.length : 1),
+      0
+    );
 
   return (
     <div style={ROW} data-testid="sync-candidate" data-shopify-id={candidate.shopifyId}>

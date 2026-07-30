@@ -33,18 +33,25 @@ async function withEnv<T>(
   }
 }
 
-test('the fixture flag alone does not divert a production build', async () => {
-  // No fixture data must come back. The live path is reached instead and fails
-  // on an unresolvable host — and failing to reach Shopify is the CORRECT
-  // outcome. A resolved promise carrying fixture products would mean one stray
-  // environment variable can serve fake inventory to a real dashboard.
-  //
-  // .invalid is reserved by RFC 2606 and never resolves, so this fails fast and
-  // reaches no real network peer.
+test('the fixture flag in a production build is a configuration error, not a silent fallback', async () => {
+  // No fixture data may come back, and the reason must be the guard rather than
+  // an incidental network failure — otherwise this test would keep passing if
+  // the guard were deleted, simply because the host does not resolve.
   await withEnv({ SHOPIFY_FIXTURE_MODE: '1', NODE_ENV: 'production' }, async () => {
     await expect(
       client.fetchShopifyProducts('store.invalid', 'not-a-real-token')
-    ).rejects.toThrow()
+    ).rejects.toThrow(/SHOPIFY_FIXTURE_MODE is set in a production build/)
+  })
+})
+
+test('no fixture flag in production reaches the live path, not the fixture', async () => {
+  // The other half: without the flag, production must behave normally. Reaching
+  // Shopify and failing on an unresolvable host is the CORRECT outcome —
+  // .invalid is reserved by RFC 2606, so no real peer is contacted.
+  await withEnv({ SHOPIFY_FIXTURE_MODE: undefined, NODE_ENV: 'production' }, async () => {
+    await expect(
+      client.fetchShopifyProducts('store.invalid', 'not-a-real-token')
+    ).rejects.toThrow(/fetch failed|ENOTFOUND|getaddrinfo/i)
   })
 })
 

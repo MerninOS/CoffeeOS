@@ -218,7 +218,7 @@ async function buildCandidates(
  * silently reintroduces the blanket sync this feature exists to replace.
  */
 export async function previewShopifyProducts(): Promise<
-  { candidates: SyncCandidate[]; excludedCount: number } | { error: string }
+  { candidates: SyncCandidate[] } | { error: string }
 > {
   const supabase = await createClient();
 
@@ -234,10 +234,9 @@ export async function previewShopifyProducts(): Promise<
     const catalog = await fetchCatalog(resolved.credentials);
     const candidates = await buildCandidates(supabase, ownerId, catalog);
 
-    return {
-      candidates,
-      excludedCount: candidates.filter((candidate) => candidate.excluded).length,
-    };
+    // No excluded count: the dialog derives it from the candidates it already
+    // has. Two sources for one number is how they drift.
+    return { candidates };
   } catch (error) {
     // Deliberately all-or-nothing. A partial catalogue would render as a
     // confident list in which the missing products silently read as "new".
@@ -257,6 +256,16 @@ async function upsertProduct(
   { product, variants }: CatalogEntry
 ): Promise<{ error?: string }> {
   const shopifyId = parseShopifyGid(product.id);
+
+  // Refuse rather than write. Shopify guarantees at least one variant, so an
+  // empty set means the payload is malformed — and the reap below treats the
+  // incoming set as authoritative, so proceeding would delete EVERY stored
+  // variant for this product and return success. That is the precise failure
+  // this feature was built to stop; it must not reappear via bad input.
+  if (variants.length === 0) {
+    return { error: "Shopify returned no variants for this product" };
+  }
+
   const firstVariant = variants[0];
   const firstImage = product.images.edges[0]?.node;
 

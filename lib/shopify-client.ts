@@ -27,7 +27,20 @@ import {
  * that unreachable in a production build regardless of how the env is set.
  */
 function usingFixtures(): boolean {
-  return process.env.SHOPIFY_FIXTURE_MODE === "1" && process.env.NODE_ENV !== "production";
+  const requested = process.env.SHOPIFY_FIXTURE_MODE === "1";
+
+  // Fail loudly rather than quietly ignoring it. Silently serving real Shopify
+  // data to something that asked for fixtures is confusing; silently serving
+  // fixtures to a production dashboard is dangerous. Neither happens: the flag
+  // being set in production is a configuration error and says so.
+  if (requested && process.env.NODE_ENV === "production") {
+    throw new Error(
+      "SHOPIFY_FIXTURE_MODE is set in a production build. This would serve fixture " +
+        "products in place of the real catalogue. Remove it from the environment."
+    );
+  }
+
+  return requested;
 }
 
 /** The on-disk fixture shape. Variants are a flat array; this module paginates them. */
@@ -38,7 +51,6 @@ type FixtureProduct = {
   description: string;
   vendor: string;
   productType: string;
-  updatedAt: string;
   imageUrl: string | null;
   variants: ShopifyVariant[];
 };
@@ -83,7 +95,6 @@ function toShopifyProduct(fixture: FixtureProduct): ShopifyProduct {
     description: fixture.description,
     vendor: fixture.vendor,
     productType: fixture.productType,
-    updatedAt: fixture.updatedAt,
     images: fixture.imageUrl
       ? { edges: [{ node: { url: fixture.imageUrl, altText: null } }] }
       : { edges: [] },

@@ -63,11 +63,15 @@ function env(): { url: string; serviceRoleKey: string } {
 
 export async function resetSyncFixture(): Promise<void> {
   const { url, serviceRoleKey } = env()
+
+  // This deletes rows with a SERVICE ROLE key, which bypasses RLS entirely. The
+  // only thing standing between it and a real account is which project the URL
+  // points at, so refuse to run unless the account it resolves is the demo one.
+  const email = process.env.DEMO_EMAIL ?? 'demo@coffeeos.io'
+
   const admin = createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
-
-  const email = process.env.DEMO_EMAIL ?? 'demo@coffeeos.io'
 
   // Resolve the owner from the seeded products rather than listing auth users:
   // the seed is the source of truth for which account these specs run against.
@@ -89,6 +93,23 @@ export async function resetSyncFixture(): Promise<void> {
   }
 
   const ownerId = seeded.user_id as string
+
+  // The guard. Resolving product 1000000005 proves the seed ran somewhere; it
+  // does NOT prove we are on the demo account. Confirm the owner is actually the
+  // demo user before deleting anything, so a mis-set NEXT_PUBLIC_SUPABASE_URL
+  // fails loudly instead of clearing a real roaster's exclusions.
+  const { data: owner, error: ownerError } = await admin.auth.admin.getUserById(ownerId)
+
+  if (ownerError || !owner?.user) {
+    throw new Error(`reset-sync-fixture could not resolve the owner account: ${ownerError?.message}`)
+  }
+  if (owner.user.email !== email) {
+    throw new Error(
+      `reset-sync-fixture refuses to run: product 1000000005 belongs to ` +
+        `${owner.user.email}, not the demo account (${email}). ` +
+        'Check NEXT_PUBLIC_SUPABASE_URL — this deletes rows with a service-role key.'
+    )
+  }
 
   // product_variants cascades from products, so deleting the products is enough.
   const { error: productsError } = await admin
