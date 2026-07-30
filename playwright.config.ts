@@ -63,6 +63,20 @@ export default defineConfig({
       // the suite is meaningful by default rather than red by default — a test
       // that always fails is a test people delete.
       ORDERS_PAGE_LIMIT: '3',
+
+      // Serves tests/fixtures/shopify-catalog.json instead of calling Shopify.
+      // The sync runs inside a server action, so the request never leaves the
+      // server and page.route() cannot intercept it — this env var is the ONLY
+      // seam. lib/shopify-client.ts additionally refuses it when NODE_ENV is
+      // production, so it cannot divert a real deployment.
+      //
+      // ⚠ `reuseExistingServer: true` above means a dev server already on :3000
+      // is ADOPTED and this whole env block is silently ignored. The sync specs
+      // then hit the real Shopify API and fail with a 401 that looks nothing
+      // like the actual cause. Kill port 3000 before running them:
+      //   lsof -ti:3000 | xargs kill -9 2>/dev/null; pnpm test:e2e
+      // This is the same trap ORDERS_PAGE_LIMIT hit in CoffeeOS#88.
+      SHOPIFY_FIXTURE_MODE: '1',
     },
   },
 })
