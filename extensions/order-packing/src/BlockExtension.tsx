@@ -12,35 +12,37 @@
  * instead of guessing a new total — recomputing here would break the parity
  * guarantee the whole feature exists for.
  *
- * VERIFICATION GAP: this file has not been run, rendered, or type-checked
- * against a real @shopify/ui-extensions-react install (see the package.json
- * next to this file and the PR/commit notes for why). Component and prop
- * names below (AdminBlock, BlockStack, InlineStack, Text, Button, TextField,
- * NumberField, Select, Divider, Badge, Banner, ProgressIndicator, and props
- * like `tone`/`onPress`/`variant`) are a best-effort match for the
- * `2024-10` admin UI extensions API, not a verified one. Confirm them
- * against the installed package's type definitions (or `shopify app dev`
- * on a real dev store) before trusting this file compiles.
+ * TYPE-CHECKED: this file compiles against the real installed
+ * @shopify/ui-extensions-react 2024.10.2 types (`cd extensions/order-packing
+ * && pnpm exec tsc --noEmit`, zero errors). All component names (AdminBlock,
+ * BlockStack, InlineStack, Text, Button, TextField, NumberField, Select,
+ * Divider, Badge, Banner, ProgressIndicator) are confirmed correct. Prop
+ * usage was corrected against the real types in the process: `gap` only
+ * accepts `'none' | 'small' | 'base' | 'large'` (no `'tight'`), `Text` has no
+ * `tone` prop (only Badge/Banner/Button/Icon/Link/ProgressIndicator do), and
+ * `NumberField` has no `labelHidden`. What remains UNVERIFIED is behavior
+ * that can only be seen by actually rendering in Shopify admin (layout,
+ * `size="small-100"` on ProgressIndicator, real API responses) — a green
+ * `tsc` run proves the file compiles, not that it looks or behaves right on
+ * a dev store. See the must-verify list in the PR/commit notes.
  *
  * AUTH: admin UI extensions run in a sandboxed iframe separate from the
  * embedded app frame — there is no ambient App Bridge session for `fetch` to
  * piggyback on, so an unauthenticated `fetch` to the app's own domain does
- * NOT get an `Authorization` header attached automatically. Per Shopify's
- * docs ("Authenticate requests between an extension and an app's backend
- * server"), the extension calls `sessionToken.get()` — off the object
- * `useApi(TARGET)` returns — before every request and sets
- * `Authorization: Bearer <token>` itself; `lib/shopify-block/auth.ts` 401s
- * without exactly that header. Session tokens are short-lived (~60s), so a
- * fresh one is fetched per request rather than cached at mount — `blockFetch`
- * below takes the token as a parameter for that reason, and there is
- * deliberately no refresh-on-401 retry loop (fetching per-request already
- * avoids stale tokens).
+ * NOT get an `Authorization` header attached automatically. The extension
+ * calls `auth.idToken()` — off the `auth` object `useApi(TARGET)` returns —
+ * before every request and sets `Authorization: Bearer <token>` itself;
+ * `lib/shopify-block/auth.ts` 401s without exactly that header. `idToken()`
+ * returns `Promise<string | null>` — a null token is a real, handled case
+ * (see `requireToken` below), not sent as `Authorization: Bearer null`.
+ * Tokens are short-lived (~60s), so a fresh one is fetched per request
+ * rather than cached at mount — `blockFetch` below takes the token as a
+ * parameter for that reason, and there is deliberately no refresh-on-401
+ * retry loop (fetching per-request already avoids stale tokens).
  *
- * `sessionToken.get()` is confirmed against Shopify's documented pattern for
- * this API shape, but NOT verified against the installed 2024.10.2 package's
- * type defs (see the VERIFICATION GAP above). If `sessionToken` is not
- * exposed under that exact name/shape on the object `useApi(TARGET)` returns
- * for this version, find the equivalent there.
+ * `auth.idToken()` is verified against the installed @shopify/ui-extensions-
+ * react 2024.10.2 type defs (`pnpm exec tsc --noEmit` in this directory) —
+ * this is no longer a guess.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -138,12 +140,13 @@ type ComponentType = (typeof COMPONENT_TYPES)[number];
 const API_BASE = "https://coffeeos.io/api/shopify/block";
 
 /**
- * The caller MUST pass a freshly-fetched Shopify session token.
+ * The caller MUST pass a freshly-fetched Shopify ID token (see `requireToken`
+ * below).
  *
  * Admin UI extensions run in their own sandboxed iframe and do NOT get a
  * session token attached automatically — unlike App Bridge's authenticatedFetch
  * in the main embedded-app frame. The token has to be pulled off the extension
- * API object (`sessionToken.get()` from `useApi(TARGET)`) and set as a header
+ * API object (`auth.idToken()` from `useApi(TARGET)`) and set as a header
  * here. An earlier revision of this file assumed the opposite and sent no
  * Authorization header at all, which meant every request 401'd:
  * lib/shopify-block/auth.ts rejects a missing bearer token outright
@@ -151,12 +154,6 @@ const API_BASE = "https://coffeeos.io/api/shopify/block";
  *
  * Tokens are short-lived (~60s), so each call site fetches a fresh one
  * immediately before its request rather than caching one at mount.
- *
- * STILL UNVERIFIED on a dev store: that `sessionToken.get()` is the exact
- * shape the installed @shopify/ui-extensions-react (2024.10.2, pinned in
- * package.json next to this file) exposes. If it is named differently there,
- * the fix is the equivalent accessor on the object `useApi(TARGET)` returns —
- * the mechanism above is right regardless of what the accessor is called.
  */
 async function blockFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -296,21 +293,19 @@ function findShippingCustomCost(customCosts: CustomCost[]): CustomCost | undefin
 // App
 // ---------------------------------------------------------------------------
 
-// Minimal shape for the session-token API surface `useApi(TARGET)` exposes.
-// See the AUTH note in the file header — the exact export/shape is a
-// documented-pattern match, not one verified against the installed types.
-interface SessionTokenApi {
-  get(): Promise<string>;
-}
+// The real `auth` type off the installed @shopify/ui-extensions-react types
+// for this target, extracted (not asserted) via the hook's own return type —
+// avoids hand-rolling an interface or importing the (unexported) `Auth` type
+// by name.
+type AdminAuth = ReturnType<typeof useApi<typeof TARGET>>["auth"];
 
 function App() {
-  const { data, sessionToken } = useApi(TARGET) as {
-    data?: { selected?: { id?: string }[] };
-    sessionToken: SessionTokenApi;
-  };
+  const { data, auth } = useApi(TARGET);
   // `data.selected[0].id` is documented for admin.order-details targets as
-  // the gid of the order currently being viewed.
-  const orderGid = data?.selected?.[0]?.id;
+  // the gid of the order currently being viewed. `selected` is typed as
+  // always present, but `[0]` is still guarded — an empty array at runtime
+  // (no order selected) is a real possibility the type doesn't rule out.
+  const orderGid = data.selected[0]?.id;
   const shopifyOrderId = numericIdFromGid(orderGid);
 
   if (!shopifyOrderId) {
@@ -321,15 +316,15 @@ function App() {
     );
   }
 
-  return <PackingBlock shopifyOrderId={shopifyOrderId} sessionToken={sessionToken} />;
+  return <PackingBlock shopifyOrderId={shopifyOrderId} auth={auth} />;
 }
 
 function PackingBlock({
   shopifyOrderId,
-  sessionToken,
+  auth,
 }: {
   shopifyOrderId: string;
-  sessionToken: SessionTokenApi;
+  auth: AdminAuth;
 }) {
   const [state, setState] = useState<PackingState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -362,11 +357,23 @@ function PackingBlock({
     if (existingShipping) setShippingPaid(existingShipping.amount);
   }, []);
 
+  // `auth.idToken()` returns `Promise<string | null>` — null is a real,
+  // documented possibility (not just a formality), so every call site routes
+  // through this instead of sending `Authorization: Bearer null` and letting
+  // the server's 401 stand in for the actual problem.
+  const requireToken = useCallback(async (): Promise<string> => {
+    const token = await auth.idToken();
+    if (!token) {
+      throw new Error("Could not verify your Shopify session — try reloading the page.");
+    }
+    return token;
+  }, [auth]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const token = await sessionToken.get();
+      const token = await requireToken();
       const { state: fetched } = await getPackingState(token, shopifyOrderId);
       applyServerState(fetched);
       if (fetched.packing.length > 0) {
@@ -382,7 +389,7 @@ function PackingBlock({
     } finally {
       setLoading(false);
     }
-  }, [shopifyOrderId, sessionToken, applyServerState]);
+  }, [shopifyOrderId, requireToken, applyServerState]);
 
   useEffect(() => {
     load();
@@ -446,7 +453,7 @@ function PackingBlock({
     setSavingPacking(true);
     setSaveError(null);
     try {
-      const token = await sessionToken.get();
+      const token = await requireToken();
       const { state: next } = await postPacking(token, shopifyOrderId, lines);
       applyServerState(next);
       setLines(next.packing.map(toWorkingLine));
@@ -484,7 +491,7 @@ function PackingBlock({
     }
     setCreatingComponent(true);
     try {
-      const token = await sessionToken.get();
+      const token = await requireToken();
       const { component, state: next } = await postComponent(token, {
         name: newName.trim(),
         type: newType,
@@ -530,7 +537,7 @@ function PackingBlock({
     setShippingSaving(true);
     setShippingError(null);
     try {
-      const token = await sessionToken.get();
+      const token = await requireToken();
       const { state: next } = await postShippingCost(token, shopifyOrderId, shippingPaid);
       applyServerState(next);
     } catch (e) {
@@ -543,7 +550,7 @@ function PackingBlock({
   if (loading) {
     return (
       <AdminBlock title="Order packing">
-        <InlineStack gap="tight" blockAlignment="center">
+        <InlineStack gap="small" blockAlignment="center">
           <ProgressIndicator size="small-100" />
           <Text>Brewing...</Text>
         </InlineStack>
@@ -579,18 +586,17 @@ function PackingBlock({
         )}
 
         {lines.length === 0 && (
-          <Text tone="subdued">Nothing packed yet. Add a material below.</Text>
+          <Text>Nothing packed yet. Add a material below.</Text>
         )}
 
         {lines.map((line) => (
           <InlineStack key={line.componentId} gap="base" blockAlignment="center">
             <Text>{line.name}</Text>
-            <Text tone="subdued">
+            <Text>
               {money(line.costPerUnit)}/{line.unit}
             </Text>
             <NumberField
               label="Quantity"
-              labelHidden
               value={line.quantity}
               min={0}
               disabled={savingPacking}
@@ -637,10 +643,10 @@ function PackingBlock({
         </InlineStack>
 
         {showNewComponent && (
-          <BlockStack gap="tight">
+          <BlockStack gap="small">
             {newComponentError && (
               <Banner tone="critical" title="Couldn't create material">
-                <BlockStack gap="tight">
+                <BlockStack gap="small">
                   <Text>{newComponentError}</Text>
                   {duplicateComponentId && (
                     <Button
@@ -703,21 +709,22 @@ function PackingBlock({
 
         <Divider />
 
-        <BlockStack gap="tight">
+        <BlockStack gap="small">
           <Text fontWeight="bold">Shipping</Text>
 
           {unrecognizedShippingCosts.length > 0 && (
-            <BlockStack gap="tight">
+            <BlockStack gap="small">
               <Banner tone="warning" title="This order already has other shipping costs">
                 <Text>
                   They're already counted in this order's COGS. Saving the field below adds a
                   new, separate "Shipping" cost — it won't update or replace these.
                 </Text>
               </Banner>
+              <Text fontWeight="bold">Already on this order (view only):</Text>
               {unrecognizedShippingCosts.map((c) => (
                 <InlineStack key={c.id} gap="base" blockAlignment="center">
-                  <Text>{c.description}</Text>
-                  <Text tone="subdued">{money(c.amount)}</Text>
+                  <Text>{c.description}:</Text>
+                  <Text>{money(c.amount)}</Text>
                 </InlineStack>
               ))}
             </BlockStack>
@@ -740,7 +747,7 @@ function PackingBlock({
             </Banner>
           )}
           {state.order.customerPaidShipping !== null && (
-            <Text tone="subdued">
+            <Text>
               Customer paid {money(state.order.customerPaidShipping)} (revenue, not your cost)
             </Text>
           )}
@@ -748,7 +755,7 @@ function PackingBlock({
 
         <Divider />
 
-        <BlockStack gap="tight">
+        <BlockStack gap="small">
           <InlineStack gap="base" blockAlignment="center">
             <Text fontWeight="bold">COGS {money(state.cogs.total)}</Text>
             {margin !== null ? (
@@ -756,10 +763,10 @@ function PackingBlock({
                 {`${margin.toFixed(1)}% margin`}
               </Badge>
             ) : (
-              <Text tone="subdued">{costabilityReason(state.costability)}</Text>
+              <Text>{costabilityReason(state.costability)}</Text>
             )}
           </InlineStack>
-          {dirty && <Text tone="subdued">Save to update totals</Text>}
+          {dirty && <Text>Save to update totals</Text>}
         </BlockStack>
       </BlockStack>
     </AdminBlock>
