@@ -91,6 +91,17 @@ test.describe('Shopify sync review', () => {
     await resetSyncFixture()
   })
 
+  /**
+   * Leave no trace. Resetting only on the way IN is not enough: these tests
+   * import products that then sit in the demo account for everything that runs
+   * afterwards. baselines.spec.ts screenshots /products, so the leftovers put
+   * two extra rows in the frame and failed the /products baseline on both
+   * viewports — a failure that looks like a design regression and is not one.
+   */
+  test.afterAll(async () => {
+    await resetSyncFixture()
+  })
+
   test('the preview opens the dialog and writes nothing', async ({ page }) => {
     const dialog = await openReview(page)
 
