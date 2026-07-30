@@ -71,6 +71,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.0",
+    "@shopify/cli": "^4.5.2",
     "@tailwindcss/postcss": "^4.1.9",
     "@types/node": "^22",
     "@types/react": "^19",

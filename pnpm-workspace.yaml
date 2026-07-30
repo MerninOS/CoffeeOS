@@ -1,8 +1,17 @@
 # pnpm 11 settings file. NOT a workspace definition — there is no `packages:` key.
+# Do not add one: `extensions/order-packing` deliberately installs standalone via
+# `pnpm install --ignore-workspace`, and making it a workspace member would change
+# dependency resolution for the whole Next.js app to solve a problem local to one
+# directory.
 #
 # pnpm blocks dependency build scripts by default and treats the unresolved case
 # as a hard error, which makes `next dev` fail before it starts (Next runs a pnpm
 # deps-status check on boot). sharp is Next's own image-optimization dependency
 # and needs its native build step.
+#
+# esbuild is @shopify/cli's bundler and needs the same treatment — left
+# unresolved, every `pnpm exec shopify ...` invocation (and `next dev`) dies on
+# the deps-status check before the command runs.
 allowBuilds:
+  esbuild: true
   sharp: true
