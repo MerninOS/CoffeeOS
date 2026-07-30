@@ -10,6 +10,25 @@ import { getPackingState } from "@/lib/orders/packing-state";
 // reaching a query. Kept in sync with packing-state/route.ts.
 const SHOPIFY_ORDER_ID_PATTERN = /^\d{1,32}$/;
 
+// components.id is a UUID primary key. Rejecting a malformed value here is a
+// clean 400 instead of a generic 500 once it reaches Postgres and fails to
+// cast to uuid.
+const UUID_PATTERN =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+// order_components.quantity is unconstrained NUMERIC (arbitrary precision),
+// so nothing at the database layer stops an absurd value from being stored.
+// Cap it well above any real packing quantity: past this, Number(...) in
+// getPackingState's COGS math can overflow to Infinity, and
+// JSON.stringify(Infinity) silently serializes to null — cogs.total/margin
+// would go null in the API response with no error anywhere.
+const MAX_QUANTITY = 1_000_000;
+
+// A few hundred lines is well beyond any real packing list. Same-tenant
+// only, so this is an availability cap (unbounded .in() / RPC payload), not
+// a security boundary.
+const MAX_LINES = 500;
+
 interface PackingBody {
   shopifyOrderId: string;
   lines: { componentId: string; quantity: number }[];
@@ -20,13 +39,19 @@ function parseBody(raw: unknown): PackingBody | null {
   const b = raw as Record<string, unknown>;
   if (typeof b.shopifyOrderId !== "string" || !SHOPIFY_ORDER_ID_PATTERN.test(b.shopifyOrderId))
     return null;
-  if (!Array.isArray(b.lines)) return null;
+  if (!Array.isArray(b.lines) || b.lines.length > MAX_LINES) return null;
   const lines: PackingBody["lines"] = [];
   for (const l of b.lines) {
     if (!l || typeof l !== "object") return null;
     const line = l as Record<string, unknown>;
-    if (typeof line.componentId !== "string" || !line.componentId) return null;
-    if (typeof line.quantity !== "number" || !Number.isFinite(line.quantity) || line.quantity <= 0)
+    if (typeof line.componentId !== "string" || !UUID_PATTERN.test(line.componentId))
+      return null;
+    if (
+      typeof line.quantity !== "number" ||
+      !Number.isFinite(line.quantity) ||
+      line.quantity <= 0 ||
+      line.quantity > MAX_QUANTITY
+    )
       return null;
     lines.push({ componentId: line.componentId, quantity: line.quantity });
   }

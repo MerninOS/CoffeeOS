@@ -10,6 +10,14 @@ const SHOPIFY_ORDER_ID_PATTERN = /^\d{1,32}$/;
 const COMPONENT_TYPES = ["ingredient", "labor", "packaging", "other"] as const;
 type ComponentType = (typeof COMPONENT_TYPES)[number];
 
+// components.cost_per_unit is DECIMAL(18,8) — 18 total digits, 8 after the
+// point, so the integer part tops out at 10 digits. Bound it here rather
+// than letting an oversized value either get rejected by Postgres as a
+// confusing 500, or (worse) silently overflow toward Infinity downstream in
+// getPackingState's COGS math, which JSON.stringify serializes as null with
+// no error anywhere.
+const MAX_COST_PER_UNIT = 1e10;
+
 interface ComponentBody {
   name: string;
   type: ComponentType;
@@ -37,7 +45,8 @@ function parseBody(raw: unknown): ComponentBody | null {
   if (
     typeof b.costPerUnit !== "number" ||
     !Number.isFinite(b.costPerUnit) ||
-    b.costPerUnit < 0
+    b.costPerUnit < 0 ||
+    b.costPerUnit >= MAX_COST_PER_UNIT
   )
     return null;
 
@@ -51,10 +60,13 @@ function parseBody(raw: unknown): ComponentBody | null {
   return { name, type, unit, costPerUnit: b.costPerUnit, shopifyOrderId };
 }
 
-// Escape ILIKE wildcards so a name like "50% blend" or "a_b" is matched
-// literally rather than as a pattern.
-function escapeIlike(value: string): string {
-  return value.replace(/[%_\\]/g, (c) => `\\${c}`);
+interface ComponentOrConflictRow {
+  id: string;
+  name: string;
+  type: string;
+  unit: string;
+  cost_per_unit: number | null;
+  inserted: boolean;
 }
 
 export async function POST(request: NextRequest) {
@@ -66,46 +78,45 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminClient();
 
-  // Duplicate guard: case-insensitive exact match on name within this
-  // tenant, so the block can surface "already exists" instead of creating a
-  // twin component. Components have no unique constraint on name (they
-  // predate this endpoint), so more than one row could already match — use
-  // limit(1) rather than maybeSingle(), which throws on a multi-row result.
-  const { data: existingRows, error: existingError } = await supabase
-    .from("components")
-    .select("id, name")
-    .eq("user_id", ctx.userId)
-    .ilike("name", escapeIlike(body.name))
-    .limit(1);
-  if (existingError) {
-    console.error("[block/component] duplicate check failed", existingError);
-    return blockJson({ error: "Could not check for an existing component" }, 500);
+  // create_component_or_conflict (scripts/026_packing_uniqueness.sql) does
+  // the insert-or-detect-duplicate atomically in one statement, backed by a
+  // UNIQUE index on components (user_id, lower(name)). This replaces a prior
+  // SELECT-then-INSERT here that raced: two concurrent POSTs for the same
+  // name could both pass the duplicate check before either had inserted,
+  // and both create a component. The match inside the function is an exact
+  // case-insensitive equality (lower(name) = lower(p_name)), not a pattern
+  // match, so there's no ILIKE-wildcard-escaping concern for this lookup —
+  // that class of bug (PostgREST's `*` alias for `%`, on top of the `%`/`_`
+  // Postgres already treats specially) doesn't apply to a plain equality
+  // comparison.
+  const { data, error: rpcError } = await supabase
+    .rpc("create_component_or_conflict", {
+      p_user_id: ctx.userId,
+      p_name: body.name,
+      p_type: body.type,
+      p_unit: body.unit,
+      p_cost_per_unit: body.costPerUnit,
+    })
+    .single();
+
+  if (rpcError || !data) {
+    console.error("[block/component] create_component_or_conflict failed", rpcError);
+    return blockJson({ error: "Could not create component" }, 500);
   }
-  const existing = existingRows?.[0];
-  if (existing) {
+
+  const row = data as unknown as ComponentOrConflictRow;
+
+  if (!row.inserted) {
+    // inserted === false means an existing row already owns this name for
+    // this tenant (either it predates this call, or it won a concurrent
+    // race) — map to the same 409 shape the block has always depended on.
     return blockJson(
       {
-        error: `A component named "${existing.name}" already exists`,
-        existingComponentId: existing.id,
+        error: `A component named "${row.name}" already exists`,
+        existingComponentId: row.id,
       },
       409
     );
-  }
-
-  const { data: created, error: insertError } = await supabase
-    .from("components")
-    .insert({
-      user_id: ctx.userId,
-      name: body.name,
-      type: body.type,
-      unit: body.unit,
-      cost_per_unit: body.costPerUnit,
-    })
-    .select("id, name, type, unit, cost_per_unit")
-    .single();
-  if (insertError || !created) {
-    console.error("[block/component] insert failed", insertError);
-    return blockJson({ error: "Could not create component" }, 500);
   }
 
   let state = null;
@@ -123,11 +134,11 @@ export async function POST(request: NextRequest) {
 
   return blockJson({
     component: {
-      id: created.id,
-      name: created.name,
-      type: created.type,
-      unit: created.unit,
-      costPerUnit: created.cost_per_unit || 0,
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      unit: row.unit,
+      costPerUnit: row.cost_per_unit || 0,
     },
     state,
   });
