@@ -34,3 +34,12 @@ test('null product ids (unlinked items) do not join the set key', () => {
 test('empty history yields empty suggestion', () => {
   expect(buildPrefillSuggestion(['p1'], [])).toEqual([])
 })
+
+test('returns copies, so mutating the result cannot corrupt history', () => {
+  const local: HistoricalOrder[] = [{ productIds: ['p1'], components: [{ ...box }] }]
+  const result = buildPrefillSuggestion(['p1'], local)
+  result[0].quantity = 999
+  result.push({ ...tape })
+  expect(local[0].components).toHaveLength(1)
+  expect(local[0].components[0].quantity).toBe(1)
+})

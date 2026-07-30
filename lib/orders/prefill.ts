@@ -16,6 +16,10 @@
  * it — the fallback simply returns the first packed entry it finds, so a
  * caller passing oldest-first will silently produce wrong-but-plausible
  * suggestions.
+ *
+ * The returned lines are copies, not references into `history` — safe for
+ * the caller to treat as mutable form state without risk of corrupting the
+ * historical data it was suggested from.
  */
 export interface SuggestionLine {
   componentId: string;
@@ -46,7 +50,7 @@ export function buildPrefillSuggestion(
   const currentKey = setKey(currentProductIds);
   if (currentKey !== "") {
     const match = packed.find((h) => setKey(h.productIds) === currentKey);
-    if (match) return match.components;
+    if (match) return match.components.map((c) => ({ ...c }));
   }
-  return packed[0].components;
+  return packed[0].components.map((c) => ({ ...c }));
 }
