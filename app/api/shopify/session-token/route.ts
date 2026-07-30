@@ -1,32 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-function verifyShopifySessionToken(token: string, secret: string) {
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-
-  const [header, payload, signature] = parts;
-
-  const expectedSig = createHmac("sha256", secret)
-    .update(`${header}.${payload}`)
-    .digest("base64url");
-
-  if (expectedSig !== signature) return null;
-
-  let payloadData: Record<string, unknown>;
-  try {
-    payloadData = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-  } catch {
-    return null;
-  }
-
-  if (typeof payloadData.exp === "number" && payloadData.exp < Math.floor(Date.now() / 1000)) {
-    return null;
-  }
-
-  return payloadData;
-}
+import { verifyShopifySessionToken } from "@/lib/shopify-block/session";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -37,22 +11,16 @@ export async function POST(request: NextRequest) {
   }
 
   const secret = process.env.SHOPIFY_CLIENT_SECRET;
-  if (!secret) {
+  const clientId = process.env.SHOPIFY_CLIENT_ID;
+  if (!secret || !clientId) {
     return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
   }
 
-  const payload = verifyShopifySessionToken(token, secret);
-  if (!payload) {
+  const session = verifyShopifySessionToken(token, secret, clientId);
+  if (!session) {
     return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 });
   }
-
-  // Extract shop hostname from dest (e.g. "https://my-store.myshopify.com")
-  let shop: string;
-  try {
-    shop = new URL(payload.dest as string).hostname.toLowerCase();
-  } catch {
-    return NextResponse.json({ error: "Invalid token payload" }, { status: 401 });
-  }
+  const shop = session.shop;
 
   const supabaseAdmin = createAdminClient();
 

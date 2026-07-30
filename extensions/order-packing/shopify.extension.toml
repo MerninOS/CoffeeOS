@@ -1,0 +1,10 @@
+api_version = "2024-10"
+
+[[extensions]]
+name = "CoffeeOS Order Packing"
+handle = "order-packing"
+type = "ui_extension"
+
+  [[extensions.targeting]]
+  module = "./src/BlockExtension.tsx"
+  target = "admin.order-details.block.render"

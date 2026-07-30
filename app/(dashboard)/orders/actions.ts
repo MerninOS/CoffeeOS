@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getEffectiveOwnerId } from "@/lib/team";
-import { fetchShopifyOrders, parseShopifyGid } from "@/lib/shopify";
+import { fetchShopifyOrders } from "@/lib/shopify";
 import { getValidAdminToken } from "@/app/(dashboard)/settings/actions";
+import { upsertShopifyOrder } from "@/lib/orders/sync";
 
 export async function syncShopifyOrders() {
   const supabase = await createClient();
@@ -58,151 +59,15 @@ export async function syncShopifyOrders() {
       (products || []).map((p) => [p.shopify_id, p.id])
     );
 
-    // Get product components for COGS calculation
-    const { data: productComponents } = await supabase
-      .from("product_components")
-      .select(`
-        product_id,
-        quantity,
-        components (cost_per_unit)
-      `);
-
-    // Calculate COGS per product
-    const productCogs = new Map<string, number>();
-    for (const pc of productComponents || []) {
-      const cost = (pc.quantity || 0) * ((pc.components as { cost_per_unit: number } | null)?.cost_per_unit || 0);
-      const current = productCogs.get(pc.product_id) || 0;
-      productCogs.set(pc.product_id, current + cost);
-    }
-
     let syncedCount = 0;
 
     // Process each order
     for (const order of allOrders) {
-      const shopifyOrderId = parseShopifyGid(order.id);
-
-      // Calculate order totals
-      const subtotal = parseFloat(order.subtotalPriceSet.shopMoney.amount);
-      const tax = parseFloat(order.totalTaxSet.shopMoney.amount);
-      const total = parseFloat(order.totalPriceSet.shopMoney.amount);
-
-      // Build line items data
-      const lineItemsData: Array<{
-        shopify_line_item_id: string;
-        shopify_product_id: string | null;
-        shopify_variant_id: string | null;
-        product_id: string | null;
-        title: string;
-        variant_title: string | null;
-        sku: string | null;
-        quantity: number;
-        price: number;
-        total_price: number;
-      }> = [];
-
-      for (const lineItemEdge of order.lineItems.edges) {
-        const lineItem = lineItemEdge.node;
-        const shopifyProductId = lineItem.product
-          ? parseShopifyGid(lineItem.product.id)
-          : null;
-        const localProductId = shopifyProductId
-          ? productMap.get(shopifyProductId)
-          : null;
-
-        const unitPrice = parseFloat(lineItem.discountedUnitPriceSet.shopMoney.amount);
-        const lineTotal = unitPrice * lineItem.quantity;
-
-        lineItemsData.push({
-          shopify_line_item_id: parseShopifyGid(lineItem.id),
-          shopify_product_id: shopifyProductId,
-          shopify_variant_id: null, // We'd need to fetch variant ID separately
-          product_id: localProductId || null,
-          title: lineItem.title,
-          variant_title: null,
-          sku: lineItem.sku,
-          quantity: lineItem.quantity,
-          price: unitPrice,
-          total_price: lineTotal,
-        });
+      const result = await upsertShopifyOrder(supabase, ownerId, order, productMap);
+      if ("error" in result) {
+        console.error("Order upsert error:", result.error);
+        continue;
       }
-
-      // First check if order exists
-      const { data: existingOrder } = await supabase
-        .from("orders")
-        .select("id")
-        .eq("shopify_order_id", shopifyOrderId)
-        .eq("user_id", ownerId)
-        .single();
-
-      let orderId: string;
-
-      if (existingOrder) {
-        // Update existing order
-        const { error: updateError } = await supabase
-          .from("orders")
-          .update({
-            shopify_order_number: order.name,
-            order_name: order.name,
-            created_at_shopify: order.createdAt,
-            financial_status: order.displayFinancialStatus,
-            fulfillment_status: order.displayFulfillmentStatus,
-            subtotal_price: subtotal,
-            total_tax: tax,
-            total_price: total,
-            currency: order.totalPriceSet.shopMoney.currencyCode,
-            synced_at: new Date().toISOString(),
-          })
-          .eq("id", existingOrder.id);
-
-        if (updateError) {
-          console.error("Order update error:", updateError);
-          continue;
-        }
-        orderId = existingOrder.id;
-      } else {
-        // Insert new order
-        const { data: newOrder, error: insertError } = await supabase
-          .from("orders")
-          .insert({
-            user_id: ownerId,
-            shopify_order_id: shopifyOrderId,
-            shopify_order_number: order.name,
-            order_name: order.name,
-            created_at_shopify: order.createdAt,
-            financial_status: order.displayFinancialStatus,
-            fulfillment_status: order.displayFulfillmentStatus,
-            subtotal_price: subtotal,
-            total_tax: tax,
-            total_price: total,
-            currency: order.totalPriceSet.shopMoney.currencyCode,
-            synced_at: new Date().toISOString(),
-          })
-          .select("id")
-          .single();
-
-        if (insertError || !newOrder) {
-          console.error("Order insert error:", insertError);
-          continue;
-        }
-        orderId = newOrder.id;
-      }
-
-// Delete existing line items and re-insert
-      await supabase
-        .from("order_line_items")
-        .delete()
-        .eq("order_id", orderId);
-
-      // Insert line items
-      if (lineItemsData.length > 0) {
-        await supabase.from("order_line_items").insert(
-          lineItemsData.map((item) => ({
-            order_id: orderId,
-            ...item,
-          }))
-        );
-      }
-
       syncedCount++;
     }
 

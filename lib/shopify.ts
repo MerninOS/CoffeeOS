@@ -275,65 +275,69 @@ export interface ShopifyOrder {
   };
 }
 
+const ORDER_FIELDS = `
+  id
+  name
+  createdAt
+  displayFinancialStatus
+  displayFulfillmentStatus
+  totalPriceSet {
+    shopMoney {
+      amount
+      currencyCode
+    }
+  }
+  subtotalPriceSet {
+    shopMoney {
+      amount
+      currencyCode
+    }
+  }
+  totalShippingPriceSet {
+    shopMoney {
+      amount
+      currencyCode
+    }
+  }
+  totalTaxSet {
+    shopMoney {
+      amount
+      currencyCode
+    }
+  }
+  lineItems(first: 50) {
+    edges {
+      node {
+        id
+        title
+        quantity
+        sku
+        product {
+          id
+        }
+        originalUnitPriceSet {
+          shopMoney {
+            amount
+            currencyCode
+          }
+        }
+        discountedUnitPriceSet {
+          shopMoney {
+            amount
+            currencyCode
+          }
+        }
+      }
+    }
+  }
+`;
+
 const ORDERS_QUERY = `
   query getOrders($first: Int!, $after: String) {
     orders(first: $first, after: $after, sortKey: CREATED_AT, reverse: true) {
       edges {
         node {
-          id
-          name
-          createdAt
-          displayFinancialStatus
-          displayFulfillmentStatus
-          totalPriceSet {
-            shopMoney {
-              amount
-              currencyCode
-            }
-          }
-          subtotalPriceSet {
-            shopMoney {
-              amount
-              currencyCode
-            }
-          }
-          totalShippingPriceSet {
-            shopMoney {
-              amount
-              currencyCode
-            }
-          }
-          totalTaxSet {
-            shopMoney {
-              amount
-              currencyCode
-            }
-          }
-          lineItems(first: 50) {
-            edges {
-              node {
-                id
-                title
-                quantity
-                sku
-                product {
-                  id
-                }
-                originalUnitPriceSet {
-                  shopMoney {
-                    amount
-                    currencyCode
-                  }
-                }
-                discountedUnitPriceSet {
-                  shopMoney {
-                    amount
-                    currencyCode
-                  }
-                }
-              }
-            }
-          }
+          ${ORDER_FIELDS}
         }
         cursor
       }
@@ -381,6 +385,58 @@ export async function fetchShopifyOrders(
   const pageInfo = data.data.orders.pageInfo;
 
   return { orders, pageInfo };
+}
+
+const ORDER_BY_ID_QUERY = `
+  query getOrderById($id: ID!) {
+    order: node(id: $id) {
+      ... on Order {
+        ${ORDER_FIELDS}
+      }
+    }
+  }
+`;
+
+/**
+ * Fetch ONE order by its numeric Shopify id. Used by the admin block's
+ * sync-on-demand: the block can open an order seconds after it was placed,
+ * before any dashboard sync has run.
+ */
+export async function fetchShopifyOrderById(
+  storeDomain: string,
+  adminAccessToken: string,
+  shopifyOrderId: string
+): Promise<ShopifyOrder | null> {
+  const response = await fetch(
+    `https://${storeDomain}/admin/api/2024-10/graphql.json`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": adminAccessToken,
+      },
+      body: JSON.stringify({
+        query: ORDER_BY_ID_QUERY,
+        variables: { id: `gid://shopify/Order/${shopifyOrderId}` },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Shopify Admin API error: ${response.status} - ${text}`);
+  }
+
+  const data = await response.json();
+
+  if (data.errors) {
+    throw new Error(`Shopify API error: ${JSON.stringify(data.errors)}`);
+  }
+
+  const node = data.data?.order;
+  // node() returns {} (no fields matched) or null for non-Order/missing ids
+  if (!node || !node.id) return null;
+  return node as ShopifyOrder;
 }
 
 type ShopifyBillingStatus = "ACTIVE" | "FROZEN" | "PENDING" | "DECLINED" | "EXPIRED" | "CANCELLED";
