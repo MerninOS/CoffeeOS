@@ -31,6 +31,12 @@ export type BlockContext =
 export interface BlockAuthDeps {
   secret: string;
   clientId: string;
+  /**
+   * May reject — e.g. the real Supabase-backed implementation throws when
+   * the lookup itself fails (including the "more than one row" case, since
+   * store_domain has no unique constraint). resolveBlockContext treats a
+   * rejection as a distinguishable 500, never as "not connected" (404).
+   */
   getSettingsByShop: (shop: string) => Promise<ShopSettingsRow | null>;
 }
 
@@ -51,7 +57,14 @@ export async function resolveBlockContext(
     return { ok: false, status: 401, error: "Invalid or expired token" };
   }
 
-  const settings = await deps.getSettingsByShop(session.shop);
+  let settings: ShopSettingsRow | null;
+  try {
+    settings = await deps.getSettingsByShop(session.shop);
+  } catch {
+    // A rejected lookup is a data/infra fault, not "shop not connected" —
+    // keep it a distinct 500 so it can never be mistaken for the 404 case.
+    return { ok: false, status: 500, error: "Settings lookup failed" };
+  }
   if (!settings?.user_id) {
     return {
       ok: false,
@@ -83,11 +96,23 @@ export async function blockContextFromRequest(
     clientId,
     getSettingsByShop: async (shop) => {
       const supabaseAdmin = createAdminClient();
-      const { data } = await supabaseAdmin
+      const { data, error } = await supabaseAdmin
         .from("shopify_settings")
         .select("user_id, store_domain, admin_access_token")
         .eq("store_domain", shop)
         .maybeSingle();
+      if (error) {
+        // PGRST116 here means MORE THAN ONE settings row for this shop —
+        // store_domain has no unique constraint. Never silently treat that
+        // as "not connected": it is a data-integrity fault, not a missing
+        // install.
+        console.error("[shopify-block] shopify_settings lookup failed", {
+          shop,
+          code: error.code,
+          message: error.message,
+        });
+        throw new Error("Settings lookup failed");
+      }
       return (data as ShopSettingsRow | null) ?? null;
     },
   });

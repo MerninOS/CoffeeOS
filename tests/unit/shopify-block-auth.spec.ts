@@ -71,3 +71,18 @@ test('rejects a token signed with the wrong secret even when it names a real con
   const ctx = await resolveBlockContext(`Bearer ${forgedToken}`, deps(settings))
   expect(ctx).toMatchObject({ ok: false, status: 401 })
 })
+
+test('500s, rather than throwing, when the settings lookup itself fails', async () => {
+  const failingDeps = {
+    secret: SECRET,
+    clientId: CLIENT_ID,
+    getSettingsByShop: async () => {
+      throw new Error('duplicate rows for store_domain')
+    },
+  }
+  const ctx = await resolveBlockContext(
+    `Bearer ${makeToken('my-store.myshopify.com')}`,
+    failingDeps
+  )
+  expect(ctx).toMatchObject({ ok: false, status: 500 })
+})
