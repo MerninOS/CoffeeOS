@@ -1,1 +1,16 @@
+# This directory installs standalone (`pnpm install --ignore-workspace`), so the
+# repo-root .gitignore's anchored `/node_modules` does not cover it.
 node_modules
+
+# `shopify app build` bundles the extension to dist/ (~120K). Build output, not
+# source — Shopify rebuilds it during `app deploy`.
+dist
+
+# Also emitted by `shopify app build`, derived entirely from the targets in
+# shopify.extension.toml and regenerated every run. Committing it only risks it
+# going stale against the toml.
+#
+# NOTE: the `uid` that the build writes INTO shopify.extension.toml is the
+# opposite case — it is the extension's stable identity, and must stay committed
+# so future deploys update this extension instead of creating a duplicate.
+manifest.json
