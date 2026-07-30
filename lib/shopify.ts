@@ -1,3 +1,11 @@
+export interface ShopifyVariant {
+  id: string;
+  title: string;
+  price: string;
+  sku: string;
+  inventoryQuantity: number;
+}
+
 export interface ShopifyProduct {
   id: string;
   title: string;
@@ -15,14 +23,15 @@ export interface ShopifyProduct {
   };
   variants: {
     edges: Array<{
-      node: {
-        id: string;
-        title: string;
-        price: string;
-        sku: string;
-        inventoryQuantity: number;
-      };
+      node: ShopifyVariant;
     }>;
+    // Callers MUST honour this. The sync deletes any stored variant absent from
+    // the set it was handed, so treating a truncated first page as the whole
+    // truth silently destroys the remainder. See fetchRemainingProductVariants.
+    pageInfo: {
+      hasNextPage: boolean;
+      endCursor: string;
+    };
   };
 }
 
@@ -39,8 +48,13 @@ export interface ShopifyConnection<T> {
   };
 }
 
+// Shopify caps a nested connection at 250; 100 keeps the per-product cost of the
+// catalogue query sane while covering all but a handful of products in one page.
+// Anything past this is fetched by fetchRemainingProductVariants.
+export const VARIANTS_PAGE_SIZE = 100;
+
 const PRODUCTS_QUERY = `
-  query getProducts($first: Int!, $after: String) {
+  query getProducts($first: Int!, $after: String, $variantsFirst: Int!) {
     products(first: $first, after: $after) {
       edges {
         node {
@@ -58,7 +72,7 @@ const PRODUCTS_QUERY = `
               }
             }
           }
-          variants(first: 10) {
+          variants(first: $variantsFirst) {
             edges {
               node {
                 id
@@ -67,6 +81,10 @@ const PRODUCTS_QUERY = `
                 sku
                 inventoryQuantity
               }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
             }
           }
         }
@@ -77,6 +95,28 @@ const PRODUCTS_QUERY = `
         hasPreviousPage
         startCursor
         endCursor
+      }
+    }
+  }
+`;
+
+const PRODUCT_VARIANTS_QUERY = `
+  query getProductVariants($id: ID!, $first: Int!, $after: String) {
+    product(id: $id) {
+      variants(first: $first, after: $after) {
+        edges {
+          node {
+            id
+            title
+            price
+            sku
+            inventoryQuantity
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
       }
     }
   }
@@ -99,7 +139,7 @@ export async function fetchShopifyProducts(
     },
     body: JSON.stringify({
       query: PRODUCTS_QUERY,
-      variables: { first, after },
+      variables: { first, after, variantsFirst: VARIANTS_PAGE_SIZE },
     }),
   });
 
@@ -115,6 +155,59 @@ export async function fetchShopifyProducts(
   }
 
   return data.data.products;
+}
+
+type ProductVariantsPage = {
+  product: {
+    variants: {
+      edges: Array<{ node: ShopifyVariant }>;
+      pageInfo: { hasNextPage: boolean; endCursor: string };
+    };
+  } | null;
+};
+
+/**
+ * Fetch the variants past the first page for one product.
+ *
+ * The catalogue query returns only the first VARIANTS_PAGE_SIZE variants per
+ * product. The sync treats the variant set it is given as authoritative and
+ * deletes anything stored but absent from it, so a caller that ignores the
+ * remainder will delete every variant past the page boundary on each run — then
+ * recreate them on the next, which also makes the product read as "changed"
+ * forever. Call this whenever product.variants.pageInfo.hasNextPage is true.
+ */
+export async function fetchRemainingProductVariants(
+  storeDomain: string,
+  accessToken: string,
+  productGid: string,
+  after: string
+): Promise<ShopifyVariant[]> {
+  const variants: ShopifyVariant[] = [];
+  let cursor: string | undefined = after;
+  let hasMore = true;
+
+  while (hasMore) {
+    const data: ProductVariantsPage = await shopifyAdminGraphql<ProductVariantsPage>(
+      storeDomain,
+      accessToken,
+      PRODUCT_VARIANTS_QUERY,
+      {
+        id: productGid,
+        first: VARIANTS_PAGE_SIZE,
+        after: cursor,
+      }
+    );
+
+    // The product was deleted between the catalogue page and this call. Return
+    // what we have rather than throwing — the caller's upsert will simply skip it.
+    if (!data.product) break;
+
+    variants.push(...data.product.variants.edges.map((edge) => edge.node));
+    hasMore = data.product.variants.pageInfo.hasNextPage;
+    cursor = data.product.variants.pageInfo.endCursor;
+  }
+
+  return variants;
 }
 
 export function parseShopifyGid(gid: string): string {

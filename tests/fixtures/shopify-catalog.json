@@ -1,0 +1,966 @@
+{
+  "products": [
+    {
+      "id": "gid://shopify/Product/1000000005",
+      "title": "Kenya Nyeri AA",
+      "handle": "kenya-nyeri-aa",
+      "description": "Costed per variant, and the variants agree.",
+      "vendor": "Mernin' Coffee Roasters",
+      "productType": "Coffee",
+      "imageUrl": null,
+      "variants": [
+        {
+          "id": "gid://shopify/ProductVariant/10000000051",
+          "title": "12oz",
+          "price": "26.00",
+          "sku": "KEN-NYERI-12",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/10000000052",
+          "title": "12oz Decaf",
+          "price": "26.0",
+          "sku": "KEN-NYERI-12-DECAF",
+          "inventoryQuantity": 25
+        }
+      ]
+    },
+    {
+      "id": "gid://shopify/Product/1000000006",
+      "title": "Sumatra Mandheling",
+      "handle": "sumatra-mandheling",
+      "description": "Variants disagree on cost — deliberately unknowable.",
+      "vendor": "Mernin' Coffee Roasters",
+      "productType": "Coffee",
+      "imageUrl": null,
+      "variants": [
+        {
+          "id": "gid://shopify/ProductVariant/10000000061",
+          "title": "12oz",
+          "price": "20.00",
+          "sku": "SUM-MAND-12",
+          "inventoryQuantity": 25
+        }
+      ]
+    },
+    {
+      "id": "gid://shopify/Product/1000000007",
+      "title": "Costa Rica Tarrazu — Washed",
+      "handle": "costa-rica-tarrazu",
+      "description": "One variant costed, one with no recipe at all.",
+      "vendor": "Mernin' Coffee Roasters",
+      "productType": "Coffee",
+      "imageUrl": null,
+      "variants": [
+        {
+          "id": "gid://shopify/ProductVariant/10000000071",
+          "title": "12oz",
+          "price": "21.00",
+          "sku": "CRI-TARRAZU-12",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/10000000072",
+          "title": "Sample 4oz",
+          "price": "8.00",
+          "sku": "CRI-TARRAZU-4OZ",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/10000000073",
+          "title": "2lb",
+          "price": "44.00",
+          "sku": "CRI-TARRAZU-2LB",
+          "inventoryQuantity": 25
+        }
+      ]
+    },
+    {
+      "id": "gid://shopify/Product/9000000001",
+      "title": "Panama Geisha Reserve",
+      "handle": "panama-geisha-reserve",
+      "description": "Small-lot, jasmine and bergamot.",
+      "vendor": "Mernin' Coffee Roasters",
+      "productType": "Coffee",
+      "imageUrl": null,
+      "variants": [
+        {
+          "id": "gid://shopify/ProductVariant/90000000011",
+          "title": "8oz",
+          "price": "48.00",
+          "sku": "PAN-GEISHA-8",
+          "inventoryQuantity": 25
+        }
+      ]
+    },
+    {
+      "id": "gid://shopify/Product/9000000002",
+      "title": "Decaf Swiss Water Blend",
+      "handle": "decaf-swiss-water-blend",
+      "description": "The one the operator does not want in CoffeeOS.",
+      "vendor": "Mernin' Coffee Roasters",
+      "productType": "Coffee",
+      "imageUrl": null,
+      "variants": [
+        {
+          "id": "gid://shopify/ProductVariant/90000000021",
+          "title": "12oz",
+          "price": "19.00",
+          "sku": "DECAF-SW-12",
+          "inventoryQuantity": 25
+        }
+      ]
+    },
+    {
+      "id": "gid://shopify/Product/9000000003",
+      "title": "Single Origin Advent Calendar",
+      "handle": "single-origin-advent-calendar",
+      "description": "One hundred and twenty little bags.",
+      "vendor": "Mernin' Coffee Roasters",
+      "productType": "Coffee",
+      "imageUrl": null,
+      "variants": [
+        {
+          "id": "gid://shopify/ProductVariant/90000000031",
+          "title": "Day 1",
+          "price": "12.00",
+          "sku": "ADVENT-001",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000032",
+          "title": "Day 2",
+          "price": "13.00",
+          "sku": "ADVENT-002",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000033",
+          "title": "Day 3",
+          "price": "14.00",
+          "sku": "ADVENT-003",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000034",
+          "title": "Day 4",
+          "price": "15.00",
+          "sku": "ADVENT-004",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000035",
+          "title": "Day 5",
+          "price": "16.00",
+          "sku": "ADVENT-005",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000036",
+          "title": "Day 6",
+          "price": "17.00",
+          "sku": "ADVENT-006",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000037",
+          "title": "Day 7",
+          "price": "18.00",
+          "sku": "ADVENT-007",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000038",
+          "title": "Day 8",
+          "price": "12.00",
+          "sku": "ADVENT-008",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000039",
+          "title": "Day 9",
+          "price": "13.00",
+          "sku": "ADVENT-009",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000040",
+          "title": "Day 10",
+          "price": "14.00",
+          "sku": "ADVENT-010",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000041",
+          "title": "Day 11",
+          "price": "15.00",
+          "sku": "ADVENT-011",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000042",
+          "title": "Day 12",
+          "price": "16.00",
+          "sku": "ADVENT-012",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000043",
+          "title": "Day 13",
+          "price": "17.00",
+          "sku": "ADVENT-013",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000044",
+          "title": "Day 14",
+          "price": "18.00",
+          "sku": "ADVENT-014",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000045",
+          "title": "Day 15",
+          "price": "12.00",
+          "sku": "ADVENT-015",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000046",
+          "title": "Day 16",
+          "price": "13.00",
+          "sku": "ADVENT-016",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000047",
+          "title": "Day 17",
+          "price": "14.00",
+          "sku": "ADVENT-017",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000048",
+          "title": "Day 18",
+          "price": "15.00",
+          "sku": "ADVENT-018",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000049",
+          "title": "Day 19",
+          "price": "16.00",
+          "sku": "ADVENT-019",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000050",
+          "title": "Day 20",
+          "price": "17.00",
+          "sku": "ADVENT-020",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000051",
+          "title": "Day 21",
+          "price": "18.00",
+          "sku": "ADVENT-021",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000052",
+          "title": "Day 22",
+          "price": "12.00",
+          "sku": "ADVENT-022",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000053",
+          "title": "Day 23",
+          "price": "13.00",
+          "sku": "ADVENT-023",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000054",
+          "title": "Day 24",
+          "price": "14.00",
+          "sku": "ADVENT-024",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000055",
+          "title": "Day 25",
+          "price": "15.00",
+          "sku": "ADVENT-025",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000056",
+          "title": "Day 26",
+          "price": "16.00",
+          "sku": "ADVENT-026",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000057",
+          "title": "Day 27",
+          "price": "17.00",
+          "sku": "ADVENT-027",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000058",
+          "title": "Day 28",
+          "price": "18.00",
+          "sku": "ADVENT-028",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000059",
+          "title": "Day 29",
+          "price": "12.00",
+          "sku": "ADVENT-029",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000060",
+          "title": "Day 30",
+          "price": "13.00",
+          "sku": "ADVENT-030",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000061",
+          "title": "Day 31",
+          "price": "14.00",
+          "sku": "ADVENT-031",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000062",
+          "title": "Day 32",
+          "price": "15.00",
+          "sku": "ADVENT-032",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000063",
+          "title": "Day 33",
+          "price": "16.00",
+          "sku": "ADVENT-033",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000064",
+          "title": "Day 34",
+          "price": "17.00",
+          "sku": "ADVENT-034",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000065",
+          "title": "Day 35",
+          "price": "18.00",
+          "sku": "ADVENT-035",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000066",
+          "title": "Day 36",
+          "price": "12.00",
+          "sku": "ADVENT-036",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000067",
+          "title": "Day 37",
+          "price": "13.00",
+          "sku": "ADVENT-037",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000068",
+          "title": "Day 38",
+          "price": "14.00",
+          "sku": "ADVENT-038",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000069",
+          "title": "Day 39",
+          "price": "15.00",
+          "sku": "ADVENT-039",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000070",
+          "title": "Day 40",
+          "price": "16.00",
+          "sku": "ADVENT-040",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000071",
+          "title": "Day 41",
+          "price": "17.00",
+          "sku": "ADVENT-041",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000072",
+          "title": "Day 42",
+          "price": "18.00",
+          "sku": "ADVENT-042",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000073",
+          "title": "Day 43",
+          "price": "12.00",
+          "sku": "ADVENT-043",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000074",
+          "title": "Day 44",
+          "price": "13.00",
+          "sku": "ADVENT-044",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000075",
+          "title": "Day 45",
+          "price": "14.00",
+          "sku": "ADVENT-045",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000076",
+          "title": "Day 46",
+          "price": "15.00",
+          "sku": "ADVENT-046",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000077",
+          "title": "Day 47",
+          "price": "16.00",
+          "sku": "ADVENT-047",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000078",
+          "title": "Day 48",
+          "price": "17.00",
+          "sku": "ADVENT-048",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000079",
+          "title": "Day 49",
+          "price": "18.00",
+          "sku": "ADVENT-049",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000080",
+          "title": "Day 50",
+          "price": "12.00",
+          "sku": "ADVENT-050",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000081",
+          "title": "Day 51",
+          "price": "13.00",
+          "sku": "ADVENT-051",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000082",
+          "title": "Day 52",
+          "price": "14.00",
+          "sku": "ADVENT-052",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000083",
+          "title": "Day 53",
+          "price": "15.00",
+          "sku": "ADVENT-053",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000084",
+          "title": "Day 54",
+          "price": "16.00",
+          "sku": "ADVENT-054",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000085",
+          "title": "Day 55",
+          "price": "17.00",
+          "sku": "ADVENT-055",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000086",
+          "title": "Day 56",
+          "price": "18.00",
+          "sku": "ADVENT-056",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000087",
+          "title": "Day 57",
+          "price": "12.00",
+          "sku": "ADVENT-057",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000088",
+          "title": "Day 58",
+          "price": "13.00",
+          "sku": "ADVENT-058",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000089",
+          "title": "Day 59",
+          "price": "14.00",
+          "sku": "ADVENT-059",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000090",
+          "title": "Day 60",
+          "price": "15.00",
+          "sku": "ADVENT-060",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000091",
+          "title": "Day 61",
+          "price": "16.00",
+          "sku": "ADVENT-061",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000092",
+          "title": "Day 62",
+          "price": "17.00",
+          "sku": "ADVENT-062",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000093",
+          "title": "Day 63",
+          "price": "18.00",
+          "sku": "ADVENT-063",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000094",
+          "title": "Day 64",
+          "price": "12.00",
+          "sku": "ADVENT-064",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000095",
+          "title": "Day 65",
+          "price": "13.00",
+          "sku": "ADVENT-065",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000096",
+          "title": "Day 66",
+          "price": "14.00",
+          "sku": "ADVENT-066",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000097",
+          "title": "Day 67",
+          "price": "15.00",
+          "sku": "ADVENT-067",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000098",
+          "title": "Day 68",
+          "price": "16.00",
+          "sku": "ADVENT-068",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000099",
+          "title": "Day 69",
+          "price": "17.00",
+          "sku": "ADVENT-069",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000100",
+          "title": "Day 70",
+          "price": "18.00",
+          "sku": "ADVENT-070",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000101",
+          "title": "Day 71",
+          "price": "12.00",
+          "sku": "ADVENT-071",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000102",
+          "title": "Day 72",
+          "price": "13.00",
+          "sku": "ADVENT-072",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000103",
+          "title": "Day 73",
+          "price": "14.00",
+          "sku": "ADVENT-073",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000104",
+          "title": "Day 74",
+          "price": "15.00",
+          "sku": "ADVENT-074",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000105",
+          "title": "Day 75",
+          "price": "16.00",
+          "sku": "ADVENT-075",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000106",
+          "title": "Day 76",
+          "price": "17.00",
+          "sku": "ADVENT-076",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000107",
+          "title": "Day 77",
+          "price": "18.00",
+          "sku": "ADVENT-077",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000108",
+          "title": "Day 78",
+          "price": "12.00",
+          "sku": "ADVENT-078",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000109",
+          "title": "Day 79",
+          "price": "13.00",
+          "sku": "ADVENT-079",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000110",
+          "title": "Day 80",
+          "price": "14.00",
+          "sku": "ADVENT-080",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000111",
+          "title": "Day 81",
+          "price": "15.00",
+          "sku": "ADVENT-081",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000112",
+          "title": "Day 82",
+          "price": "16.00",
+          "sku": "ADVENT-082",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000113",
+          "title": "Day 83",
+          "price": "17.00",
+          "sku": "ADVENT-083",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000114",
+          "title": "Day 84",
+          "price": "18.00",
+          "sku": "ADVENT-084",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000115",
+          "title": "Day 85",
+          "price": "12.00",
+          "sku": "ADVENT-085",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000116",
+          "title": "Day 86",
+          "price": "13.00",
+          "sku": "ADVENT-086",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000117",
+          "title": "Day 87",
+          "price": "14.00",
+          "sku": "ADVENT-087",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000118",
+          "title": "Day 88",
+          "price": "15.00",
+          "sku": "ADVENT-088",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000119",
+          "title": "Day 89",
+          "price": "16.00",
+          "sku": "ADVENT-089",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000120",
+          "title": "Day 90",
+          "price": "17.00",
+          "sku": "ADVENT-090",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000121",
+          "title": "Day 91",
+          "price": "18.00",
+          "sku": "ADVENT-091",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000122",
+          "title": "Day 92",
+          "price": "12.00",
+          "sku": "ADVENT-092",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000123",
+          "title": "Day 93",
+          "price": "13.00",
+          "sku": "ADVENT-093",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000124",
+          "title": "Day 94",
+          "price": "14.00",
+          "sku": "ADVENT-094",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000125",
+          "title": "Day 95",
+          "price": "15.00",
+          "sku": "ADVENT-095",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000126",
+          "title": "Day 96",
+          "price": "16.00",
+          "sku": "ADVENT-096",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000127",
+          "title": "Day 97",
+          "price": "17.00",
+          "sku": "ADVENT-097",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000128",
+          "title": "Day 98",
+          "price": "18.00",
+          "sku": "ADVENT-098",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000129",
+          "title": "Day 99",
+          "price": "12.00",
+          "sku": "ADVENT-099",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000130",
+          "title": "Day 100",
+          "price": "13.00",
+          "sku": "ADVENT-100",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000131",
+          "title": "Day 101",
+          "price": "14.00",
+          "sku": "ADVENT-101",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000132",
+          "title": "Day 102",
+          "price": "15.00",
+          "sku": "ADVENT-102",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000133",
+          "title": "Day 103",
+          "price": "16.00",
+          "sku": "ADVENT-103",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000134",
+          "title": "Day 104",
+          "price": "17.00",
+          "sku": "ADVENT-104",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000135",
+          "title": "Day 105",
+          "price": "18.00",
+          "sku": "ADVENT-105",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000136",
+          "title": "Day 106",
+          "price": "12.00",
+          "sku": "ADVENT-106",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000137",
+          "title": "Day 107",
+          "price": "13.00",
+          "sku": "ADVENT-107",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000138",
+          "title": "Day 108",
+          "price": "14.00",
+          "sku": "ADVENT-108",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000139",
+          "title": "Day 109",
+          "price": "15.00",
+          "sku": "ADVENT-109",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000140",
+          "title": "Day 110",
+          "price": "16.00",
+          "sku": "ADVENT-110",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000141",
+          "title": "Day 111",
+          "price": "17.00",
+          "sku": "ADVENT-111",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000142",
+          "title": "Day 112",
+          "price": "18.00",
+          "sku": "ADVENT-112",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000143",
+          "title": "Day 113",
+          "price": "12.00",
+          "sku": "ADVENT-113",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000144",
+          "title": "Day 114",
+          "price": "13.00",
+          "sku": "ADVENT-114",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000145",
+          "title": "Day 115",
+          "price": "14.00",
+          "sku": "ADVENT-115",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000146",
+          "title": "Day 116",
+          "price": "15.00",
+          "sku": "ADVENT-116",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000147",
+          "title": "Day 117",
+          "price": "16.00",
+          "sku": "ADVENT-117",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000148",
+          "title": "Day 118",
+          "price": "17.00",
+          "sku": "ADVENT-118",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000149",
+          "title": "Day 119",
+          "price": "18.00",
+          "sku": "ADVENT-119",
+          "inventoryQuantity": 25
+        },
+        {
+          "id": "gid://shopify/ProductVariant/90000000150",
+          "title": "Day 120",
+          "price": "12.00",
+          "sku": "ADVENT-120",
+          "inventoryQuantity": 25
+        }
+      ]
+    }
+  ]
+}

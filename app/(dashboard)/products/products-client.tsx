@@ -11,10 +11,17 @@ import {
   EmptyState,
 } from "@merninos/ui/instrument";
 import { RefreshCw, Search, Package, Plus, Settings } from "lucide-react";
-import { syncShopifyProducts, deleteProduct, createProduct } from "./actions";
+import {
+  previewShopifyProducts,
+  syncShopifyProducts,
+  deleteProduct,
+  createProduct,
+} from "./actions";
 import { mono, overline, sans } from "@/lib/instrument/tokens";
 import { ProductsWorksheetTable } from "./components/ProductsWorksheetTable";
 import { AddProductDialog, DeleteProductDialog } from "./components/ProductDialogs";
+import { SyncReviewDialog, type SyncSelection } from "./components/SyncReviewDialog";
+import type { SyncCandidate } from "@/lib/products/shopify-diff";
 import type { Product } from "./components/types";
 
 /**
@@ -55,6 +62,9 @@ export function ProductsClient({
   const [searchQuery, setSearchQuery] = useState("");
   const [costing, setCosting] = useState<CostingFilter>("all");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [candidates, setCandidates] = useState<SyncCandidate[]>([]);
   const [syncMessage, setSyncMessage] = useState<{ type: "success" | "error"; text: string } | null>(
     null
   );
@@ -81,17 +91,67 @@ export function ProductsClient({
         p.sku?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
+  /**
+   * The button no longer writes anything. It reads the catalogue, diffs it, and
+   * opens the review dialog — the operator decides what happens next.
+   */
   const handleSync = async () => {
-    setIsSyncing(true);
+    setIsPreviewing(true);
     setSyncMessage(null);
-    const result = await syncShopifyProducts();
-    if (result.error) {
+
+    const result = await previewShopifyProducts();
+
+    if ("error" in result) {
+      // No dialog on failure. A dialog with an empty list would read as "Shopify
+      // has nothing", which is a different and much worse message than "we could
+      // not reach Shopify".
       setSyncMessage({ type: "error", text: result.error });
     } else {
-      setSyncMessage({ type: "success", text: `Synced ${result.count} products from Shopify.` });
-      window.location.reload();
+      setCandidates(result.candidates);
+      setIsReviewOpen(true);
     }
+
+    setIsPreviewing(false);
+  };
+
+  const handleConfirmSync = async (selection: SyncSelection) => {
+    setIsSyncing(true);
+
+    const result = await syncShopifyProducts(selection);
+
+    if ("error" in result) {
+      setSyncMessage({ type: "error", text: result.error });
+      setIsSyncing(false);
+      setIsReviewOpen(false);
+      return;
+    }
+
+    // Report what was WRITTEN, and say so plainly when it is less than what was
+    // asked for. The previous version could only ever claim success.
+    const text =
+      result.failures.length > 0
+        ? `Imported ${result.count} of ${result.requested}. ${result.failures.length} failed: ${result.failures
+            .map((failure) => `${failure.shopifyId} (${failure.reason})`)
+            .join(", ")}`
+        : result.requested === 0
+          ? // A decline-only confirm. "Imported 0 products" would read as a
+            // failure when the operator got exactly what they asked for.
+            "Nothing imported. Those products won't be offered again."
+          : `Imported ${result.count} product${result.count === 1 ? "" : "s"} from Shopify.`;
+
+    // Products may have landed while the declined-list update failed. Say both
+    // rather than letting a bookkeeping failure masquerade as a failed import.
+    const suffix = result.bookkeepingError
+      ? ` The declined products could not be saved: ${result.bookkeepingError}`
+      : "";
+
+    setSyncMessage({
+      type: result.failures.length > 0 || result.bookkeepingError ? "error" : "success",
+      text: text + suffix,
+    });
+    setIsReviewOpen(false);
     setIsSyncing(false);
+    window.location.reload();
   };
 
   const handleDelete = async () => {
@@ -184,10 +244,17 @@ export function ProductsClient({
             variant="secondary"
             iconLeft={<RefreshCw size={14} strokeWidth={2} />}
             onClick={handleSync}
-            disabled={!isShopifyConfigured || isSyncing}
+            disabled={!isShopifyConfigured || isPreviewing || isSyncing}
           >
-            {isSyncing ? "Syncing…" : "Sync Shopify"}
+            {isPreviewing ? "Reading Shopify…" : "Sync Shopify"}
           </Button>
+          <SyncReviewDialog
+            open={isReviewOpen}
+            onOpenChange={setIsReviewOpen}
+            candidates={candidates}
+            isSyncing={isSyncing}
+            onConfirm={handleConfirmSync}
+          />
           <AddProductDialog
             open={isAddDialogOpen}
             onOpenChange={setIsAddDialogOpen}

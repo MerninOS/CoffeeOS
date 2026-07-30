@@ -312,12 +312,28 @@ async function seedDemoData(admin, ownerId) {
     throw new Error("Missing one or more inserted components.");
   }
 
+  // shopify_id is the NUMERIC TAIL, not the full gid://shopify/Product/… GID.
+  //
+  // That is what syncShopifyProducts writes — it stores parseShopifyGid(id) —
+  // and what the orders sync looks products up by. This fixture used to store
+  // full GIDs, which matched nothing the app actually produces: on production
+  // 95 of 95 synced rows are numeric tails, and the only full-GID rows in the
+  // database were the seven this seed had written.
+  //
+  // It went unnoticed because the seed links order_line_items by product_id
+  // directly, never exercising the shopify_id lookup. The sync review flow is
+  // the first thing that does, and against the old fixture every seeded product
+  // classified as "new" — a silent, total misclassification.
+  //
+  // product_variants.shopify_variant_id below is a DIFFERENT case: the sync
+  // stores those unparsed, so full GIDs there are correct.
   const { data: products, error: productsError } = await admin
     .from("products")
     .insert([
       {
         user_id: ownerId,
-        shopify_id: "gid://shopify/Product/1000000001",
+        shopify_id: "1000000001",
+        shopify_handle: "yirgacheffe-light-roast-12oz",
         title: "Yirgacheffe Light Roast 12oz",
         description: "Floral and citrus-forward single origin.",
         sku: "ETH-12-LIGHT",
@@ -326,7 +342,8 @@ async function seedDemoData(admin, ownerId) {
       },
       {
         user_id: ownerId,
-        shopify_id: "gid://shopify/Product/1000000002",
+        shopify_id: "1000000002",
+        shopify_handle: "house-espresso-blend-2lb",
         title: "House Espresso Blend 2lb",
         description: "Chocolate and caramel with balanced acidity.",
         sku: "HOUSE-ESP-2LB",
@@ -335,7 +352,8 @@ async function seedDemoData(admin, ownerId) {
       },
       {
         user_id: ownerId,
-        shopify_id: "gid://shopify/Product/1000000003",
+        shopify_id: "1000000003",
+        shopify_handle: "cold-brew-blend-5lb",
         title: "Cold Brew Blend 5lb",
         description: "Low-acid blend built for concentrate and kegs.",
         sku: "CB-5LB",
@@ -355,7 +373,8 @@ async function seedDemoData(admin, ownerId) {
       // exact defect orders-uncosted.spec.ts exists to catch.
       {
         user_id: ownerId,
-        shopify_id: "gid://shopify/Product/1000000004",
+        shopify_id: "1000000004",
+        shopify_handle: "guatemala-huehuetenango-12oz",
         title: "Guatemala Huehuetenango 12oz",
         description: "Synced from Shopify, not yet costed.",
         sku: "GTM-12-HUEHUE",
@@ -376,7 +395,8 @@ async function seedDemoData(admin, ownerId) {
       // fixture containing every one of them, and are vacuous without.
       {
         user_id: ownerId,
-        shopify_id: "gid://shopify/Product/1000000005",
+        shopify_id: "1000000005",
+        shopify_handle: "kenya-nyeri-aa",
         title: "Kenya Nyeri AA",
         description: "Costed per variant, and the variants agree.",
         sku: "KEN-NYERI",
@@ -384,7 +404,8 @@ async function seedDemoData(admin, ownerId) {
       },
       {
         user_id: ownerId,
-        shopify_id: "gid://shopify/Product/1000000006",
+        shopify_id: "1000000006",
+        shopify_handle: "sumatra-mandheling",
         title: "Sumatra Mandheling",
         description: "Variants disagree on cost — deliberately unknowable.",
         sku: "SUM-MAND",
@@ -392,7 +413,8 @@ async function seedDemoData(admin, ownerId) {
       },
       {
         user_id: ownerId,
-        shopify_id: "gid://shopify/Product/1000000007",
+        shopify_id: "1000000007",
+        shopify_handle: "costa-rica-tarrazu",
         title: "Costa Rica Tarrazu",
         description: "One variant costed, one with no recipe at all.",
         sku: "CRI-TARRAZU",
