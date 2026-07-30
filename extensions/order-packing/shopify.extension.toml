@@ -1,4 +1,11 @@
-api_version = "2024-10"
+# The UI-EXTENSION PLATFORM version — NOT the Admin GraphQL version that
+# lib/shopify.ts calls (that one is 2024-10 and is unrelated). Shopify rejects
+# anything older than 2025-07 for block extensions:
+#   "2024-10" is not a valid API version: Block extension requires one of
+#   ["2025-07", "2025-10", "2026-01", ...]
+# Keep this in step with the @shopify/ui-extensions* versions in package.json —
+# 2025-07 is the newest line with a published stable dist-tag (2025.7.4).
+api_version = "2025-07"
 
 [[extensions]]
 name = "CoffeeOS Order Packing"
