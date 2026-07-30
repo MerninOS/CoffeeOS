@@ -15,6 +15,20 @@ automated tests for `app/api/shopify/block/{packing-state,packing,component,ship
 themselves do not). Run this checklist before every deploy that touches any
 file listed above, or `extensions/order-packing/src/BlockExtension.tsx`.
 
+## Known data state — read this before you start
+
+**`orders.total_shipping` is `NULL` on all 319 existing orders in production
+(`coffee-os-supabase`) as of this writing.** The column is only ever written
+by `upsertShopifyOrder` (`lib/orders/sync.ts`), so any order synced *before*
+migration 025 added the column has no value for it, and the block's "Customer
+paid $X.XX (revenue, not your cost)" line will simply be **absent** on every
+one of those 319 orders — not blank, not `$0.00`, just not rendered at all
+(`state.order.customerPaidShipping !== null` gates it). This is expected on
+old orders, not a defect. It populates two ways: a full dashboard re-sync of
+an existing order, or immediately for a brand-new order via sync-on-demand
+(see "Sync-on-demand" below) — pick a freshly-placed test order if you want
+to exercise this line without re-syncing the whole account.
+
 ---
 
 ## Before you start
@@ -23,9 +37,18 @@ Run these in order — each depends on the one before it.
 
 ### 1. Apply migration `scripts/025_shopify_block_support.sql`
 
-This has **not been applied to any database**. The block is unusable without
-it: the packing-state routes write `orders.total_shipping` and call the
-`replace_order_packing` RPC, and **both fail without this migration.**
+**Status: applied and verified on production (`coffee-os-supabase`)** — both
+025 and 026 have been applied there, and all six objects (the column, both
+RPCs, both unique indexes) have been confirmed to exist, with both
+`ON CONFLICT` targets confirmed to match their index predicates exactly. If
+you are testing against production, you can treat this step and step 2 as
+already done and skip straight to their verification queries as a sanity
+check rather than an apply step. If you are testing against any **other**
+environment (a fresh dev/staging database, a branch/preview database, a
+local Supabase instance), it will not have this migration and you must apply
+it there first — the block is unusable without it: the packing-state routes
+write `orders.total_shipping` and call the `replace_order_packing` RPC, and
+**both fail without this migration.**
 
 - [ ] Apply `scripts/025_shopify_block_support.sql` to the target database.
 - [ ] Run the verification block at the bottom of that file (it is a trailing
@@ -432,7 +455,105 @@ request) could previously both miss an existing row and both insert.
       sync), confirm the block shows "Customer paid $X.XX (revenue, not your
       cost)" beneath the shipping input, and that this text never changes as
       a result of saving your own shipping cost (it's a separate,
-      Shopify-sourced field, not derived from what you just saved).
+      Shopify-sourced field, not derived from what you just saved). Pick a
+      recently-synced or brand-new order for this check — see "Known data
+      state" at the top of this doc: this line is absent, by design, on any
+      of production's 319 pre-025 orders, since `total_shipping` is `NULL` on
+      all of them.
+
+### Multiple/unrecognized shipping costs (commit `72423f5`)
+
+Production turned up orders carrying more than one shipping-flavored custom
+cost under different names — a case the original design didn't anticipate.
+`findShippingCustomCost` (the block's pre-fill matcher) and
+`upsert_order_shipping_cost` (the server's write target) both match
+**exactly** `lower(description) = "shipping"`, by design (see "Doesn't
+false-match a similar description" above) — so a row named e.g. `"Mernin
+Shipping"` is invisible to both. Without `72423f5`, an operator on one of
+these orders would see an empty shipping field, as if nothing had been
+recorded, and a blind save would silently add a *third* shipping cost that's
+still fully counted in COGS (`getOrderCogs` sums every `order_custom_costs`
+row regardless of description).
+
+`72423f5` adds a client-side-only `unrecognizedShippingCosts` memo:
+`state.customCosts` filtered to descriptions that `.toLowerCase().includes
+("shipping")` but are **not** exactly `"shipping"`. When non-empty, it
+renders a warning banner and a read-only description/amount line per entry,
+above the shipping input. It changes **nothing** about matching or writing —
+the exact-match pre-fill and the RPC's write target are both untouched.
+
+Four real production orders exercise both paths without needing to fabricate
+data:
+
+| Order | Custom costs | Exact `"Shipping"` row? |
+| --- | --- | --- |
+| **#1312** | `Shipping` $5.89 | Yes |
+| **#1309** | `Shipping` $8.51 | Yes |
+| **#1311** | `Mernin Shipping` $6.00, `Suurup Shipping` $6.07 | No |
+| **#1307** | `Mernin Shipping` $6.93, `Suurup shipping` $8.00 | No |
+
+- [ ] **Exact-match order (#1312 or #1309) — unchanged behavior.** Open the
+      block. Confirm: the shipping field pre-fills with the existing amount
+      (`$5.89` on #1312, `$8.51` on #1309), **no** warning banner appears,
+      and re-saving a different amount updates that same row in place —
+      still exactly one `Shipping` row on the order afterward.
+- [ ] **Unrecognized-shipping order (#1311 or #1307) — the new banner.** Open
+      the block. Confirm:
+  - [ ] The warning banner appears with the exact copy:
+        > **This order already has other shipping costs**
+        > They're already counted in this order's COGS. Saving the field
+        > below adds a new, separate "Shipping" cost — it won't update or
+        > replace these.
+  - [ ] Both existing costs are listed **read-only**, description and amount,
+        matching the table above exactly (`Mernin Shipping` $6.00 and
+        `Suurup Shipping` $6.07 on #1311; `Mernin Shipping` $6.93 and
+        `Suurup shipping` $8.00 on #1307 — note the lowercase "shipping" in
+        #1307's second entry is preserved verbatim, not re-cased).
+  - [ ] The shipping input itself starts **empty** — it is not pre-filled
+        from either listed cost, since neither is an exact match.
+- [ ] **Read-only, not editable.** On the same order, confirm the two listed
+      entries have **no** edit or delete control of any kind (no icon button,
+      no click target) — this is intentional, not an oversight: there is no
+      route in `app/api/shopify/block/` that edits or deletes an arbitrary
+      `order_custom_costs` row, only `upsert_order_shipping_cost`, which only
+      ever touches the one row matching `lower(description) = 'shipping'`
+      exactly.
+- [ ] **Deliberate save on an unrecognized-shipping order (#1311).** With the
+      banner showing and the input still empty, enter an amount (e.g. `4.00`)
+      and Save anyway. Confirm the documented, intended behavior: a **new**
+      `Shipping` row is added, and the two existing rows (`Mernin Shipping`,
+      `Suurup Shipping`) are untouched — the order now carries **three**
+      shipping-flavored costs, and all three are counted in COGS. This is
+      correct given the warning was shown; the operator's judgment, not the
+      software, is what prevents triple-counting here. Verify with SQL
+      (replace the placeholder with #1311's actual `orders.id`, found via
+      `SELECT id, order_name FROM public.orders WHERE order_name = '#1311';`):
+    ```sql
+    SELECT id, description, amount, created_at
+    FROM public.order_custom_costs
+    WHERE order_id = '<1311_ORDER_ID>'
+    ORDER BY created_at;
+    -- expect 3 rows: Mernin Shipping ($6.00), Suurup Shipping ($6.07), and the
+    -- new Shipping row you just saved, most recent by created_at.
+    ```
+    **Undo this before finishing** so you leave production as you found it —
+    the row you just created is the *only* one that can ever match this
+    filter, by construction (the partial unique index guarantees at most one
+    `lower(description) = 'shipping'` row per order, and neither pre-existing
+    row is an exact match):
+    ```sql
+    DELETE FROM public.order_custom_costs
+    WHERE order_id = '<1311_ORDER_ID>' AND lower(description) = 'shipping';
+    ```
+    Re-run the `SELECT` above afterward and confirm exactly the original 2
+    rows remain.
+- [ ] **Nothing is summed client-side.** Throughout the above, confirm the
+      block's own "COGS $X.XX" / margin figure never changes as a result of
+      what's shown in the unrecognized-costs list — those figures still come
+      only from the server's `PackingState.cogs` (see the `HARD RULE` at the
+      top of `BlockExtension.tsx`). The block surfaces the extra rows as
+      read-only context; it does not add their amounts into anything it
+      displays.
 
 ---
 
