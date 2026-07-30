@@ -53,7 +53,78 @@ it: the packing-state routes write `orders.total_shipping` and call the
     -- expect: 0
     ```
 
-### 2. Confirm env vars
+### 2. Apply migration `scripts/026_packing_uniqueness.sql`
+
+Apply this **after** 025, on the same database. It closes a check-then-write
+race in the component-create and shipping-cost routes by adding two unique
+indexes and replacing their SELECT-then-INSERT/UPDATE with a single atomic
+RPC each: `create_component_or_conflict` (component quick-create) and
+`upsert_order_shipping_cost` (shipping save). **Both routes now call these
+RPCs with no fallback path** — quick-create and shipping-save are unusable
+without this migration, exactly as packing-save and sync-on-demand are
+unusable without 025. Applying 025 alone is not enough to exercise the whole
+feature: `packing-state` (load) and "Save packing" will work, then
+quick-create and "Save shipping" will 500, which reads like a partial,
+confusing failure if you don't know 026 is a separate, later migration.
+
+- [ ] **Pre-flight — run both of these BEFORE applying.** `CREATE UNIQUE
+      INDEX` fails outright if any existing rows would violate it, and unlike
+      025 this migration is not simply re-runnable past that failure without
+      first resolving the collision:
+  - [ ] Components that would collide on `(user_id, lower(name))`:
+    ```sql
+    SELECT user_id, lower(name) AS name_ci, count(*), array_agg(id) AS ids
+    FROM public.components
+    GROUP BY user_id, lower(name)
+    HAVING count(*) > 1;
+    ```
+    If this returns rows: for each group, pick the canonical row (usually the
+    oldest, or whichever is referenced by `product_components` /
+    `order_components`), repoint any references at it, then **delete** the
+    duplicate(s).
+  - [ ] Orders with more than one "Shipping"-ish custom cost row:
+    ```sql
+    SELECT order_id, count(*), array_agg(id) AS ids, array_agg(amount) AS amounts
+    FROM public.order_custom_costs
+    WHERE lower(description) = 'shipping'
+    GROUP BY order_id
+    HAVING count(*) > 1;
+    ```
+    If this returns rows, keep the oldest row per `order_id` (the block's own
+    tie-break) and delete the rest.
+  - [ ] **In both cases, the fix is to merge or delete the duplicate rows —
+        never to weaken the index** (e.g. dropping the uniqueness requirement,
+        or making it non-unique, to force the migration to apply). Doing that
+        silently brings back the exact race this migration exists to close.
+- [ ] Apply `scripts/026_packing_uniqueness.sql`.
+- [ ] Run its verification block (trailing comment in the file, not executed
+      by the migration itself):
+  - [ ] Confirm both indexes exist:
+    ```sql
+    SELECT indexname, indexdef FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND indexname IN ('components_user_id_lower_name_key', 'order_custom_costs_shipping_unique');
+    -- expect two rows, the second showing the partial WHERE clause.
+    ```
+  - [ ] Confirm both functions exist:
+    ```sql
+    SELECT routine_name, routine_type, security_type
+    FROM information_schema.routines
+    WHERE routine_schema = 'public'
+      AND routine_name IN ('create_component_or_conflict', 'upsert_order_shipping_cost');
+    -- expect two rows, both | FUNCTION | INVOKER
+    ```
+  - [ ] Smoke test the shipping upsert is idempotent, against a real order id
+        you own (mutates data):
+    ```sql
+    SELECT * FROM public.upsert_order_shipping_cost('<REAL_ORDER_ID>'::uuid, 5.00);
+    SELECT * FROM public.upsert_order_shipping_cost('<REAL_ORDER_ID>'::uuid, 7.50);
+    SELECT count(*), array_agg(amount) FROM public.order_custom_costs
+    WHERE order_id = '<REAL_ORDER_ID>'::uuid AND lower(description) = 'shipping';
+    -- expect: count = 1, amount = 7.50
+    ```
+
+### 3. Confirm env vars
 
 - [ ] `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET` are set in the target
       environment. `lib/shopify-block/auth.ts` (`blockContextFromRequest`)
@@ -66,7 +137,7 @@ it: the packing-state routes write `orders.total_shipping` and call the
     and by the existing `app/api/shopify/session-token/route.ts` — if Shopify
     OAuth already works in this environment, they're already set.
 
-### 3. Resolve the extension's dependency install gap
+### 4. Resolve the extension's dependency install gap
 
 `extensions/order-packing/package.json` declares `@shopify/ui-extensions`
 and `@shopify/ui-extensions-react` (both pinned `2024.10.2`) plus `react`, but
@@ -115,28 +186,49 @@ dev` session doesn't get mistaken for a broken feature.
       runtime. Fix: check the installed package's `.d.ts` files (or run
       `shopify app dev` against a real dev store) and correct names/props to
       match. Expect to touch this on the very first build.
-- [ ] **401s from the block's own fetch calls.** The block uses plain
-      `fetch(...)` (see `blockFetch` in `BlockExtension.tsx`) to
-      `https://coffeeos.io/api/shopify/block/...`, assuming Shopify
-      auto-attaches a verified session token to same-app requests. This is an
-      assumption, not a confirmed behavior of the installed
-      `@shopify/ui-extensions-react@2024.10.2`. Symptom: every block action
-      shows "Something went sideways" / "Missing bearer token". Fix: switch
-      to whichever authenticated-fetch mechanism that version's admin API
-      object exposes — historically surfaced off what `useApi(TARGET)`
-      returns — instead of raw `fetch`.
+- [ ] **`sessionToken` shape/name on `useApi(TARGET)`.** The block explicitly
+      fetches a fresh session token per request (`sessionToken.get()`, off
+      the object `useApi(TARGET)` returns) and attaches it itself as
+      `Authorization: Bearer <token>` — see the `AUTH` note at the top of
+      `BlockExtension.tsx` and `blockFetch`'s `token` parameter. This is
+      Shopify's documented pattern for admin UI extensions (there is no
+      ambient App Bridge session for a same-app `fetch` to piggyback on), but
+      the exact export name/shape of `sessionToken` on the object
+      `useApi(TARGET)` returns has **not** been confirmed against the
+      installed `2024.10.2` type defs. Symptom: a build/runtime error
+      destructuring `sessionToken` from `useApi(TARGET)`, or every block
+      action showing "Something went sideways" / "Missing bearer token" (the
+      token fetch silently produced something that isn't a valid token). Fix:
+      check the installed package's `.d.ts` files for the real shape and
+      correct the `SessionTokenApi` interface/destructure in
+      `BlockExtension.tsx` to match.
+      (Note: an **earlier** version of this file assumed Shopify would
+      auto-attach a token to a plain same-app `fetch` with no manual header
+      wiring. That assumption was replaced with the explicit
+      `sessionToken.get()` call described above — if you see a stale comment
+      inside `blockFetch` still describing the old auto-attach assumption,
+      that comment is leftover and does not describe the code beneath it;
+      trust the `AUTH` note at the top of the file and the code, not that one
+      paragraph.)
 - [ ] **`data.selected[0].id` shape.** `App()` in `BlockExtension.tsx` reads
       the order gid as `data.selected?.[0]?.id` off `useApi(TARGET)`. This is
       assumed, not confirmed, for `admin.order-details.block.render` on
       `2024-10`. Symptom: the block permanently shows "No order in context."
       on every real order page. Fix: log `data` from `useApi(TARGET)` on a
       real dev store and correct the accessor.
-- [ ] **Migration not applied.** Covered above — if you skipped step 1,
-      every save (`packing`, `shipping-cost`) will 500 with "Could not save
-      the packing list" / "Could not save shipping cost", because
-      `replace_order_packing` and `orders.total_shipping` don't exist. This
-      is the single most likely cause of "everything loads but nothing
-      saves."
+- [ ] **Migration 025 not applied.** If you skipped "Before you start" step
+      1, `packing-state` (initial load) and "Save packing" 500 — the
+      `replace_order_packing` RPC and the `orders.total_shipping` column
+      don't exist. Symptom: "Could not save the packing list", or a 500 on
+      the very first load of the block.
+- [ ] **Migration 026 not applied.** If you skipped step 2, quick-create and
+      "Save shipping" 500 — `create_component_or_conflict` and
+      `upsert_order_shipping_cost` don't exist. Symptom: "Could not create
+      component" or "Could not save shipping cost", while packing-state load
+      and "Save packing" work fine (025 alone is enough for those two). Do
+      **not** attribute a component-create or shipping-save 500 to 025 — as
+      of the `7ee8b99` hardening commit, those two routes no longer touch
+      `replace_order_packing` at all; they depend entirely on 026.
 
 ---
 
@@ -246,32 +338,59 @@ shop to a `shopify_settings` row.
 
 ## Quick-create
 
-`POST /api/shopify/block/component`.
+`POST /api/shopify/block/component`. **Requires migration 026** — the route
+calls the `create_component_or_conflict` RPC (an atomic `INSERT ... ON
+CONFLICT DO NOTHING`, backed by the unique index on `(user_id, lower(name))`)
+with no fallback; there is no longer a separate SELECT-then-INSERT in the
+route itself. The match is an exact, case-insensitive equality
+(`lower(name) = lower(p_name)`), not a pattern/`ilike` match.
 
-- [ ] Create a new material with a name that doesn't exist yet. Confirm: it
-      appears in the block's "Add material" list immediately, and — per
-      `handleCreateComponent` — is added to the *local, unsaved* working
-      lines automatically (creating a component does **not** itself save the
-      packing list; a separate "Save packing" is still required).
+- [ ] Create a new material with a name that doesn't exist yet. Confirm:
+      `inserted: true` comes back from the RPC, it appears in the block's
+      "Add material" list immediately, and — per `handleCreateComponent` — is
+      added to the *local, unsaved* working lines automatically (creating a
+      component does **not** itself save the packing list; a separate "Save
+      packing" is still required).
 - [ ] **Duplicate name (409).** Create a component whose name matches an
       existing one exactly, and again with different case (e.g. `Small Box`
-      vs `small box` — the check is `ilike`, case-insensitive). Confirm:
-      `POST /component` returns **`409`**, body
-      `{"error":"A component named \"<existing name>\" already exists","existingComponentId":"<id>"}`.
-      In the block, this surfaces as a Banner titled "Couldn't create
-      material" with that exact error text as the body (see the `status ===
-      409` branch in `handleCreateComponent`).
+      vs `small box`). Confirm: `POST /component` returns **`409`**, body
+      `{"error":"A component named \"<existing name>\" already exists","existingComponentId":"<id>"}`
+      (the RPC returned `inserted: false`, and the route mapped that to this
+      shape). In the block, this surfaces as a Banner titled "Couldn't create
+      material" with that exact error text as the body, **plus** a new
+      recovery action: a "Add existing material to packing list instead"
+      button (`useExistingComponent` in `BlockExtension.tsx`).
+- [ ] **Duplicate recovery button.** Click "Add existing material to packing
+      list instead." Confirm it adds the *existing* component (matched by
+      `existingComponentId` from the 409 body) to the local, unsaved working
+      lines — not a new component — closes the new-material form, and clears
+      the error. Like plain quick-create, this does **not** itself save the
+      packing list.
 - [ ] Confirm no duplicate row was created in `components` (the existing row's
-      id comes back in `existingComponentId`, nothing new is inserted).
+      id comes back in `existingComponentId`, nothing new is inserted) — this
+      now holds even under a genuine race (two near-simultaneous creates for
+      the same name), because the uniqueness is enforced by the index inside
+      one atomic statement, not by a check the route does beforehand.
+- [ ] **Cost upper bound.** Try a `costPerUnit` at or above `1e10`. Confirm
+      the route rejects it with **`400`**, `{"error":"Invalid request
+      body"}`, before it ever reaches the RPC (`components.cost_per_unit` is
+      `DECIMAL(18,8)`; this cap exists so an oversized value can't overflow
+      the COGS math to `Infinity`, which `JSON.stringify` would silently turn
+      into `null`).
 
 ---
 
 ## Shipping
 
-`POST /api/shopify/block/shipping-cost`. This writes/updates a row in
-`order_custom_costs` with `description: "Shipping"` (title case, exact) —
-matched back on re-save via `ilike("description", "shipping")`, oldest match
-first.
+`POST /api/shopify/block/shipping-cost`. **Requires migration 026** — the
+route calls the `upsert_order_shipping_cost` RPC, a single atomic `INSERT ...
+ON CONFLICT (order_id) WHERE lower(description) = 'shipping' DO UPDATE`
+statement, backed by the partial unique index
+`order_custom_costs_shipping_unique`. There is no separate SELECT-for-
+existing-row in the route anymore — Postgres itself resolves "update the
+existing row vs. insert a new one" as part of the one statement, closing a
+race where two near-simultaneous saves (double-click, two devices, a retried
+request) could previously both miss an existing row and both insert.
 
 - [ ] **First save.** Enter an amount under "What you paid for shipping" and
       Save. Confirm a new `order_custom_costs` row appears with description
@@ -286,9 +405,28 @@ first.
 - [ ] **Adopts a hand-typed row.** If an operator already added a custom cost
       named "shipping" (any case) via the dashboard's own "Add Cost" dialog
       *before* ever using the block, confirm the block's first shipping save
-      updates that existing row rather than creating a second one (this is
-      the "oldest first" `.order("created_at", { ascending: true })` +
-      `.limit(1)` behavior).
+      updates that existing row rather than creating a second one. This is
+      now guaranteed structurally, not by a tie-break: the partial unique
+      index means at most one `lower(description) = 'shipping'` row can exist
+      per order (026's own pre-flight step requires resolving any pre-
+      existing duplicates before the index can even be created), so
+      `ON CONFLICT` always has exactly one candidate row to resolve into.
+- [ ] **Doesn't false-match a similar description.** Add a custom cost named
+      something that merely *contains* "shipping" but isn't an exact
+      case-insensitive match — e.g. "Shipping insurance" — via the
+      dashboard's Add Cost dialog. Then use the block to save a shipping
+      amount. Confirm the block does **not** treat "Shipping insurance" as
+      the existing shipping row: it should insert/update a *separate* row
+      literally named `Shipping`, leaving "Shipping insurance" untouched.
+      (The block's own prefill match, `findShippingCustomCost` in
+      `BlockExtension.tsx`, deliberately mirrors the RPC's predicate with an
+      exact `lower(description) === "shipping"` comparison, not a substring
+      test, specifically to prevent this false-match case — see the comment
+      above that function.)
+- [ ] **Amount upper bound.** Try an amount at or above `1e8`. Confirm the
+      route rejects it with **`400`**, `{"error":"Invalid request body"}`
+      (`order_custom_costs.amount` is `DECIMAL(10,2)`; same overflow-to-
+      `Infinity` rationale as the component cost bound above).
 - [ ] **Customer-paid shipping reference figure.** If the order has
       `orders.total_shipping` populated (written by `upsertShopifyOrder` on
       sync), confirm the block shows "Customer paid $X.XX (revenue, not your
@@ -418,28 +556,35 @@ apples-to-apples comparison target. See the callout below.
 
 Ordered — do not reorder these steps.
 
-1. [ ] **Migration first.** Confirm migration 025 is applied to the
+1. [ ] **Migration 025 first.** Confirm migration 025 is applied to the
    **production** database (not just a dev/staging one) — repeat the
    verification queries from "Before you start" step 1 against production.
-2. [ ] **Env vars.** Confirm `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` are
+2. [ ] **Migration 026 next.** Run 026's pre-flight collision queries against
+   **production** (not just dev/staging — production is exactly where
+   pre-existing duplicate component names or duplicate "Shipping" custom-cost
+   rows are most likely to already exist), resolve any collisions found, then
+   apply 026 and repeat its verification queries from "Before you start" step
+   2. Do not skip the pre-flight step because dev/staging came back clean —
+   production has more data and more history to have accumulated duplicates.
+3. [ ] **Env vars.** Confirm `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` are
    set in the production Next.js deployment (Vercel or wherever CoffeeOS
    runs) — these routes 500 immediately without them.
-3. [ ] **Deploy the Next.js app** (the four `/api/shopify/block/*` routes)
+4. [ ] **Deploy the Next.js app** (the four `/api/shopify/block/*` routes)
    through the normal CoffeeOS deploy path. These routes are additive — they
    don't touch any existing route — so this is safe to ship ahead of the
    extension itself; the extension simply won't exist yet to call them.
-4. [ ] **Deploy the extension**: `pnpm shopify:deploy` (root `package.json`
+5. [ ] **Deploy the extension**: `pnpm shopify:deploy` (root `package.json`
    script → `shopify app deploy`). This is the actual release switch — until
    this runs, no merchant sees the block at all, regardless of what's live on
    the API side. Requires Shopify CLI auth in whoever runs this step; that is
    out of scope for this document (see the "Do NOT authenticate to Shopify"
    constraint this checklist was written under — a human runs this step).
-5. [ ] **What merchants see.** After deploy, existing installs pick up the
+6. [ ] **What merchants see.** After deploy, existing installs pick up the
    new admin block automatically on their next order-details page load — no
    merchant-side action, re-install, or scope re-approval needed, since the
    extension adds a UI surface rather than new access scopes (`shopify.app.toml`
    scopes remain `read_orders,read_products`, unchanged by this feature).
-6. [ ] **Rollback path.**
+7. [ ] **Rollback path.**
    - Extension: `shopify app deploy` a prior version (or an empty/removed
      `[[extensions]]` block) — the previous release stays reachable via the
      Partner Dashboard's extension version history if a fast revert is
@@ -450,11 +595,19 @@ Ordered — do not reorder these steps.
      merchants will see the block fail with a generic error (fetches 404 at
      the framework level) — so roll back the **extension** before or
      alongside the API if you must roll back either.
-   - Migration: **not reversible via this checklist.** `total_shipping` and
-     `replace_order_packing` are additive (a new column, a new function) and
-     are safe to leave in place even if the feature is rolled back — no
-     rollback SQL is provided here. If you need to actually drop them, treat
-     that as its own reviewed change, not a fast-path rollback step.
+   - Migrations: **not reversible via this checklist.** `total_shipping`,
+     `replace_order_packing` (025), the two unique indexes, and
+     `create_component_or_conflict` / `upsert_order_shipping_cost` (026) are
+     all additive and safe to leave in place even if the feature is rolled
+     back — no rollback SQL is provided for either migration. If you need to
+     actually drop any of them, treat that as its own reviewed change, not a
+     fast-path rollback step. Note that 026's unique indexes have a
+     real-world side effect beyond this feature: once applied, they will
+     also reject any *other* future write that would create a duplicate
+     component name or a second "Shipping" custom cost row on an order —
+     that's the point, but it's a behavior change outside this feature's own
+     surface, so mention it if anyone else's rollback investigation touches
+     `components` or `order_custom_costs`.
 
 ---
 
@@ -466,6 +619,7 @@ Ordered — do not reorder these steps.
 | Date | |
 | Environment tested (store domain / DB) | |
 | Migration 025 applied & verified? | ☐ Yes ☐ No |
+| Migration 026 applied & verified (pre-flight collision checks run first)? | ☐ Yes ☐ No |
 | Extension dependency install resolved (option a/b above)? | ☐ a ☐ b |
 | All sections above passed? | ☐ Yes ☐ No — see exceptions |
 | Exceptions taken (what, and why it's acceptable to ship anyway) | |
