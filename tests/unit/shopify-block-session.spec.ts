@@ -57,3 +57,21 @@ test('rejects a token whose dest is not a valid URL', () => {
   const token = makeToken({ ...validPayload(), dest: '::::' })
   expect(verifyShopifySessionToken(token, SECRET, CLIENT_ID)).toBeNull()
 })
+
+test('rejects a token with no exp claim', () => {
+  const { exp: _exp, ...noExp } = validPayload()
+  expect(verifyShopifySessionToken(makeToken(noExp), SECRET, CLIENT_ID)).toBeNull()
+})
+
+test('ignores the alg header and still requires a valid HMAC signature', () => {
+  const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url')
+  const body = Buffer.from(JSON.stringify(validPayload())).toString('base64url')
+  expect(verifyShopifySessionToken(`${header}.${body}.`, SECRET, CLIENT_ID)).toBeNull()
+})
+
+test('rejects a payload that decodes to a non-object', () => {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')
+  const body = Buffer.from(JSON.stringify(null)).toString('base64url')
+  const sig = createHmac('sha256', SECRET).update(`${header}.${body}`).digest('base64url')
+  expect(verifyShopifySessionToken(`${header}.${body}.${sig}`, SECRET, CLIENT_ID)).toBeNull()
+})
