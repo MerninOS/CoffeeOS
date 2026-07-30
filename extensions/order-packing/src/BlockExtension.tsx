@@ -21,6 +21,26 @@
  * `2024-10` admin UI extensions API, not a verified one. Confirm them
  * against the installed package's type definitions (or `shopify app dev`
  * on a real dev store) before trusting this file compiles.
+ *
+ * AUTH: admin UI extensions run in a sandboxed iframe separate from the
+ * embedded app frame — there is no ambient App Bridge session for `fetch` to
+ * piggyback on, so an unauthenticated `fetch` to the app's own domain does
+ * NOT get an `Authorization` header attached automatically. Per Shopify's
+ * docs ("Authenticate requests between an extension and an app's backend
+ * server"), the extension calls `sessionToken.get()` — off the object
+ * `useApi(TARGET)` returns — before every request and sets
+ * `Authorization: Bearer <token>` itself; `lib/shopify-block/auth.ts` 401s
+ * without exactly that header. Session tokens are short-lived (~60s), so a
+ * fresh one is fetched per request rather than cached at mount — `blockFetch`
+ * below takes the token as a parameter for that reason, and there is
+ * deliberately no refresh-on-401 retry loop (fetching per-request already
+ * avoids stale tokens).
+ *
+ * `sessionToken.get()` is confirmed against Shopify's documented pattern for
+ * this API shape, but NOT verified against the installed 2024.10.2 package's
+ * type defs (see the VERIFICATION GAP above). If `sessionToken` is not
+ * exposed under that exact name/shape on the object `useApi(TARGET)` returns
+ * for this version, find the equivalent there.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -133,11 +153,12 @@ const API_BASE = "https://coffeeos.io/api/shopify/block";
  * exposes (check its type defs; historically this has been surfaced off the
  * object `useApi(TARGET)` returns) instead of raw `fetch`.
  */
-async function blockFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function blockFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
       ...(init?.headers || {}),
     },
   });
@@ -171,14 +192,15 @@ class BlockFetchError extends Error {
   }
 }
 
-function getPackingState(shopifyOrderId: string) {
+function getPackingState(token: string, shopifyOrderId: string) {
   return blockFetch<{ state: PackingState }>(
-    `/packing-state?shopify_order_id=${encodeURIComponent(shopifyOrderId)}`
+    `/packing-state?shopify_order_id=${encodeURIComponent(shopifyOrderId)}`,
+    token
   );
 }
 
-function postPacking(shopifyOrderId: string, lines: WorkingLine[]) {
-  return blockFetch<{ state: PackingState }>(`/packing`, {
+function postPacking(token: string, shopifyOrderId: string, lines: WorkingLine[]) {
+  return blockFetch<{ state: PackingState }>(`/packing`, token, {
     method: "POST",
     body: JSON.stringify({
       shopifyOrderId,
@@ -187,21 +209,28 @@ function postPacking(shopifyOrderId: string, lines: WorkingLine[]) {
   });
 }
 
-function postComponent(input: {
-  name: string;
-  type: ComponentType;
-  unit: string;
-  costPerUnit: number;
-  shopifyOrderId: string;
-}) {
-  return blockFetch<{ component: LibraryComponent; state: PackingState }>(`/component`, {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+function postComponent(
+  token: string,
+  input: {
+    name: string;
+    type: ComponentType;
+    unit: string;
+    costPerUnit: number;
+    shopifyOrderId: string;
+  }
+) {
+  return blockFetch<{ component: LibraryComponent; state: PackingState | null }>(
+    `/component`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    }
+  );
 }
 
-function postShippingCost(shopifyOrderId: string, amount: number) {
-  return blockFetch<{ state: PackingState }>(`/shipping-cost`, {
+function postShippingCost(token: string, shopifyOrderId: string, amount: number) {
+  return blockFetch<{ state: PackingState }>(`/shipping-cost`, token, {
     method: "POST",
     body: JSON.stringify({ shopifyOrderId, amount }),
   });
@@ -239,24 +268,40 @@ function costabilityReason(costability: Costability): string {
   }
 }
 
-// Best-effort read of "what I paid for shipping" out of the generic
-// customCosts bucket (order_custom_costs has no dedicated shipping field in
-// the PackingState contract — the /shipping-cost route presumably records it
-// as a custom cost line). Purely for pre-filling the input; never used for
-// any total math.
+// Read "what I paid for shipping" out of the generic customCosts bucket
+// (order_custom_costs has no dedicated shipping field in the PackingState
+// contract). MUST mirror app/api/shopify/block/shipping-cost/route.ts's
+// `.ilike("description", "shipping")` EXACTLY (case-insensitive, no
+// wildcards) — a looser match here (e.g. a substring test) can pick up an
+// unrelated custom cost like "Shipping insurance", pre-fill its amount into
+// this field, and get it saved back under a DIFFERENT description. The
+// server would then find no exact "Shipping" row, insert a second one, and
+// order_custom_costs sums additively — silently double-counting a cost that
+// was never shipping. Purely for pre-filling the input; never used for any
+// total math.
 function findShippingCustomCost(customCosts: CustomCost[]): CustomCost | undefined {
-  return customCosts.find((c) => /shipping/i.test(c.description));
+  return customCosts.find((c) => c.description.toLowerCase() === "shipping");
 }
 
 // ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
 
+// Minimal shape for the session-token API surface `useApi(TARGET)` exposes.
+// See the AUTH note in the file header — the exact export/shape is a
+// documented-pattern match, not one verified against the installed types.
+interface SessionTokenApi {
+  get(): Promise<string>;
+}
+
 function App() {
-  const { data } = useApi(TARGET);
+  const { data, sessionToken } = useApi(TARGET) as {
+    data?: { selected?: { id?: string }[] };
+    sessionToken: SessionTokenApi;
+  };
   // `data.selected[0].id` is documented for admin.order-details targets as
   // the gid of the order currently being viewed.
-  const orderGid = (data as { selected?: { id?: string }[] } | undefined)?.selected?.[0]?.id;
+  const orderGid = data?.selected?.[0]?.id;
   const shopifyOrderId = numericIdFromGid(orderGid);
 
   if (!shopifyOrderId) {
@@ -267,10 +312,16 @@ function App() {
     );
   }
 
-  return <PackingBlock shopifyOrderId={shopifyOrderId} />;
+  return <PackingBlock shopifyOrderId={shopifyOrderId} sessionToken={sessionToken} />;
 }
 
-function PackingBlock({ shopifyOrderId }: { shopifyOrderId: string }) {
+function PackingBlock({
+  shopifyOrderId,
+  sessionToken,
+}: {
+  shopifyOrderId: string;
+  sessionToken: SessionTokenApi;
+}) {
   const [state, setState] = useState<PackingState | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -289,6 +340,7 @@ function PackingBlock({ shopifyOrderId }: { shopifyOrderId: string }) {
   const [newUnit, setNewUnit] = useState("");
   const [newCost, setNewCost] = useState<number | undefined>(undefined);
   const [newComponentError, setNewComponentError] = useState<string | null>(null);
+  const [duplicateComponentId, setDuplicateComponentId] = useState<string | null>(null);
   const [creatingComponent, setCreatingComponent] = useState(false);
 
   const [shippingPaid, setShippingPaid] = useState<number | undefined>(undefined);
@@ -305,7 +357,8 @@ function PackingBlock({ shopifyOrderId }: { shopifyOrderId: string }) {
     setLoading(true);
     setLoadError(null);
     try {
-      const { state: fetched } = await getPackingState(shopifyOrderId);
+      const token = await sessionToken.get();
+      const { state: fetched } = await getPackingState(token, shopifyOrderId);
       applyServerState(fetched);
       if (fetched.packing.length > 0) {
         setLines(fetched.packing.map(toWorkingLine));
@@ -320,7 +373,7 @@ function PackingBlock({ shopifyOrderId }: { shopifyOrderId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [shopifyOrderId, applyServerState]);
+  }, [shopifyOrderId, sessionToken, applyServerState]);
 
   useEffect(() => {
     load();
@@ -365,7 +418,8 @@ function PackingBlock({ shopifyOrderId }: { shopifyOrderId: string }) {
     setSavingPacking(true);
     setSaveError(null);
     try {
-      const { state: next } = await postPacking(shopifyOrderId, lines);
+      const token = await sessionToken.get();
+      const { state: next } = await postPacking(token, shopifyOrderId, lines);
       applyServerState(next);
       setLines(next.packing.map(toWorkingLine));
       setFromSuggestion(false);
@@ -377,25 +431,49 @@ function PackingBlock({ shopifyOrderId }: { shopifyOrderId: string }) {
     }
   }
 
+  // Adds an already-existing library component to the packing list (no-op if
+  // it's already a line). Shared by the "Add material" select and the 409
+  // duplicate-name recovery path below.
+  function useExistingComponent(componentId: string) {
+    if (!lines.some((l) => l.componentId === componentId)) {
+      addFromLibrary(componentId);
+    }
+    setShowNewComponent(false);
+    setNewComponentError(null);
+    setDuplicateComponentId(null);
+    setNewName("");
+    setNewUnit("");
+    setNewCost(undefined);
+    setNewType("packaging");
+  }
+
   async function handleCreateComponent() {
     setNewComponentError(null);
+    setDuplicateComponentId(null);
     if (!newName.trim() || !newUnit.trim() || newCost === undefined) {
       setNewComponentError("Name, unit, and cost are required.");
       return;
     }
     setCreatingComponent(true);
     try {
-      const { component, state: next } = await postComponent({
+      const token = await sessionToken.get();
+      const { component, state: next } = await postComponent(token, {
         name: newName.trim(),
         type: newType,
         unit: newUnit.trim(),
         costPerUnit: newCost,
         shopifyOrderId,
       });
-      // Refresh server-truth state (library now includes the new component)
-      // WITHOUT touching the local working `lines` from `next.packing` —
-      // creating a component must never save the packing list.
-      applyServerState(next);
+      // The route returns `state: null` when it wasn't given a
+      // shopifyOrderId (a shared route used elsewhere without one). This
+      // block always sends one, but guard anyway rather than assume.
+      if (next) {
+        // Refresh server-truth state (library now includes the new
+        // component) WITHOUT touching the local working `lines` from
+        // `next.packing` — creating a component must never save the
+        // packing list.
+        applyServerState(next);
+      }
       setDirty(true);
       setLines((prev) => [
         ...prev,
@@ -409,6 +487,8 @@ function PackingBlock({ shopifyOrderId }: { shopifyOrderId: string }) {
     } catch (e) {
       if (e instanceof BlockFetchError && e.status === 409) {
         setNewComponentError(e.message);
+        const body = e.body as { existingComponentId?: string } | null;
+        setDuplicateComponentId(body?.existingComponentId ?? null);
       } else {
         setNewComponentError(e instanceof Error ? e.message : "Something went sideways");
       }
@@ -422,7 +502,8 @@ function PackingBlock({ shopifyOrderId }: { shopifyOrderId: string }) {
     setShippingSaving(true);
     setShippingError(null);
     try {
-      const { state: next } = await postShippingCost(shopifyOrderId, shippingPaid);
+      const token = await sessionToken.get();
+      const { state: next } = await postShippingCost(token, shopifyOrderId, shippingPaid);
       applyServerState(next);
     } catch (e) {
       setShippingError(e instanceof Error ? e.message : "Something went sideways");
@@ -484,9 +565,15 @@ function PackingBlock({ shopifyOrderId }: { shopifyOrderId: string }) {
               labelHidden
               value={line.quantity}
               min={0}
+              disabled={savingPacking}
               onChange={(value: number) => updateQuantity(line.componentId, value)}
             />
-            <Button variant="tertiary" tone="critical" onPress={() => removeLine(line.componentId)}>
+            <Button
+              variant="tertiary"
+              tone="critical"
+              disabled={savingPacking}
+              onPress={() => removeLine(line.componentId)}
+            >
               Remove
             </Button>
           </InlineStack>
@@ -494,10 +581,15 @@ function PackingBlock({ shopifyOrderId }: { shopifyOrderId: string }) {
 
         <Divider />
 
+        {/* Locked while a packing save is in flight — `handleSavePacking`
+            closes over `lines` at call time, so an edit made mid-request
+            would be silently dropped (never sent, then overwritten when the
+            response applies server state) if these stayed live. */}
         <InlineStack gap="base" blockAlignment="center">
           <Select
             label="Add material"
             value={addSelection}
+            disabled={savingPacking}
             onChange={(value: string) => addFromLibrary(value)}
             options={[
               { value: "", label: "Choose a material…" },
@@ -507,7 +599,11 @@ function PackingBlock({ shopifyOrderId }: { shopifyOrderId: string }) {
               })),
             ]}
           />
-          <Button variant="secondary" onPress={() => setShowNewComponent((v) => !v)}>
+          <Button
+            variant="secondary"
+            disabled={savingPacking}
+            onPress={() => setShowNewComponent((v) => !v)}
+          >
             {showNewComponent ? "Cancel new material" : "New material"}
           </Button>
         </InlineStack>
@@ -516,24 +612,51 @@ function PackingBlock({ shopifyOrderId }: { shopifyOrderId: string }) {
           <BlockStack gap="tight">
             {newComponentError && (
               <Banner tone="critical" title="Couldn't create material">
-                <Text>{newComponentError}</Text>
+                <BlockStack gap="tight">
+                  <Text>{newComponentError}</Text>
+                  {duplicateComponentId && (
+                    <Button
+                      variant="tertiary"
+                      disabled={savingPacking}
+                      onPress={() => useExistingComponent(duplicateComponentId)}
+                    >
+                      Add existing material to packing list instead
+                    </Button>
+                  )}
+                </BlockStack>
               </Banner>
             )}
-            <TextField label="Name" value={newName} onChange={(v: string) => setNewName(v)} />
+            <TextField
+              label="Name"
+              value={newName}
+              disabled={savingPacking}
+              onChange={(v: string) => setNewName(v)}
+            />
             <Select
               label="Type"
               value={newType}
+              disabled={savingPacking}
               onChange={(v: string) => setNewType(v as ComponentType)}
               options={COMPONENT_TYPES.map((t) => ({ value: t, label: t }))}
             />
-            <TextField label="Unit" value={newUnit} onChange={(v: string) => setNewUnit(v)} />
+            <TextField
+              label="Unit"
+              value={newUnit}
+              disabled={savingPacking}
+              onChange={(v: string) => setNewUnit(v)}
+            />
             <NumberField
               label="Cost per unit"
               value={newCost}
               min={0}
+              disabled={savingPacking}
               onChange={(v: number) => setNewCost(v)}
             />
-            <Button variant="primary" onPress={handleCreateComponent} disabled={creatingComponent}>
+            <Button
+              variant="primary"
+              onPress={handleCreateComponent}
+              disabled={creatingComponent || savingPacking}
+            >
               {creatingComponent ? "Creating…" : "Create material"}
             </Button>
           </BlockStack>
