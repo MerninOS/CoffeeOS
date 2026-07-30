@@ -422,6 +422,11 @@ export async function fetchShopifyOrderById(
     }
   );
 
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Shopify Admin API error: ${response.status} - ${text}`);
+  }
+
   const data = await response.json();
 
   if (data.errors) {

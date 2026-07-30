@@ -91,3 +91,19 @@ test('posts a well-formed request: correct GID and API version', async () => {
     restore()
   }
 })
+
+test('throws a diagnosable error on a non-200 response', async () => {
+  const original = globalThis.fetch
+  globalThis.fetch = (async () =>
+    new Response('<html>Bad Gateway</html>', {
+      status: 502,
+      headers: { 'content-type': 'text/html' },
+    })) as typeof fetch
+  try {
+    await expect(
+      fetchShopifyOrderById('my-store.myshopify.com', 'token', '123456')
+    ).rejects.toThrow(/502/)
+  } finally {
+    globalThis.fetch = original
+  }
+})
