@@ -5,6 +5,19 @@
  *
  * Returned by the GET and by every mutation route, so the block re-syncs to
  * authoritative state after each write.
+ *
+ * FAILS LOUDLY on infrastructure errors, matching app/(dashboard)/orders/page.tsx
+ * ("A blank error beats a convincing lie"). A silently-swallowed error here is
+ * worse than one on the dashboard: `products`/`product_variants` erroring and
+ * falling back to `[]` collapses the lookup to `{}`, which makes every line
+ * item look unlinked — a well-costed order would flip to a wrong-but-plausible
+ * "items not linked" badge with near-zero COGS, and nothing would say a query
+ * failed. That is the exact class of defect the variant-level lookup fix
+ * (buildProductLookup) exists to prevent, just moved one layer down. So:
+ * `getPackingState` THROWS on any query whose `error` is set, and returns
+ * `null` ONLY for a genuine not-found (no matching `orders` row for this
+ * user). Do not "helpfully" restore `|| []` on the queries marked below —
+ * that reintroduces the outage-looks-like-empty-state failure this guards.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -92,7 +105,12 @@ export async function getPackingState(
   userId: string,
   shopifyOrderId: string
 ): Promise<PackingState | null> {
-  const { data: order } = await supabase
+  // maybeSingle() returns {data: null, error: null} for a genuine zero-row
+  // result and {data: null, error: set} for an infra failure (bad connection,
+  // RLS misconfiguration, etc.) — those are NOT the same thing, and only the
+  // former is a 404. Check `error` before `!order`, or a transient failure
+  // silently reads as "this order doesn't exist."
+  const { data: order, error: orderError } = await supabase
     .from("orders")
     .select(
       `
@@ -106,14 +124,25 @@ export async function getPackingState(
     .eq("user_id", userId)
     .maybeSingle();
 
+  if (orderError) {
+    throw new Error(
+      `Could not load order ${shopifyOrderId} for packing: ${orderError.message}`
+    );
+  }
   if (!order) return null;
 
-  // Component library (all of the user's components, name-sorted).
-  const { data: library } = await supabase
+  // Component library (all of the user's components, name-sorted). A failed
+  // query here would otherwise render as "you have no components yet" — an
+  // empty picker that looks like a routine empty state, not an outage.
+  const { data: library, error: libraryError } = await supabase
     .from("components")
     .select("id, name, type, unit, cost_per_unit")
     .eq("user_id", userId)
     .order("name");
+
+  if (libraryError) {
+    throw new Error(`Could not load the component library: ${libraryError.message}`);
+  }
 
   // ProductLookup for classify/cogs — every owned product, per the cogs.ts
   // contract ("the builder must write an entry for EVERY owned product").
@@ -125,7 +154,7 @@ export async function getPackingState(
   // parity guarantee this module exists for. So this reuses the same
   // buildProductLookup() that app/(dashboard)/orders/page.tsx and /products
   // call, rather than re-deriving the precedence rule here.
-  const { data: products } = await supabase
+  const { data: products, error: productsError } = await supabase
     .from("products")
     .select(
       `
@@ -135,7 +164,15 @@ export async function getPackingState(
     )
     .eq("user_id", userId);
 
-  const { data: variantRows } = await supabase
+  // FAIL LOUDLY — see module header. `products` erroring and falling back to
+  // `[]` here is the failure mode this whole change guards against: the
+  // lookup collapses to `{}`, every line item's product_id looks absent, and
+  // classifyOrder reports `unlinked` for orders that are actually costed.
+  if (productsError) {
+    throw new Error(`Could not load product costs for packing: ${productsError.message}`);
+  }
+
+  const { data: variantRows, error: variantsError } = await supabase
     .from("product_variants")
     .select(
       `
@@ -144,6 +181,10 @@ export async function getPackingState(
     `
     )
     .in("product_id", (products || []).map((p) => p.id));
+
+  if (variantsError) {
+    throw new Error(`Could not load variant costs for packing: ${variantsError.message}`);
+  }
 
   const lookup: ProductLookup = buildProductLookup(
     (products || []) as CostableProduct[],
@@ -157,6 +198,12 @@ export async function getPackingState(
   // Suggestion only when nothing is packed yet — never over real data.
   let suggestion: SuggestionLine[] = [];
   if (packing.length === 0) {
+    // Deliberately NOT thrown on error, unlike the queries above. A failure
+    // here only degrades the prefill suggestion to empty — the operator packs
+    // from a blank slate instead of a pre-filled one, which is a worse UX but
+    // not a wrong COGS or a mislabeled order. That's a materially lower stake
+    // than the lookup/order/library queries, so this one is allowed to fall
+    // through to `[]` rather than fail the whole GET.
     const { data: recent } = await supabase
       .from("orders")
       .select(
