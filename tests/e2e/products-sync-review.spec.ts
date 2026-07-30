@@ -196,3 +196,44 @@ test.describe('Shopify sync review', () => {
     await expect(page.getByText(/Day 120/).first()).toBeVisible({ timeout: 30_000 })
   })
 })
+
+/**
+ * Its own describe, with its own reset, because it needs every fixture product
+ * to still be NEW — the block above imports two of them.
+ */
+test.describe('declining without importing', () => {
+  test.beforeAll(async () => {
+    await resetSyncFixture()
+  })
+
+  test.afterAll(async () => {
+    await resetSyncFixture()
+  })
+
+  test('every new product can be declined without importing anything', async ({ page }) => {
+    // The gesture the whole feature exists for: "Shopify has new products and I
+    // want none of them." It was unreachable — confirm was gated on having
+    // something selected, so unchecking everything greyed out the only button
+    // that writes an exclusion, and Cancel writes nothing. The products came
+    // back on every preview with no way to say no.
+    await openReview(page)
+
+    await deselectChangedGroup(page)
+    await setChecked(page, 'Select all New', false)
+
+    const confirm = page.getByRole('button', { name: /^Decline \d+$/ })
+    await expect(confirm, 'declining alone must be a reachable action').toBeEnabled()
+    await confirm.click()
+
+    await expect(page.getByTestId('sync-review-dialog')).toBeHidden({ timeout: 60_000 })
+
+    // Nothing was imported...
+    await expect(page.getByText(FIXTURE_ONLY_PRODUCT)).toHaveCount(0)
+    await expect(page.getByText(ADVENT_PRODUCT)).toHaveCount(0)
+
+    // ...and the declines stuck: the next preview offers no new products at all.
+    await openReview(page)
+    await expect(page.getByTestId('sync-group-new')).toHaveCount(0)
+    await expect(page.getByTestId('reveal-ignored')).toBeVisible()
+  })
+})

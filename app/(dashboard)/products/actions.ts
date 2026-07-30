@@ -10,6 +10,7 @@ import { fetchShopifyProducts, fetchRemainingProductVariants } from "@/lib/shopi
 import { parseShopifyGid, type ShopifyProduct, type ShopifyVariant } from "@/lib/shopify";
 import {
   diffProduct,
+  exclusionsToRecord,
   type ExistingProduct,
   type ExistingVariant,
   type SyncCandidate,
@@ -339,7 +340,14 @@ export async function syncShopifyProducts(selection: {
   importIds: string[];
   excludeIds: string[];
 }): Promise<
-  | { success: true; count: number; requested: number; failures: UpsertFailure[] }
+  | {
+      success: true;
+      count: number;
+      requested: number;
+      failures: UpsertFailure[];
+      /** Set when products imported but the declined-list update failed. */
+      bookkeepingError: string | null;
+    }
   | { error: string }
 > {
   const supabase = await createClient();
@@ -381,32 +389,42 @@ export async function syncShopifyProducts(selection: {
       else imported++;
     }
 
-    // Exclusions are for declined NEW products only.
+    // The bookkeeping below runs AFTER products have already been committed, so
+    // it must never throw into the outer catch. Doing so returned a bare
+    // { error }, discarding the import count and the per-product failures — the
+    // operator was told the sync failed while their products had in fact landed,
+    // and the client skipped its reload so the page did not even show them.
     //
-    // Declining an update to a product already in the catalogue means "skip this
-    // change", not "never import this product". Writing an exclusion for it
-    // would banish an in-use product from every future preview — it would still
-    // be sitting in the catalogue, now invisible to the sync that maintains it.
-    const newlyExcluded = selection.excludeIds.filter(
-      (shopifyId) => statusById.get(shopifyId) === "new"
-    );
+    // That is the same dishonest-reporting bug this action was rewritten to
+    // remove, so a bookkeeping failure is reported ALONGSIDE the import result,
+    // never instead of it.
+    let bookkeepingError: string | null = null;
 
-    if (newlyExcluded.length > 0) {
-      const { error } = await supabase.from("shopify_product_exclusions").upsert(
-        newlyExcluded.map((shopify_id) => ({ user_id: ownerId, shopify_id })),
-        { onConflict: "user_id,shopify_id" }
-      );
-      if (error) throw new Error(`Could not record declined products: ${error.message}`);
-    }
+    try {
+      // Exclusions are for declined NEW products only — see exclusionsToRecord.
+      const newlyExcluded = exclusionsToRecord(selection.excludeIds, statusById);
 
-    // Importing a product un-ignores it — this is the un-ignore path (AC7).
-    for (const ids of chunk(selection.importIds, ID_CHUNK_SIZE)) {
-      const { error } = await supabase
-        .from("shopify_product_exclusions")
-        .delete()
-        .eq("user_id", ownerId)
-        .in("shopify_id", ids);
-      if (error) throw new Error(`Could not clear declined products: ${error.message}`);
+      if (newlyExcluded.length > 0) {
+        const { error } = await supabase.from("shopify_product_exclusions").upsert(
+          newlyExcluded.map((shopify_id) => ({ user_id: ownerId, shopify_id })),
+          { onConflict: "user_id,shopify_id" }
+        );
+        if (error) throw new Error(`Could not record declined products: ${error.message}`);
+      }
+
+      // Importing a product un-ignores it — this is the un-ignore path (AC7).
+      for (const ids of chunk(selection.importIds, ID_CHUNK_SIZE)) {
+        const { error } = await supabase
+          .from("shopify_product_exclusions")
+          .delete()
+          .eq("user_id", ownerId)
+          .in("shopify_id", ids);
+        if (error) throw new Error(`Could not clear declined products: ${error.message}`);
+      }
+    } catch (error) {
+      console.error("Shopify exclusion bookkeeping error:", error);
+      bookkeepingError =
+        error instanceof Error ? error.message : "Could not save the declined products";
     }
 
     revalidatePath("/products");
@@ -420,6 +438,7 @@ export async function syncShopifyProducts(selection: {
       count: imported,
       requested: selection.importIds.length,
       failures,
+      bookkeepingError,
     };
   } catch (error) {
     console.error("Shopify sync error:", error);

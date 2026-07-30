@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test'
 import {
   diffProduct,
+  exclusionsToRecord,
   type ExistingProduct,
   type ExistingVariant,
+  type SyncStatus,
 } from '../../lib/products/shopify-diff'
 import type { ShopifyProduct, ShopifyVariant } from '../../lib/shopify'
 
@@ -265,6 +267,55 @@ test('a renamed variant is reported as changed, naming the title', () => {
   ])
 })
 
+test('a re-SKUd variant is reported as changed, naming the sku', () => {
+  const candidate = diffProduct({
+    ...identical(),
+    incomingVariants: [
+      shopifyVariant({ id: 'gid://shopify/ProductVariant/10000000011', sku: 'ETH-12-LIGHT' }),
+    ],
+    // Product-level sku moved with it (it is derived from this variant), so the
+    // stored row is set to match — isolating the VARIANT-level diff.
+    existing: existingProduct({ sku: 'ETH-12-LIGHT' }),
+  })
+
+  // The sync writes variant sku on every row. A variant other than the first
+  // could change sku with no diff at all before this was compared.
+  expect(candidate.variantDiffs).toEqual([
+    {
+      shopifyVariantId: 'gid://shopify/ProductVariant/10000000011',
+      kind: 'changed',
+      diffs: [{ field: 'sku', current: 'BASE-SKU', incoming: 'ETH-12-LIGHT' }],
+    },
+  ])
+})
+
+test('a re-SKUd SECOND variant is still caught', () => {
+  const second = 'gid://shopify/ProductVariant/10000000012'
+  const candidate = diffProduct({
+    ...identical(),
+    incomingVariants: [
+      shopifyVariant({ id: 'gid://shopify/ProductVariant/10000000011' }),
+      shopifyVariant({ id: second, title: '2lb', sku: 'ETH-2LB-V2' }),
+    ],
+    existingVariants: [
+      existingVariant(),
+      existingVariant({ shopify_variant_id: second, title: '2lb', sku: 'ETH-2LB' }),
+    ],
+  })
+
+  // The case that was invisible: nothing about the product row moves, so
+  // without a variant-level sku comparison this classified UNCHANGED.
+  expect(candidate.status).toBe('changed')
+  expect(candidate.diffs).toEqual([])
+  expect(candidate.variantDiffs).toEqual([
+    {
+      shopifyVariantId: second,
+      kind: 'changed',
+      diffs: [{ field: 'sku', current: 'ETH-2LB', incoming: 'ETH-2LB-V2' }],
+    },
+  ])
+})
+
 test('a repriced variant is reported as changed, naming the price', () => {
   const candidate = diffProduct({
     ...identical(),
@@ -377,6 +428,55 @@ test('an excluded product still classifies on its own merits', () => {
   // reachable and re-importable, which needs its real classification intact.
   expect(candidate.status).toBe('new')
   expect(candidate.excluded).toBe(true)
+})
+
+// ── AC6a: which declines are remembered ─────────────────────────────────────
+
+/**
+ * The single most load-bearing rule in the feature, and the one whose absence
+ * is unrecoverable: writing an exclusion for a CHANGED product leaves an in-use
+ * catalogue item invisible to the sync that maintains it. Nothing tested this
+ * directly before — the e2e only ever declines a NEW product, so deleting the
+ * status filter entirely would have kept the suite green.
+ */
+const statuses = (entries: Record<string, SyncStatus>) =>
+  new Map(Object.entries(entries)) as Map<string, SyncStatus>
+
+test('a declined NEW product is remembered', () => {
+  expect(exclusionsToRecord(['a'], statuses({ a: 'new' }))).toEqual(['a'])
+})
+
+test('a declined CHANGED product is NOT remembered — that means skip the update', () => {
+  expect(exclusionsToRecord(['a'], statuses({ a: 'changed' }))).toEqual([])
+})
+
+test('a declined UNCHANGED product is NOT remembered', () => {
+  expect(exclusionsToRecord(['a'], statuses({ a: 'unchanged' }))).toEqual([])
+})
+
+test('a mixed decline keeps only the new ones, in order', () => {
+  const declined = ['keep1', 'skip-changed', 'keep2', 'skip-unchanged']
+  expect(
+    exclusionsToRecord(
+      declined,
+      statuses({
+        keep1: 'new',
+        'skip-changed': 'changed',
+        keep2: 'new',
+        'skip-unchanged': 'unchanged',
+      })
+    )
+  ).toEqual(['keep1', 'keep2'])
+})
+
+test('an id the server never classified is not remembered', () => {
+  // The client can post arbitrary ids. One the server's own re-diff never saw
+  // has no status, and an unknown id must never become an exclusion.
+  expect(exclusionsToRecord(['ghost'], statuses({ a: 'new' }))).toEqual([])
+})
+
+test('declining nothing writes nothing', () => {
+  expect(exclusionsToRecord([], statuses({ a: 'new' }))).toEqual([])
 })
 
 test('a product with no variants at all does not throw', () => {

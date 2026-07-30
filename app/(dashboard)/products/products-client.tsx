@@ -133,9 +133,22 @@ export function ProductsClient({
         ? `Imported ${result.count} of ${result.requested}. ${result.failures.length} failed: ${result.failures
             .map((failure) => `${failure.shopifyId} (${failure.reason})`)
             .join(", ")}`
-        : `Imported ${result.count} product${result.count === 1 ? "" : "s"} from Shopify.`;
+        : result.requested === 0
+          ? // A decline-only confirm. "Imported 0 products" would read as a
+            // failure when the operator got exactly what they asked for.
+            "Nothing imported. Those products won't be offered again."
+          : `Imported ${result.count} product${result.count === 1 ? "" : "s"} from Shopify.`;
 
-    setSyncMessage({ type: result.failures.length > 0 ? "error" : "success", text });
+    // Products may have landed while the declined-list update failed. Say both
+    // rather than letting a bookkeeping failure masquerade as a failed import.
+    const suffix = result.bookkeepingError
+      ? ` The declined products could not be saved: ${result.bookkeepingError}`
+      : "";
+
+    setSyncMessage({
+      type: result.failures.length > 0 || result.bookkeepingError ? "error" : "success",
+      text: text + suffix,
+    });
     setIsReviewOpen(false);
     setIsSyncing(false);
     window.location.reload();

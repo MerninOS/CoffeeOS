@@ -90,6 +90,29 @@ export interface DiffInput {
 }
 
 /**
+ * Which declined products get remembered (AC6a).
+ *
+ * ONLY the ones the server itself classified `new`. Declining an update to a
+ * product already in the catalogue means "skip this change", not "never import
+ * this product" — recording that would leave an in-use product sitting in
+ * CoffeeOS, invisible to the sync that maintains it, reachable only through the
+ * ignored reveal.
+ *
+ * Extracted from the action so the rule can be tested without a database. It is
+ * one `filter`, and it is the single most load-bearing line in the feature: the
+ * distinction it encodes is not recoverable once the wrong row is written.
+ *
+ * `statuses` MUST come from the server's own re-diff. A client-supplied status
+ * here would let anyone banish any product by posting a status of "new".
+ */
+export function exclusionsToRecord(
+  excludeIds: string[],
+  statuses: Map<string, SyncStatus>
+): string[] {
+  return excludeIds.filter((shopifyId) => statuses.get(shopifyId) === "new");
+}
+
+/**
  * Money compared as a fixed 2-decimal string.
  *
  * Shopify sends `"19.0"`; Postgres DECIMAL(10,2) comes back as `19.00` or the
@@ -175,8 +198,17 @@ function diffVariants(
       continue;
     }
 
+    // Every field the write touches must be compared here. The sync writes
+    // title, sku and price for each variant row; omitting sku meant a re-SKU on
+    // any variant but the first produced no diff at all — the product read
+    // unchanged, sat in the collapsed group, and the corrected SKU never
+    // arrived. Worse in the other direction: import that product for an
+    // unrelated reason and the write silently changes a column the preview
+    // never showed. The first variant escaped only because products.sku is
+    // derived from it and that IS diffed.
     const diffs: FieldDiff[] = [];
     pushDiff(diffs, "title", normalizeText(existing.title), normalizeText(incoming.title));
+    pushDiff(diffs, "sku", normalizeText(existing.sku), normalizeText(incoming.sku));
     pushDiff(diffs, "price", normalizePrice(existing.price), normalizePrice(incoming.price));
 
     if (diffs.length > 0) {

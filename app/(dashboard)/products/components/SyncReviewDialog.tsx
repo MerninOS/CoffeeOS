@@ -308,6 +308,25 @@ export function SyncReviewDialog({
     setShowIgnored(false);
   }, [groups]);
 
+  /**
+   * Declining is a real gesture on its own, not a side effect of importing.
+   *
+   * "Shopify has three new products and I want none of them" is the whole point
+   * of the feature, and it was unreachable: the confirm button was gated on
+   * `selectedIds.size === 0`, so unchecking everything greyed it out and the
+   * only exit was Cancel — which writes nothing, leaving those products to
+   * reappear on every future preview with no way to say no.
+   *
+   * Only NEW products count. Unchecking a changed or unchanged one records
+   * nothing (see exclusionsToRecord), so it must not enable the button either —
+   * otherwise confirm would be live while doing nothing at all.
+   */
+  const declineCount = useMemo(
+    () =>
+      groups.new.filter((candidate) => !selectedIds.has(candidate.shopifyId)).length,
+    [groups, selectedIds]
+  );
+
   const toggle = (shopifyId: string) =>
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -448,8 +467,15 @@ export function SyncReviewDialog({
             <Button variant="tertiary" onClick={() => onOpenChange(false)} disabled={isSyncing}>
               Cancel
             </Button>
-            <Button onClick={confirm} disabled={isSyncing || selectedIds.size === 0}>
-              {isSyncing ? "Importing…" : `Import ${selectedIds.size}`}
+            <Button
+              onClick={confirm}
+              disabled={isSyncing || (selectedIds.size === 0 && declineCount === 0)}
+            >
+              {isSyncing
+                ? "Working…"
+                : selectedIds.size > 0
+                  ? `Import ${selectedIds.size}`
+                  : `Decline ${declineCount}`}
             </Button>
           </span>
         </DialogFooter>
