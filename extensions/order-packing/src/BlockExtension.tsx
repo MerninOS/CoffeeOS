@@ -270,15 +270,19 @@ function costabilityReason(costability: Costability): string {
 
 // Read "what I paid for shipping" out of the generic customCosts bucket
 // (order_custom_costs has no dedicated shipping field in the PackingState
-// contract). MUST mirror app/api/shopify/block/shipping-cost/route.ts's
-// `.ilike("description", "shipping")` EXACTLY (case-insensitive, no
-// wildcards) — a looser match here (e.g. a substring test) can pick up an
-// unrelated custom cost like "Shipping insurance", pre-fill its amount into
-// this field, and get it saved back under a DIFFERENT description. The
-// server would then find no exact "Shipping" row, insert a second one, and
-// order_custom_costs sums additively — silently double-counting a cost that
-// was never shipping. Purely for pre-filling the input; never used for any
-// total math.
+// contract). MUST mirror the predicate app/api/shopify/block/shipping-cost/
+// route.ts's `upsert_order_shipping_cost` RPC uses to find the row it
+// updates — `lower(description) = 'shipping'`, an exact case-insensitive
+// match enforced by the partial unique index `order_custom_costs_shipping_
+// unique` in scripts/026_packing_uniqueness.sql (`WHERE lower(description) =
+// 'shipping'`) — EXACTLY (no wildcards, no substring match). A looser match
+// here (e.g. a substring test) can pick up an unrelated custom cost like
+// "Shipping insurance", pre-fill its amount into this field, and get it
+// saved back under a DIFFERENT description. The RPC would then find no
+// existing row matching its own predicate and INSERT a second "Shipping"
+// row — order_custom_costs sums additively, so that silently double-counts
+// a cost that was never shipping. Purely for pre-filling the input; never
+// used for any total math.
 function findShippingCustomCost(customCosts: CustomCost[]): CustomCost | undefined {
   return customCosts.find((c) => c.description.toLowerCase() === "shipping");
 }
