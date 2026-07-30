@@ -1,0 +1,9 @@
+{
+  "name": "order-packing",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "@shopify/ui-extensions": "2024.10.2",
+    "@shopify/ui-extensions-react": "2024.10.2"
+  }
+}
