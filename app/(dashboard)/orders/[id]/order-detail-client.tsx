@@ -540,6 +540,10 @@ export function OrderDetailClient({
             {assignedCoffeeList.map((assignment) => (
               <div
                 key={assignment.id}
+                /* Test contract — see the note on `detail-cogs`. A coffee
+                   assignment row and the "Total Assigned" line both render the
+                   same gram figure, so text alone cannot address one of them. */
+                data-testid="coffee-assignment"
                 className="flex items-center justify-between rounded-[10px] border-[2px] border-fog bg-cream px-4 py-2.5"
               >
                 <div>
@@ -812,16 +816,26 @@ export function OrderDetailClient({
             equally known and renders in ink. Same rule as /orders
             (OrdersWorksheetTable) — the two surfaces must not disagree.
           */}
+          {/* `detail-cogs` and `detail-profit` are the elements
+              order-detail-capabilities.spec.ts asserts exact dollar deltas
+              against. They are a TEST CONTRACT, not decoration: the Instrument
+              rebuild (CoffeeOS#70) may move, restyle or re-parent these figures,
+              but must carry the testids with them — they are the only thing that
+              can tell a working control from one that renders perfectly and
+              silently no-ops, which a screenshot cannot. */}
           <div className="flex justify-between pt-1">
             <span className="text-espresso/60 font-medium">Total COGS</span>
-            <span className={`font-bold ${costKnown ? "text-espresso" : "text-tomato"}`}>
+            <span
+              data-testid="detail-cogs"
+              className={`font-bold ${costKnown ? "text-espresso" : "text-tomato"}`}
+            >
               {cogsLabel(cogs, costKnown)}
             </span>
           </div>
           {costKnown ? (
             <div className={`flex justify-between border-t-[2px] border-espresso pt-2 ${profit >= 0 ? "text-matcha" : "text-tomato"}`}>
               <span className="font-extrabold text-[14px] uppercase tracking-[.06em]">Net Profit</span>
-              <span className="font-extrabold text-[14px]">${profit.toFixed(2)}</span>
+              <span data-testid="detail-profit" className="font-extrabold text-[14px]">${profit.toFixed(2)}</span>
             </div>
           ) : (
             <div className="border-t-[2px] border-espresso pt-2">
