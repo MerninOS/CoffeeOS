@@ -51,6 +51,14 @@ const BASE_PROFIT = 3.26
 const COMPONENT = 'Roastery Labor'
 const COMPONENT_COST = 22.0
 
+/**
+ * The option's full visible text. `selectOption` matches a literal label — it
+ * takes no RegExp — so this has to mirror how AddComponentRow renders it.
+ * Deriving it from the two constants above keeps the coupling honest: change the
+ * component or its cost and this follows, rather than silently failing to match.
+ */
+const COMPONENT_OPTION = `${COMPONENT} ($${COMPONENT_COST.toFixed(2)}/unit)`
+
 const money = (n: number) => `−$${n.toFixed(2)}`
 const profitText = (n: number) => `$${n.toFixed(2)}`
 
@@ -111,10 +119,14 @@ test('adding a custom cost moves COGS and profit by exactly that amount', async 
   await openOrder(page, ORDER)
   await expectBaseline(page)
 
-  await page.getByRole('button', { name: 'Add Cost', exact: true }).click()
-  await page.getByPlaceholder('e.g., Shipping, Packaging').fill('Capability probe')
-  await page.getByPlaceholder('0.00').fill('4.00')
-  await page.getByRole('button', { name: 'Add Cost', exact: true }).last().click()
+  // Stage B replaced the Radix dialog with an inline worksheet row: the
+  // collapsed "Add cost" button expands the row in place, and the same label
+  // submits it. Assertions below are unchanged — the interaction moved, the
+  // behaviour did not, which is exactly what this suite exists to prove.
+  await page.getByRole('button', { name: 'Add cost', exact: true }).click()
+  await page.getByLabel('Description').fill('Capability probe')
+  await page.getByLabel('Amount').fill('4.00')
+  await page.getByRole('button', { name: 'Add cost', exact: true }).last().click()
 
   // Both figures, because they are two derivations over the same number and a
   // mutation must move both. Checking only COGS would miss profit going stale.
@@ -122,7 +134,7 @@ test('adding a custom cost moves COGS and profit by exactly that amount', async 
   await expect(profit(page)).toHaveText(profitText(BASE_PROFIT - 4))
 
   // Restore — see the note at the top about baseline drift.
-  await page.getByRole('row', { name: /Capability probe/ }).getByRole('button').click()
+  await page.getByRole('button', { name: 'Remove Capability probe' }).click()
   await page.getByRole('button', { name: 'Delete', exact: true }).click()
   await expectBaseline(page)
 })
@@ -133,15 +145,17 @@ test('adding and removing an order component moves COGS by exactly its cost', as
   await openOrder(page, ORDER)
   await expectBaseline(page)
 
-  await page.getByRole('button', { name: 'Add Component', exact: true }).click()
-  await page.getByRole('combobox').click()
-  await page.getByRole('option', { name: new RegExp(COMPONENT) }).click()
-  await page.getByRole('button', { name: 'Add Component', exact: true }).last().click()
+  // Instrument's Select is a NATIVE <select>, so this is selectOption() rather
+  // than clicking a listbox. Driving a native select any other way silently
+  // does nothing.
+  await page.getByRole('button', { name: 'Add component', exact: true }).click()
+  await page.getByLabel('Component').selectOption({ label: COMPONENT_OPTION })
+  await page.getByRole('button', { name: 'Add component', exact: true }).last().click()
 
   await expect(cogs(page)).toHaveText(money(BASE_COGS + COMPONENT_COST))
   await expect(profit(page)).toHaveText(profitText(BASE_PROFIT - COMPONENT_COST))
 
-  await page.getByRole('row', { name: new RegExp(COMPONENT) }).getByRole('button').click()
+  await page.getByRole('button', { name: `Remove ${COMPONENT}` }).click()
   await page.getByRole('button', { name: 'Remove', exact: true }).click()
   await expectBaseline(page)
 })

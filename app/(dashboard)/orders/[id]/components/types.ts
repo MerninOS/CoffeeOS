@@ -90,6 +90,33 @@ export interface OrderDetailClientProps {
   components: Component[];
 }
 
+/**
+ * A line item joined to what the product lookup knows about it.
+ *
+ * Derived in the parent so the worksheet renders an answer rather than computing
+ * one. `linked` and `hasRecipe` are separate on purpose: absent-from-the-lookup
+ * (the product no longer exists) and present-but-uncosted are different failures
+ * with different remedies, and collapsing them is the bug CoffeeOS#100 fixed.
+ *
+ * `title` here is the line item's HISTORICAL name, used for display. Anything
+ * naming a product to send an operator somewhere must use the lookup's current
+ * title instead (CoffeeOS#78).
+ */
+export type ProductRow = {
+  id: string;
+  title: string;
+  variantTitle: string | null;
+  sku: string | null;
+  qty: number;
+  price: number;
+  /** Unit COGS from the lookup. Meaningless unless `linked && hasRecipe`. */
+  unitCost: number;
+  /** The line item resolved to a product that exists. */
+  linked: boolean;
+  /** That product carries recipe rows. NOT the same as `unitCost > 0`. */
+  hasRecipe: boolean;
+};
+
 /** A coffee assignment flattened for display. Derived in the parent. */
 export type AssignedCoffee = {
   id: string;

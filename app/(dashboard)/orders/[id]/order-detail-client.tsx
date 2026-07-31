@@ -15,14 +15,13 @@ import {
   addOrderComponent,
   removeOrderComponent,
 } from "../actions";
-import type { OrderDetailClientProps } from "./components/types";
-import { LineItemsPanel } from "./components/LineItemsPanel";
-import { CostSummaryPanel } from "./components/CostSummaryPanel";
+import type { OrderDetailClientProps, ProductRow } from "./components/types";
 import { OrderHeader } from "./components/OrderHeader";
 import { SummaryCards } from "./components/SummaryCards";
 import { RoastedCoffeePanel } from "./components/RoastedCoffeePanel";
-import { CustomCostsPanel } from "./components/CustomCostsPanel";
-import { ComponentsPanel } from "./components/ComponentsPanel";
+import { Worksheet } from "./components/Worksheet";
+import { AddComponentRow } from "./components/AddComponentRow";
+import { AddCostRow } from "./components/AddCostRow";
 import { DeleteDialogs } from "./components/DeleteDialogs";
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -63,6 +62,31 @@ export function OrderDetailClient({
     assignedAt: a.assigned_at,
   }));
   const totalAssignedCoffeeG = assignedCoffeeList.reduce((sum, c) => sum + c.amountG, 0);
+
+  /**
+   * Each line item joined to what the product lookup knows about it.
+   *
+   * `linked` and `hasRecipe` stay separate because they are different failures
+   * with different remedies: a line item pointing at a product that no longer
+   * exists cannot be repaired by costing anything (CoffeeOS#78), while one whose
+   * product simply has no recipe can. Collapsing them is the defect
+   * CoffeeOS#100 fixed, and `unitCost > 0` is not a substitute for either — a
+   * product costed entirely from zero-cost components is genuinely $0.00.
+   */
+  const rows: ProductRow[] = order.order_line_items.map((li) => {
+    const product = li.product_id ? products[li.product_id] : undefined;
+    return {
+      id: li.id,
+      title: li.title,
+      variantTitle: li.variant_title,
+      sku: li.sku,
+      qty: li.quantity,
+      price: li.price,
+      unitCost: product?.cogs ?? 0,
+      linked: Boolean(product),
+      hasRecipe: Boolean(product?.hasRecipe),
+    };
+  });
 
   // Costed through lib/orders/cogs.ts — the one implementation /orders and the
   // Shopify packing block already share. This page used to carry its own
@@ -191,43 +215,43 @@ export function OrderDetailClient({
         gramsToLbs={gramsToLbs}
         setDeleteAssignmentId={setDeleteAssignmentId}
       />
-      {/* Line Items */}
-      <LineItemsPanel order={order} shipping={shipping} />
-      {/* Custom Costs */}
-      <CustomCostsPanel
-        isAddCostOpen={isAddCostOpen}
-        setIsAddCostOpen={setIsAddCostOpen}
-        newCostDescription={newCostDescription}
-        setNewCostDescription={setNewCostDescription}
-        newCostAmount={newCostAmount}
-        setNewCostAmount={setNewCostAmount}
-        handleAddCustomCost={handleAddCustomCost}
-        isPending={isPending}
+      {/* The worksheet — line items, order components, custom costs and the
+          totals that reconcile them, on ONE set of column tracks. Replaces four
+          separate panels; see Worksheet.tsx for why that is the whole point. */}
+      <Worksheet
         order={order}
-        setDeleteCostId={setDeleteCostId}
-      />
-      {/* Additional Components */}
-      <ComponentsPanel
-        isAddComponentOpen={isAddComponentOpen}
-        setIsAddComponentOpen={setIsAddComponentOpen}
-        components={components}
-        selectedComponentId={selectedComponentId}
-        setSelectedComponentId={setSelectedComponentId}
-        componentQuantity={componentQuantity}
-        setComponentQuantity={setComponentQuantity}
-        handleAddComponent={handleAddComponent}
-        isPending={isPending}
-        order={order}
-        setDeleteComponentId={setDeleteComponentId}
-      />
-      {/* Cost Summary */}
-      <CostSummaryPanel
-        order={order}
+        rows={rows}
         cogs={cogs}
         costKnown={costKnown}
         profit={profit}
+        margin={margin}
         blockedBy={blockedBy}
+        shipping={shipping}
+        onRemoveComponent={setDeleteComponentId}
+        onRemoveCost={setDeleteCostId}
+        addComponentRow={
+          <AddComponentRow
+            components={components}
+            selectedComponentId={selectedComponentId}
+            setSelectedComponentId={setSelectedComponentId}
+            componentQuantity={componentQuantity}
+            setComponentQuantity={setComponentQuantity}
+            handleAddComponent={handleAddComponent}
+            isPending={isPending}
+          />
+        }
+        addCostRow={
+          <AddCostRow
+            newCostDescription={newCostDescription}
+            setNewCostDescription={setNewCostDescription}
+            newCostAmount={newCostAmount}
+            setNewCostAmount={setNewCostAmount}
+            handleAddCustomCost={handleAddCustomCost}
+            isPending={isPending}
+          />
+        }
       />
+
       {/* Delete confirmation dialogs */}
       <DeleteDialogs
         deleteAssignmentId={deleteAssignmentId}
