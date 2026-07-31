@@ -30,6 +30,7 @@ export function DeleteDialogs({
   deleteComponentId,
   setDeleteComponentId,
   handleRemoveComponent,
+  isPending,
 }: {
   deleteAssignmentId: string | null;
   setDeleteAssignmentId: (id: string | null) => void;
@@ -40,6 +41,7 @@ export function DeleteDialogs({
   deleteComponentId: string | null;
   setDeleteComponentId: (id: string | null) => void;
   handleRemoveComponent: (id: string) => void;
+  isPending: boolean;
 }) {
   return (
     <>
@@ -62,6 +64,7 @@ export function DeleteDialogs({
       <AlertDialogFooter>
         <AlertDialogCancel style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", border: "1px solid var(--hairline-strong)", borderRadius: "var(--r-md)", background: "var(--surface-sunken)", color: "var(--ink)" }}>Cancel</AlertDialogCancel>
         <AlertDialogAction
+              disabled={isPending}
           onClick={() => deleteAssignmentId && handleRemoveCoffeeAssignment(deleteAssignmentId)}
           style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", background: "var(--danger)", color: "var(--on-danger, #fff)", border: "1px solid var(--danger)", borderRadius: "var(--r-md)" }}
         >
@@ -88,6 +91,7 @@ export function DeleteDialogs({
       <AlertDialogFooter>
         <AlertDialogCancel style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", border: "1px solid var(--hairline-strong)", borderRadius: "var(--r-md)", background: "var(--surface-sunken)", color: "var(--ink)" }}>Cancel</AlertDialogCancel>
         <AlertDialogAction
+              disabled={isPending}
           onClick={() => deleteCostId && handleRemoveCustomCost(deleteCostId)}
           style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", background: "var(--danger)", color: "var(--on-danger, #fff)", border: "1px solid var(--danger)", borderRadius: "var(--r-md)" }}
         >
@@ -114,6 +118,7 @@ export function DeleteDialogs({
       <AlertDialogFooter>
         <AlertDialogCancel style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", border: "1px solid var(--hairline-strong)", borderRadius: "var(--r-md)", background: "var(--surface-sunken)", color: "var(--ink)" }}>Cancel</AlertDialogCancel>
         <AlertDialogAction
+              disabled={isPending}
           onClick={() => deleteComponentId && handleRemoveComponent(deleteComponentId)}
           style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", background: "var(--danger)", color: "var(--on-danger, #fff)", border: "1px solid var(--danger)", borderRadius: "var(--r-md)" }}
         >

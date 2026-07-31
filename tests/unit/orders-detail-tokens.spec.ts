@@ -98,11 +98,20 @@ test('no file on /orders/[id] re-derives a costing rule that lib/orders/format.t
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
     const rel = path.relative(ROUTE, file)
 
+    // The LITERAL is forbidden; importing COGS_NOT_SET from format.ts is the
+    // sanctioned way to branch on that state, because it cannot drift.
     if (/["']not set["']/.test(code)) {
-      offences.push(`${rel}: the "not set" literal belongs to cogsLabel()`)
+      offences.push(`${rel}: hard-codes "not set" — import COGS_NOT_SET instead`)
     }
     if (/===\s*["']costed["']/.test(code)) {
       offences.push(`${rel}: the costed check belongs to mayShowMargin()`)
+    }
+    // The SEMANTICS, not just the literal. MarginHero re-derived cogsLabel's
+    // rule as `costKnown || cogs !== 0` and the two checks above sailed past
+    // it, because neither the "not set" string nor === "costed" appears in it.
+    // A guard that only knows the spelling of a rule cannot protect the rule.
+    if (/\bcogs\s*[!=]==?\s*0\b/.test(code)) {
+      offences.push(`${rel}: comparing cogs to 0 re-derives cogsLabel()'s rule`)
     }
   }
 

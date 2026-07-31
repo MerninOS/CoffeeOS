@@ -250,3 +250,32 @@ test('toggling ready to ship flips the control and leaves the money alone', asyn
   // into the costing path.
   await expectBaseline(page)
 })
+
+// ── Cancel: the control that must do nothing ────────────────────────────────
+
+/**
+ * Cancel had no test, and a no-op version of it survived mutation testing.
+ *
+ * It is easy to dismiss as trivial, but it is the only escape from an inline row
+ * — the dialogs it replaced could be dismissed with Escape or a backdrop click,
+ * and an inline row has neither. A Cancel that silently does nothing traps the
+ * operator in a form with no way out, and nothing else in this suite notices.
+ */
+test('cancelling an add row closes it and changes nothing', async ({ page }) => {
+  await openOrder(page, ORDER)
+  await expectBaseline(page)
+
+  await page.getByRole('button', { name: 'Add cost', exact: true }).click()
+  await page.getByLabel('Description').fill('Should never be saved')
+  await page.getByLabel('Amount').fill('999.00')
+
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+
+  // The row is gone and the collapsed trigger is back.
+  await expect(page.getByLabel('Description')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Add cost', exact: true })).toBeVisible()
+
+  // And nothing was written.
+  await expectBaseline(page)
+  await expect(page.getByText('Should never be saved')).toHaveCount(0)
+})

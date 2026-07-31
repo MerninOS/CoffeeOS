@@ -20,21 +20,45 @@ import type { Order } from "./types";
  * available is not that. The old page filled this button with --color-tomato.
  */
 
-const FINANCIAL: Record<
-  string,
-  { tone: "success" | "warning" | "danger" | "neutral"; label: string }
-> = {
-  paid: { tone: "success", label: "Paid" },
-  pending: { tone: "warning", label: "Pending" },
-  refunded: { tone: "neutral", label: "Refunded" },
-  partially_refunded: { tone: "neutral", label: "Partly refunded" },
+/**
+ * Tone lookups ONLY — never label lookups.
+ *
+ * Shopify's displayFinancialStatus / displayFulfillmentStatus are stored
+ * verbatim (lib/orders/sync.ts) and include values these maps do not name:
+ * AUTHORIZED, PARTIALLY_PAID, VOIDED, EXPIRED, RESTOCKED, ON_HOLD, IN_PROGRESS,
+ * SCHEDULED. An earlier version of this file looked the LABEL up here too, so an
+ * unrecognised payment status rendered no badge at all and an unrecognised
+ * fulfilment status was asserted to be "Unfulfilled" — positively false, and a
+ * regression against both the StatusPill this replaced (which rendered
+ * `{status || "Unfulfilled"}`) and /orders' StatusBadge, which still shows the
+ * real value with a neutral fallback.
+ *
+ * So: an unknown status is displayed, in a neutral tone. Never swallowed, never
+ * relabelled.
+ */
+const FIN_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> = {
+  paid: "success",
+  pending: "warning",
+  refunded: "neutral",
+  partially_refunded: "neutral",
+  voided: "neutral",
+  expired: "neutral",
+  authorized: "warning",
+  partially_paid: "warning",
 };
 
-const FULFILLMENT: Record<string, { tone: "success" | "info" | "neutral"; label: string }> = {
-  fulfilled: { tone: "success", label: "Fulfilled" },
-  partial: { tone: "info", label: "Partial" },
-  partially_fulfilled: { tone: "info", label: "Partial" },
+const FUL_TONE: Record<string, "success" | "info" | "neutral"> = {
+  fulfilled: "success",
+  partial: "info",
+  partially_fulfilled: "info",
+  in_progress: "info",
+  scheduled: "info",
+  on_hold: "neutral",
+  restocked: "neutral",
 };
+
+/** Shopify sends SCREAMING_SNAKE; operators read words. */
+const humanise = (s: string) => s.replace(/_/g, " ").toLowerCase();
 
 /**
  * A separator with its own padding.
@@ -55,8 +79,8 @@ export function OrderHeader({
   isPending: boolean;
   handleToggleReadyToShip: () => void;
 }) {
-  const fin = FINANCIAL[(order.financial_status || "").toLowerCase()];
-  const ful = FULFILLMENT[(order.fulfillment_status || "").toLowerCase()];
+  const finRaw = order.financial_status || "unknown";
+  const fulRaw = order.fulfillment_status || "unfulfilled";
 
   return (
     <div
@@ -94,16 +118,12 @@ export function OrderHeader({
             >
               {order.order_name}
             </h1>
-            {fin && (
-              <Badge tone={fin.tone} dot>
-                {fin.label}
-              </Badge>
-            )}
-            {ful ? (
-              <Badge tone={ful.tone}>{ful.label}</Badge>
-            ) : (
-              <Badge tone="neutral">Unfulfilled</Badge>
-            )}
+            <Badge tone={FIN_TONE[finRaw.toLowerCase()] ?? "neutral"} dot>
+              {humanise(finRaw)}
+            </Badge>
+            <Badge tone={FUL_TONE[fulRaw.toLowerCase()] ?? "neutral"}>
+              {humanise(fulRaw)}
+            </Badge>
             {order.ready_to_ship && <Badge tone="info">Ready to ship</Badge>}
           </div>
           <p

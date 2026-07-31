@@ -32,7 +32,7 @@ export function AddComponentRow({
   setSelectedComponentId: (v: string) => void;
   componentQuantity: string;
   setComponentQuantity: (v: string) => void;
-  handleAddComponent: () => void;
+  handleAddComponent: () => Promise<boolean>;
   isPending: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -44,6 +44,7 @@ export function AddComponentRow({
           size="sm"
           variant="tertiary"
           iconLeft={<Plus size={14} strokeWidth={1.5} />}
+          disabled={isPending}
           onClick={() => setOpen(true)}
         >
           Add component
@@ -91,9 +92,11 @@ export function AddComponentRow({
         size="sm"
         variant="primary"
         disabled={isPending}
-        onClick={() => {
-          handleAddComponent();
-          setOpen(false);
+        /* Close ONLY on success. Closing regardless discards what the
+           operator typed and hides the failure — the dialogs this replaced
+           closed inside `if (result.success)`. */
+        onClick={async () => {
+          if (await handleAddComponent()) setOpen(false);
         }}
       >
         Add component

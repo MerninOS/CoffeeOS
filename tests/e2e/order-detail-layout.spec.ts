@@ -135,5 +135,44 @@ for (const { name, note } of AGREE) {
       detailWithheld,
       `${name}: one surface shows a margin and the other withholds it`,
     ).toBe(listWithheld)
+
+    /**
+     * The header must NAME both states — never swallow one.
+     *
+     * The visual baselines cannot see this: the repo runs toHaveScreenshot at
+     * maxDiffPixelRatio 0.01, and two short badge labels sit far inside that
+     * budget. A version of OrderHeader that looked labels up in a partial map
+     * rendered NO payment badge at all for VOIDED / AUTHORIZED / PARTIALLY_PAID
+     * and asserted "Unfulfilled" for RESTOCKED and ON_HOLD — and passed all six
+     * baselines. That is how this gap was found, so it is asserted as text.
+     */
+    // expect.poll, not a one-shot innerText(): the surrounding assertions use
+    // auto-retrying locators, and reading text once raced the header's render —
+    // this returned [] on a first run and passed on retry before being fixed.
+    await expect
+      .poll(
+        async () =>
+          (await page.locator('h1').locator('xpath=..').innerText())
+            .split('\n')
+            .slice(1)
+            .map((t) => t.trim())
+            .filter(Boolean),
+        {
+          message: `${name}: the header must show a payment AND a fulfilment badge`,
+          timeout: 15_000,
+        },
+      )
+      .toEqual(expect.arrayContaining([expect.any(String)]))
+
+    const badges = (await page.locator('h1').locator('xpath=..').innerText())
+      .split('\n')
+      .slice(1)
+      .map((t) => t.trim())
+      .filter(Boolean)
+
+    expect(
+      badges.length,
+      `${name}: the header must show a payment AND a fulfilment badge, got ${JSON.stringify(badges)}`,
+    ).toBeGreaterThanOrEqual(2)
   })
 }

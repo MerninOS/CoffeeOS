@@ -1,6 +1,7 @@
 "use client";
 
 import { HeroMetric, StatStrip } from "@merninos/ui/instrument";
+import { COGS_NOT_SET } from "@/lib/orders/format";
 import { mono, overline, sans, money } from "../../components/tokens";
 
 /**
@@ -29,7 +30,7 @@ export function MarginHero({
   margin,
   profit,
   revenue,
-  cogs,
+  cogsText,
   itemCount,
   reason,
 }: {
@@ -37,7 +38,8 @@ export function MarginHero({
   margin: number;
   profit: number;
   revenue: number;
-  cogs: number;
+  /** Already formatted by cogsLabel — see the note below. */
+  cogsText: string;
   itemCount: number;
   reason: string | null;
 }) {
@@ -89,13 +91,21 @@ export function MarginHero({
         <StatStrip
           stats={[
             { label: "Revenue", value: revenue.toFixed(2), unit: "USD" },
-            /* COGS shows whatever is genuinely known even when the verdict is
-               not `costed` — an uncostable order can still carry real
-               order-level cost, and hiding it would disagree with /orders. */
+            /* Takes cogsLabel's ANSWER rather than recomputing its rule.
+               `costKnown || cogs !== 0` was that rule written a second time, and
+               the token guard could not see it because it greps for the "not
+               set" literal. A partial figure is toned like the worksheet's, so
+               the same number is not shown as complete here and incomplete
+               there.
+
+               NOT toned: StatStrip offers only "default" and "live", and the
+               design system rules "live" unusable here — nothing on this page
+               polls. The partial-ness is carried by the worksheet's red figure
+               and by the withheld margin beside this strip. */
             {
               label: "COGS",
-              value: costKnown || cogs !== 0 ? cogs.toFixed(2) : "—",
-              unit: costKnown || cogs !== 0 ? "USD" : undefined,
+              value: cogsText === COGS_NOT_SET ? "—" : cogsText.replace(/^[−+]\$/, ""),
+              unit: cogsText === COGS_NOT_SET ? undefined : "USD",
             },
             {
               label: "Profit",

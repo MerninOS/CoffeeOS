@@ -125,6 +125,7 @@ export function Worksheet({
   margin,
   blockedBy,
   shipping,
+  discount,
   addComponentRow,
   addCostRow,
   onRemoveComponent,
@@ -138,6 +139,8 @@ export function Worksheet({
   margin: number;
   blockedBy: string | null;
   shipping: number;
+  /** Order-level discount, surfaced so Subtotal+Shipping+Tax−Discount == Revenue. */
+  discount: number;
   addComponentRow: React.ReactNode;
   addCostRow: React.ReactNode;
   onRemoveComponent: (id: string) => void;
@@ -317,6 +320,9 @@ export function Worksheet({
             ["Subtotal", order.subtotal_price],
             ["Shipping", shipping],
             ["Tax", order.total_tax],
+            // Only when there is one — an always-present "$0.00 Discount" row
+            // is noise, and its absence is meaningful.
+            ...(discount !== 0 ? ([["Discount", -discount]] as const) : []),
           ] as const
         ).map(([label, value]) => (
           <div key={label} style={{ display: "contents" }}>

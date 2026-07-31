@@ -55,6 +55,8 @@ export type Order = {
   subtotal_price: number;
   total_tax: number;
   total_price: number;
+  /** Stored by lib/orders/sync.ts. Read it rather than deriving a residual. */
+  total_shipping: number | null;
   currency: string;
   ready_to_ship: boolean;
   order_line_items: OrderLineItem[];

@@ -41,7 +41,7 @@ export function CoffeeBlock({
   setSelectedCoffeeId: (v: string) => void;
   coffeeAmount: string;
   setCoffeeAmount: (v: string) => void;
-  handleAssignCoffee: () => void;
+  handleAssignCoffee: () => Promise<boolean>;
   isPending: boolean;
   assignedCoffeeList: AssignedCoffee[];
   totalAssignedCoffeeG: number;
@@ -76,7 +76,8 @@ export function CoffeeBlock({
             size="sm"
             variant="secondary"
             iconLeft={<Plus size={14} strokeWidth={1.5} />}
-            onClick={() => setAdding(true)}
+            disabled={isPending}
+          onClick={() => setAdding(true)}
           >
             Pull coffee
           </Button>
