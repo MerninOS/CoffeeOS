@@ -36,6 +36,44 @@ async function hideOnboardingWidget(page: Page) {
 
 // ── Criterion 17: geometry across widths ────────────────────────────────────
 
+/**
+ * The stacked layout, asserted where the baselines could not see it.
+ *
+ * The desktop-only widths below missed a real break: at 375px the seven tracks
+ * total ~490px of fixed width against ~327px available, so the headers collided
+ * ("REVENUEUNIT COST"), the Qty track collapsed and printed its value on top of
+ * the wrapping item name. The mobile baseline tolerated it — 1% of a full-page
+ * shot is a large budget — and nothing else was watching below 1280.
+ *
+ * So the contract is asserted directly: ONE track below the breakpoint, seven
+ * at or above it.
+ */
+for (const width of [375, 414, 768]) {
+  test(`worksheet stacks to a single column at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 })
+    await page.goto(`/orders/${seededOrderIds()['#1002']}`)
+    await expect(page).not.toHaveURL(/\/auth\//)
+    await hideOnboardingWidget(page)
+
+    const grid = page.getByTestId('worksheet')
+    await expect(grid).toBeVisible({ timeout: 20_000 })
+
+    const tracks = await grid.evaluate(
+      (el) => getComputedStyle(el).gridTemplateColumns.split(' ').length,
+    )
+    expect(
+      tracks,
+      `the worksheet must collapse to one column at ${width}px — seven tracks ` +
+        `do not fit, and a partial grid-column span silently keeps a multi-track skeleton`,
+    ).toBe(1)
+
+    // Every figure must name itself once the column headers are gone, or the
+    // stacked layout is a list of unlabelled numbers.
+    const labels = await grid.locator('.ws-figure-label').count()
+    expect(labels, `stacked figures must carry their own labels at ${width}px`).toBeGreaterThan(0)
+  })
+}
+
 for (const width of [1280, 1440, 1600]) {
   test(`worksheet columns do not overlap at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 })
