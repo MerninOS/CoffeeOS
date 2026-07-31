@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { classifyOrder, getOrderCogs, type ProductLookup } from "@/lib/orders/cogs";
-import { cogsLabel, mayShowMargin } from "@/lib/orders/format";
+import { blockingReason, cogsLabel, mayShowMargin } from "@/lib/orders/format";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -297,29 +297,9 @@ export function OrderDetailClient({
   const costability = classifyOrder(order, products);
   const costKnown = mayShowMargin(costability.status);
 
-  // What the operator would have to fix, named. `unlinked` outranks `uncosted`
-  // in classifyOrder, so an order with both problems never gets copy implying
-  // that costing a product would repair it — it would not.
-  //
-  // The two branches name different things on purpose. `uncosted` names the
-  // blocking PRODUCT, whose title comes from the lookup — the product's current
-  // name, which is where the operator has to go. Sending them to fix "Mexico
-  // Veracruz" when /products lists "Mexico Veracruz Medium Roast" is the
-  // confusion CoffeeOS#78 documents. `unlinked` can only name the LINE ITEM
-  // (classifyOrder falls back to `item.title`), because by definition no product
-  // resolved — the historical name is the only name that exists.
-  const blockedBy =
-    costability.status === "unlinked"
-      ? costability.unresolvable.length > 0
-        ? `${costability.unresolvable.join(", ")} — ${
-            costability.unresolvable.length === 1 ? "this item matches" : "these items match"
-          } no product, so ${costability.unresolvable.length === 1 ? "its" : "their"} cost cannot be known.`
-        : "This order has no line items, so there is nothing to cost."
-      : costability.status === "uncosted"
-        ? `${costability.blocking
-            .map((b) => b.title)
-            .join(", ")} — no components assigned, so the cost is unknown (not zero).`
-        : null;
+  // What the operator would have to fix, named. Lives in lib/orders/format.ts so
+  // the copy is asserted by tests rather than re-declared by them.
+  const blockedBy = blockingReason(costability, cogs);
   const shipping = (order.total_price || 0) - (order.subtotal_price || 0) - (order.total_tax || 0);
 
   const LBS_TO_GRAMS = 453.592;

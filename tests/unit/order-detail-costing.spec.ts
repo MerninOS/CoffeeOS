@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { buildProductLookup } from '../../lib/products/costing'
 import { classifyOrder, getOrderCogs, type ProductLookup } from '../../lib/orders/cogs'
-import { cogsLabel, mayShowMargin } from '../../lib/orders/format'
+import { blockingReason, cogsLabel, mayShowMargin } from '../../lib/orders/format'
 
 /**
  * What /orders/[id] must compute, and what it must refuse to compute.
@@ -180,5 +180,103 @@ test.describe('how COGS is written down', () => {
     const verdict = classifyOrder(order, lookup)
     expect(verdict.status).toBe('costed')
     expect(cogsLabel(getOrderCogs(order, lookup), mayShowMargin(verdict.status))).toBe('−$0.00')
+  })
+
+  /**
+   * COGS renders as a deduction, but the amount can genuinely be negative:
+   * `classifyOrder` treats `product.cogs < 0` as a real state, and the add-cost
+   * handler accepts a negative amount. Hard-coding the minus printed `−$-5.00`.
+   */
+  test('a negative cost flips the sign instead of double-negating', () => {
+    expect(cogsLabel(-5, true)).toBe('+$5.00')
+    expect(cogsLabel(-5, false)).toBe('+$5.00')
+    expect(cogsLabel(0, true)).toBe('−$0.00')
+    expect(cogsLabel(12.14, false)).toBe('−$12.14')
+  })
+})
+
+test.describe('what the operator is told to fix', () => {
+  const lookup = buildProductLookup(PRODUCTS_1312, VARIANTS_1312)
+
+  test('a costed order is told nothing', () => {
+    expect(blockingReason(classifyOrder(ORDER_1312, lookup), 27.65)).toBeNull()
+  })
+
+  test('one unresolvable item reads in the singular', () => {
+    const verdict = classifyOrder(
+      { order_line_items: [{ product_id: null, quantity: 1, title: 'Sunrise Blend (discontinued)' }] },
+      lookup,
+    )
+    expect(blockingReason(verdict, 0)).toBe(
+      'Sunrise Blend (discontinued) — this item matches no product, so its cost cannot be known.',
+    )
+  })
+
+  test('two unresolvable items read in the plural, and both are named', () => {
+    const verdict = classifyOrder(
+      {
+        order_line_items: [
+          { product_id: null, quantity: 1, title: 'Sunrise Blend (discontinued)' },
+          { product_id: null, quantity: 1, title: 'Holiday Gift Set' },
+        ],
+      },
+      lookup,
+    )
+    expect(blockingReason(verdict, 0)).toBe(
+      'Sunrise Blend (discontinued), Holiday Gift Set — these items match no product, so their cost cannot be known.',
+    )
+  })
+
+  /**
+   * The uncosted branch must name the product's CURRENT title from the lookup,
+   * not the line item's historical one — sending an operator to fix a name that
+   * no longer exists on /products is the confusion CoffeeOS#78 documents.
+   */
+  test('an uncosted order names the blocking product by its current title', () => {
+    const withNoRecipe = buildProductLookup(
+      [...PRODUCTS_1312, { id: 'p-mex', title: 'Mexico Veracruz Medium Roast', product_components: [] }],
+      VARIANTS_1312,
+    )
+    const verdict = classifyOrder(
+      { order_line_items: [{ product_id: 'p-mex', quantity: 1, title: 'Mexico Veracruz' }] },
+      withNoRecipe,
+    )
+    expect(blockingReason(verdict, 0)).toBe(
+      'Mexico Veracruz Medium Roast — no components assigned, so the cost is unknown (not zero).',
+    )
+    expect(blockingReason(verdict, 0)).not.toContain('Mexico Veracruz —')
+  })
+
+  /**
+   * The empty-order contradiction. classifyOrder reads only line items while
+   * getOrderCogs also sums order-level costs, so such an order can carry a real
+   * figure — and "there is nothing to cost" printed above it contradicts the
+   * Cost Summary. Three such orders exist in production.
+   */
+  test('an empty order carrying order-level cost does not claim there is nothing to cost', () => {
+    const order = {
+      total_price: 40,
+      order_line_items: [],
+      order_components: [],
+      order_custom_costs: [{ amount: 5 }],
+    }
+    const verdict = classifyOrder(order, lookup)
+    const cogs = getOrderCogs(order, lookup)
+
+    expect(verdict.status).toBe('unlinked')
+    expect(money(cogs)).toBe(5)
+    expect(cogsLabel(cogs, mayShowMargin(verdict.status))).toBe('−$5.00')
+    expect(blockingReason(verdict, cogs)).not.toBe(
+      'This order has no line items, so there is nothing to cost.',
+    )
+    expect(blockingReason(verdict, cogs)).toContain('order-level cost only')
+  })
+
+  test('an empty order with no cost at all still says there is nothing to cost', () => {
+    const order = { total_price: 40, order_line_items: [], order_components: [], order_custom_costs: [] }
+    const verdict = classifyOrder(order, lookup)
+    expect(blockingReason(verdict, getOrderCogs(order, lookup))).toBe(
+      'This order has no line items, so there is nothing to cost.',
+    )
   })
 })

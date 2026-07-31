@@ -68,10 +68,17 @@ export default async function OrderDetailPage({
     notFound();
   }
 
-  // Cost this order through the SAME lookup /orders and the Shopify packing block
-  // use. The two queries, the tenancy scope and the fail-loudly behaviour live in
-  // lib/products/load-lookup.ts — extracted so the `user_id` filter is pinned by a
-  // test rather than by a comment. See that file for why it matters.
+  // Cost this order through the same lookup /orders uses. The two queries, the
+  // tenancy scope and the fail-loudly behaviour live in lib/products/load-lookup.ts
+  // — extracted so the `user_id` filter is pinned by a test rather than by a
+  // comment. See that file for why it matters.
+  //
+  // NOT yet shared by every surface: lib/orders/packing-state.ts and
+  // app/(dashboard)/products/page.tsx still build their own lookups from
+  // buildProductLookup with their own copies of these queries. The selects are
+  // equivalent today, so those surfaces agree by coincidence rather than by
+  // construction — adding a column here would silently leave them behind. Worth
+  // migrating; do not read this call as a guarantee that it is already done.
   const productLookup = await loadProductLookup(asLookupClient(supabase), ownerId);
 
   // Get available roasted coffee stock
