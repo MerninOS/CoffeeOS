@@ -154,7 +154,11 @@ export function Worksheet({
         background: "var(--surface)",
       }}
     >
-      <div style={{ display: "grid", gridTemplateColumns: GRID }}>
+      {/* `worksheet` is a test contract: order-detail-layout.spec.ts measures
+          these grid tracks at three widths. Baselines only shoot 1280 and 375,
+          and /orders shipped a defect that lived above 1400 where no baseline
+          looks — so geometry is asserted, not pixels. */}
+      <div data-testid="worksheet" style={{ display: "grid", gridTemplateColumns: GRID }}>
         <div style={HEAD}>Item</div>
         <div style={{ ...HEAD, ...R }}>Qty</div>
         <div style={{ ...HEAD, ...R }}>Price</div>
