@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { getOrderCogs, type ProductLookup } from "@/lib/orders/cogs";
+import { classifyOrder, getOrderCogs, type ProductLookup } from "@/lib/orders/cogs";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -285,6 +285,40 @@ export function OrderDetailClient({
   const cogs = getOrderCogs(order, products);
   const profit = order.total_price - cogs;
   const margin = order.total_price > 0 ? (profit / order.total_price) * 100 : 0;
+
+  // Whether this order's cost is knowable at all. Same call /orders and the
+  // packing block make, so the three surfaces cannot disagree about an order.
+  //
+  // `costed` is the ONLY status that may show a margin. Everything derived from
+  // an unknown cost — profit, margin — is not "uncertain", it is invented, and
+  // printing it in red would say "be careful about this number" when the honest
+  // statement is "there is no number". That is how the old figure got believed.
+  const costability = classifyOrder(order, products);
+  const costKnown = costability.status === "costed";
+
+  // What the operator would have to fix, named. `unlinked` outranks `uncosted`
+  // in classifyOrder, so an order with both problems never gets copy implying
+  // that costing a product would repair it — it would not.
+  //
+  // The two branches name different things on purpose. `uncosted` names the
+  // blocking PRODUCT, whose title comes from the lookup — the product's current
+  // name, which is where the operator has to go. Sending them to fix "Mexico
+  // Veracruz" when /products lists "Mexico Veracruz Medium Roast" is the
+  // confusion CoffeeOS#78 documents. `unlinked` can only name the LINE ITEM
+  // (classifyOrder falls back to `item.title`), because by definition no product
+  // resolved — the historical name is the only name that exists.
+  const blockedBy =
+    costability.status === "unlinked"
+      ? costability.unresolvable.length > 0
+        ? `${costability.unresolvable.join(", ")} — ${
+            costability.unresolvable.length === 1 ? "this item matches" : "these items match"
+          } no product, so ${costability.unresolvable.length === 1 ? "its" : "their"} cost cannot be known.`
+        : "This order has no line items, so there is nothing to cost."
+      : costability.status === "uncosted"
+        ? `${costability.blocking
+            .map((b) => b.title)
+            .join(", ")} — no components assigned, so the cost is unknown (not zero).`
+        : null;
   const shipping = (order.total_price || 0) - (order.subtotal_price || 0) - (order.total_tax || 0);
 
   const LBS_TO_GRAMS = 453.592;
@@ -416,13 +450,29 @@ export function OrderDetailClient({
           },
           {
             label: "Profit Margin",
-            content: (
+            /*
+              WITHHELD, not reddened, when the cost is unknown. Both figures here
+              are derived wholly from the missing number, so a value would not be
+              uncertain — it would be invented. The em dash is the true statement,
+              and it is muted rather than red on purpose: red warns about a figure
+              that exists, and there is no figure. Matches /orders exactly
+              (OrdersWorksheetTable, "Profit and margin are WITHHELD, not
+              reddened").
+            */
+            content: costKnown ? (
               <div>
                 <div className={`text-[24px] font-extrabold leading-none ${margin >= 0 ? "text-matcha" : "text-tomato"}`}>
                   {margin.toFixed(1)}%
                 </div>
                 <div className={`text-[11px] font-bold mt-0.5 ${profit >= 0 ? "text-matcha" : "text-tomato"}`}>
                   ${profit.toFixed(2)} profit
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="text-[24px] font-extrabold leading-none text-espresso/30">—</div>
+                <div className="text-[11px] font-bold mt-0.5 text-espresso/40">
+                  cost unknown
                 </div>
               </div>
             ),
@@ -770,14 +820,38 @@ export function OrderDetailClient({
             <span className="font-extrabold text-espresso text-[12px] uppercase tracking-[.06em]">Total Revenue</span>
             <span className="font-extrabold text-espresso">${order.total_price.toFixed(2)}</span>
           </div>
+          {/*
+            `not set` replaces the figure ONLY when there is genuinely nothing
+            costed. An order can carry components and custom costs while its
+            products are uncosted — printing "not set" over a real $12.14 would
+            be a lie. So: no cost at all → "not set"; some cost but incomplete →
+            the figure, in danger.
+
+            Red here means INCOMPLETE, not "known". A costed order's COGS is
+            equally known and renders in ink. Same rule as /orders
+            (OrdersWorksheetTable) — the two surfaces must not disagree.
+          */}
           <div className="flex justify-between pt-1">
             <span className="text-espresso/60 font-medium">Total COGS</span>
-            <span className="font-bold text-tomato">−${cogs.toFixed(2)}</span>
+            <span className={`font-bold ${costKnown ? "text-espresso" : "text-tomato"}`}>
+              {!costKnown && cogs === 0 ? "not set" : `−$${cogs.toFixed(2)}`}
+            </span>
           </div>
-          <div className={`flex justify-between border-t-[2px] border-espresso pt-2 ${profit >= 0 ? "text-matcha" : "text-tomato"}`}>
-            <span className="font-extrabold text-[14px] uppercase tracking-[.06em]">Net Profit</span>
-            <span className="font-extrabold text-[14px]">${profit.toFixed(2)}</span>
-          </div>
+          {costKnown ? (
+            <div className={`flex justify-between border-t-[2px] border-espresso pt-2 ${profit >= 0 ? "text-matcha" : "text-tomato"}`}>
+              <span className="font-extrabold text-[14px] uppercase tracking-[.06em]">Net Profit</span>
+              <span className="font-extrabold text-[14px]">${profit.toFixed(2)}</span>
+            </div>
+          ) : (
+            <div className="border-t-[2px] border-espresso pt-2">
+              <div className="flex justify-between text-espresso/40">
+                <span className="font-extrabold text-[14px] uppercase tracking-[.06em]">Net Profit</span>
+                <span className="font-extrabold text-[14px]">—</span>
+              </div>
+              {/* The remedy, named. Never a bare "cannot compute". */}
+              <p className="text-[12px] font-medium text-tomato mt-2 leading-snug">{blockedBy}</p>
+            </div>
+          )}
         </div>
       </Panel>
 
