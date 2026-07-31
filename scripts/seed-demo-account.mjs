@@ -925,10 +925,46 @@ async function main() {
   const demoUserId = await getOrCreateDemoUser(admin);
   await clearDemoData(admin, demoUserId);
   await seedDemoData(admin, demoUserId);
+  await writeOrderIdFixture(admin, demoUserId);
 
   console.log("Demo account is ready.");
   console.log(`Email: ${DEMO_EMAIL}`);
   console.log(`Password: ${DEMO_PASSWORD}`);
+}
+
+/**
+ * Emit order_name -> id so detail-route specs can navigate straight to
+ * /orders/<id>.
+ *
+ * They cannot get there through the list. `playwright.config.ts` pins
+ * ORDERS_PAGE_LIMIT to 3 on purpose — /orders' criterion 5 can only detect its
+ * pagination bug when the limit is BINDING — so the list permanently shows the
+ * newest three orders and nothing else. The states a detail-route baseline most
+ * needs (unlinked, and an order with no line items) are older than that by
+ * design, and no period or search reaches them: search filters the fetched page,
+ * not the range.
+ *
+ * The ids themselves are not stable across reseeds, so this file is generated
+ * rather than committed (see .gitignore) — the same contract as
+ * tests/e2e/.auth/storageState.json. A spec that cannot find it should say so
+ * and tell you to re-run this script, exactly as global-setup.ts does.
+ */
+async function writeOrderIdFixture(admin, ownerId) {
+  const { data, error } = await admin
+    .from("orders")
+    .select("order_name, id")
+    .eq("user_id", ownerId)
+    .order("order_name");
+
+  if (error) {
+    throw new Error(`Could not read back seeded orders: ${error.message}`);
+  }
+
+  const byName = Object.fromEntries((data || []).map((o) => [o.order_name, o.id]));
+  const dest = path.join(process.cwd(), "tests", "fixtures", "seeded-orders.json");
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, JSON.stringify(byName, null, 2) + "\n");
+  console.log(`Wrote ${Object.keys(byName).length} order ids to ${dest}`);
 }
 
 main().catch((error) => {

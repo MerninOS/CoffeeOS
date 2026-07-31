@@ -1,4 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 
 /**
  * Visual + console baselines for every route the instrument re-skin will touch,
@@ -9,13 +11,14 @@ import { test, expect, type Page } from '@playwright/test'
  * failure rather than a post-merge surprise.
  */
 
-// Routes being converted, phase by phase. Detail routes are excluded: they need
-// seeded record IDs, which the seed script does not currently expose.
+// Routes being converted, phase by phase. Detail routes are excluded from this
+// list: they need seeded record IDs, which the seed script does not expose.
 //
-// EXCEPTION: /products/[id] — see PRODUCT_DETAIL below. CoffeeOS#69 converts it,
-// and Stage A's whole proof is "zero baseline movement", which asserts nothing
-// for a route with no baseline. It is reached by clicking through /products by
-// product NAME rather than by id, which the seed does fix.
+// TWO EXCEPTIONS, both reached by reading a row's href rather than by id:
+//   - /products/[id] — see PRODUCT_DETAIL below (CoffeeOS#69).
+//   - /orders/[id]   — see ORDER_DETAIL below (CoffeeOS#70).
+// In both cases Stage A's whole proof is "zero baseline movement", which asserts
+// nothing for a route with no baseline.
 const DASHBOARD = [
   '/dashboard',
   '/orders',
@@ -147,6 +150,94 @@ test.describe('product detail baselines (authenticated)', () => {
         fullPage: true,
       })
       expect(errors, `console errors on /products/[id] (${slug})`).toEqual([])
+    })
+  }
+})
+
+/**
+ * Three orders, because the detail page branches hard on COSTABILITY and each
+ * branch renders structurally different content. CoffeeOS#100 made those
+ * branches real; CoffeeOS#70 rebuilds the page around them, and Stage A's proof
+ * is that none of them moved.
+ *
+ *   costed    a margin figure, a profit figure, an ink COGS total
+ *   unlinked  both figures withheld, COGS "not set", copy NAMING the item
+ *   empty     no line items at all — a different sentence again, and the only
+ *             state where the worksheet can show a real cost while the margin
+ *             stays withheld (CoffeeOS#81)
+ *
+ * A baseline of only the first would let the rebuild silently break the two
+ * states that 240 of 316 production orders are actually in.
+ *
+ * Order names, not ids — scripts/seed-demo-account.mjs fixes these deliberately
+ * and its comments name each state.
+ */
+const ORDER_DETAIL = [
+  { name: '#1002', slug: 'costed' },
+  { name: '#1007', slug: 'unlinked' },
+  { name: '#1004', slug: 'empty' },
+]
+
+/**
+ * These navigate by id, NOT by clicking through /orders — the one place this
+ * suite deviates from the /products/[id] precedent above, and not by preference.
+ *
+ * `playwright.config.ts` pins ORDERS_PAGE_LIMIT to 3 deliberately, so /orders'
+ * criterion 5 can detect its pagination bug. That makes the list permanently the
+ * newest three orders, and two of the three states below are older than that BY
+ * DESIGN: #1007 is 4th newest and #1004 is 6th. No period reaches them (they are
+ * in range, just not on the page) and no search does either, because search
+ * filters the fetched page rather than the range.
+ *
+ * So the ids come from a fixture the seed emits. It is generated, not committed,
+ * because ids do not survive a reseed — the same contract as
+ * tests/e2e/.auth/storageState.json.
+ */
+function seededOrderIds(): Record<string, string> {
+  const file = path.join(__dirname, '..', 'fixtures', 'seeded-orders.json')
+  if (!existsSync(file)) {
+    throw new Error(
+      `Missing ${file}. Run \`node scripts/seed-demo-account.mjs\` to (re)create ` +
+        `the demo account — it writes this fixture on the way out.`,
+    )
+  }
+  return JSON.parse(readFileSync(file, 'utf8'))
+}
+
+test.describe('order detail baselines (authenticated)', () => {
+  for (const { name, slug } of ORDER_DETAIL) {
+    test(`baseline /orders/[id] (${slug})`, async ({ page }) => {
+      const id = seededOrderIds()[name]
+      expect(id, `${name} is missing from tests/fixtures/seeded-orders.json — re-run the seed`).toBeTruthy()
+
+      const href = `/orders/${id}`
+      expect(href).toMatch(/^\/orders\/[0-9a-f-]{36}$/)
+
+      // A stale fixture points at a deleted order, which renders notFound() —
+      // and a 404 page screenshots perfectly happily. Assert we are on the real
+      // detail route before baselining anything.
+      await page.goto(href)
+      await expect(page).not.toHaveURL(/\/auth\//)
+      await expect(
+        page.getByRole('heading', { name, exact: false }),
+        `${name} did not render — the id fixture is probably stale; re-run the seed`,
+      ).toBeVisible({ timeout: 20_000 })
+
+      // Warm the route before collecting console errors — see the note on
+      // /products/[id] above. Deliberately not a KNOWN_NOISE entry: an allowlist
+      // would suppress that message for a genuine hydration bug introduced by
+      // the Stage B rewrite, which is exactly what this baseline exists to catch.
+      await page.goto(href!)
+      await page.waitForLoadState('networkidle')
+
+      const errors = collectErrors(page)
+      await page.goto(href!)
+      await page.waitForLoadState('networkidle')
+
+      await expect(page).toHaveScreenshot(`_orders_detail_${slug}.png`, {
+        fullPage: true,
+      })
+      expect(errors, `console errors on /orders/[id] (${slug})`).toEqual([])
     })
   }
 })
