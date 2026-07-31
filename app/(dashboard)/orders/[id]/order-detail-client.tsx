@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { classifyOrder, getOrderCogs, type ProductLookup } from "@/lib/orders/cogs";
+import { cogsLabel, mayShowMargin } from "@/lib/orders/format";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -294,7 +295,7 @@ export function OrderDetailClient({
   // printing it in red would say "be careful about this number" when the honest
   // statement is "there is no number". That is how the old figure got believed.
   const costability = classifyOrder(order, products);
-  const costKnown = costability.status === "costed";
+  const costKnown = mayShowMargin(costability.status);
 
   // What the operator would have to fix, named. `unlinked` outranks `uncosted`
   // in classifyOrder, so an order with both problems never gets copy implying
@@ -834,7 +835,7 @@ export function OrderDetailClient({
           <div className="flex justify-between pt-1">
             <span className="text-espresso/60 font-medium">Total COGS</span>
             <span className={`font-bold ${costKnown ? "text-espresso" : "text-tomato"}`}>
-              {!costKnown && cogs === 0 ? "not set" : `−$${cogs.toFixed(2)}`}
+              {cogsLabel(cogs, costKnown)}
             </span>
           </div>
           {costKnown ? (
