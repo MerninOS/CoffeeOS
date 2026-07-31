@@ -51,189 +51,10 @@ import {
   addOrderComponent,
   removeOrderComponent,
 } from "../actions";
-
-// ── Types ───────────────────────────────────────────────────────────────────
-
-type OrderLineItem = {
-  id: string;
-  title: string;
-  variant_title: string | null;
-  sku: string | null;
-  quantity: number;
-  price: number;
-  total_price: number;
-  /**
-   * The only thing costing needs from a line item. The nested `products` relation
-   * that used to hang here fed `calculateCOGS` and nothing else — cost now comes
-   * from the owner-wide ProductLookup, keyed by this id.
-   *
-   * Note the display fields above are the order's HISTORICAL values: `title` is
-   * what the item was called when it sold, which is deliberately not the
-   * product's current title. Anything naming a product to send an operator to
-   * fix it must read the lookup instead (CoffeeOS#78).
-   */
-  product_id: string | null;
-};
-
-type OrderComponent = {
-  id: string;
-  component_id: string;
-  quantity: number;
-  components: { id: string; name: string; type: string; cost_per_unit: number } | null;
-};
-
-type OrderCustomCost = { id: string; description: string; amount: number };
-
-type OrderRoastedCoffee = {
-  id: string;
-  green_coffee_id: string;
-  amount_g: number;
-  assigned_at: string;
-  green_coffee_inventory: { id: string; name: string } | null;
-};
-
-type Order = {
-  id: string;
-  order_name: string;
-  created_at_shopify: string;
-  financial_status: string;
-  fulfillment_status: string | null;
-  subtotal_price: number;
-  total_tax: number;
-  total_price: number;
-  currency: string;
-  ready_to_ship: boolean;
-  order_line_items: OrderLineItem[];
-  order_components: OrderComponent[];
-  order_custom_costs: OrderCustomCost[];
-  order_roasted_coffee: OrderRoastedCoffee[];
-};
-
-type CoffeeStock = { id: string; name: string; origin: string | null; roasted_stock_g: number };
-type Component = { id: string; name: string; type: string; cost_per_unit: number };
-
-interface OrderDetailClientProps {
-  order: Order;
-  /**
-   * Every product the owner has, keyed by id — NOT just the ones on this order.
-   * `classifyOrder` distinguishes "product no longer exists" from "product has no
-   * recipe" by absence from this map, so a narrower lookup silently collapses
-   * those two cases. Built server-side by `buildProductLookup`.
-   */
-  products: ProductLookup;
-  coffeeStock: CoffeeStock[];
-  components: Component[];
-}
-
-// ── Primitives ──────────────────────────────────────────────────────────────
-
-function Btn({
-  children,
-  onClick,
-  disabled,
-  variant = "primary",
-  size = "md",
-  className = "",
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  variant?: "primary" | "outline" | "ghost" | "danger";
-  size?: "sm" | "md";
-  className?: string;
-}) {
-  const base =
-    "inline-flex items-center justify-center font-extrabold uppercase tracking-[.08em] transition-all duration-[120ms] border-[2.5px] cursor-pointer disabled:opacity-50 disabled:pointer-events-none";
-  const sizes = { sm: "text-[11px] px-3 py-1.5 rounded-[8px]", md: "text-[12px] px-4 py-2 rounded-[10px]" };
-  const variants = {
-    primary: "bg-tomato text-cream border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[3px] active:translate-y-[3px] active:shadow-none",
-    outline: "bg-transparent text-espresso border-espresso hover:bg-espresso hover:text-cream",
-    ghost: "bg-transparent text-espresso border-transparent hover:bg-fog/50 shadow-none",
-    danger: "bg-transparent text-tomato border-tomato hover:bg-tomato hover:text-cream",
-  };
-  return (
-    <button onClick={onClick} disabled={disabled} className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}>
-      {children}
-    </button>
-  );
-}
-
-function Panel({
-  title,
-  action,
-  children,
-  className = "",
-}: {
-  title: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden ${className}`}>
-      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b-2 border-espresso bg-cream">
-        <div className="font-extrabold text-sm uppercase tracking-[.08em] text-espresso">{title}</div>
-        {action && <div className="shrink-0">{action}</div>}
-      </div>
-      <div className="p-5">{children}</div>
-    </div>
-  );
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-[11px] font-extrabold uppercase tracking-[.08em] text-espresso mb-1">
-      {children}
-    </div>
-  );
-}
-
-function MerninInput({
-  type = "text",
-  value,
-  onChange,
-  placeholder,
-  step,
-  min,
-}: {
-  type?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  placeholder?: string;
-  step?: string;
-  min?: string;
-}) {
-  return (
-    <input
-      type={type}
-      step={step}
-      min={min}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className="w-full bg-cream border-[2.5px] border-espresso rounded-[10px] px-3 py-2 text-[13px] font-medium text-espresso placeholder:text-espresso/40 shadow-[3px_3px_0_#1C0F05] focus:outline-none focus:border-tomato focus:shadow-[3px_3px_0_#E8442A] transition-all duration-[120ms]"
-    />
-  );
-}
-
-function StatusPill({ status, type }: { status: string | null; type: "financial" | "fulfillment" }) {
-  const s = (status || "").toLowerCase();
-  let bg = "bg-fog text-espresso border-fog";
-  if (type === "financial") {
-    if (s === "paid") bg = "bg-matcha/20 text-matcha border-matcha";
-    else if (s === "pending") bg = "bg-sun/30 text-espresso border-sun";
-    else if (s === "refunded" || s === "partially_refunded") bg = "bg-tomato/20 text-tomato border-tomato";
-  } else {
-    if (s === "fulfilled") bg = "bg-matcha/20 text-matcha border-matcha";
-    else if (s === "unfulfilled") bg = "bg-sun/30 text-espresso border-sun";
-    else if (s === "partially_fulfilled") bg = "bg-sky/30 text-espresso border-sky";
-  }
-  return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full border-[2px] ${bg} text-[11px] font-extrabold uppercase tracking-[.06em]`}>
-      {status || "Unfulfilled"}
-    </span>
-  );
-}
+import { Btn, FieldLabel, MerninInput, Panel, StatusPill } from "./components/primitives";
+import type { OrderDetailClientProps } from "./components/types";
+import { LineItemsPanel } from "./components/LineItemsPanel";
+import { CostSummaryPanel } from "./components/CostSummaryPanel";
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -571,51 +392,7 @@ export function OrderDetailClient({
       </Panel>
 
       {/* Line Items */}
-      <Panel title="Order Items">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="border-b-[2px] border-dashed border-fog">
-              <th className="text-left py-2 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/50">Item</th>
-              <th className="text-center py-2 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/50">Qty</th>
-              <th className="text-right py-2 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/50">Price</th>
-              <th className="text-right py-2 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/50">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {order.order_line_items.map((item) => (
-              <tr key={item.id} className="border-b border-dashed border-fog/60">
-                <td className="py-2.5">
-                  <div className="font-bold text-espresso">{item.title}</div>
-                  {item.variant_title && (
-                    <div className="text-[11px] text-espresso/50">{item.variant_title}</div>
-                  )}
-                  {item.sku && (
-                    <div className="text-[10px] text-espresso/40 font-mono">SKU: {item.sku}</div>
-                  )}
-                </td>
-                <td className="py-2.5 text-center font-bold text-espresso">{item.quantity}</td>
-                <td className="py-2.5 text-right font-bold text-espresso">${item.price.toFixed(2)}</td>
-                <td className="py-2.5 text-right font-bold text-espresso">${item.total_price.toFixed(2)}</td>
-              </tr>
-            ))}
-            {[
-              ["Subtotal", `$${(order.subtotal_price || 0).toFixed(2)}`],
-              ["Shipping", `$${shipping.toFixed(2)}`],
-              ["Tax", `$${(order.total_tax || 0).toFixed(2)}`],
-            ].map(([label, val]) => (
-              <tr key={label} className="border-b border-dashed border-fog/40">
-                <td colSpan={3} className="py-1.5 text-right text-[12px] font-bold text-espresso/50">{label}</td>
-                <td className="py-1.5 text-right font-bold text-espresso">{val}</td>
-              </tr>
-            ))}
-            <tr className="border-t-[2px] border-espresso">
-              <td colSpan={3} className="py-2.5 text-right font-extrabold text-[12px] uppercase tracking-[.06em] text-espresso">Total</td>
-              <td className="py-2.5 text-right font-extrabold text-espresso">${(order.total_price || 0).toFixed(2)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </Panel>
-
+      <LineItemsPanel order={order} shipping={shipping} />
       {/* Custom Costs */}
       <Panel
         title="Custom Costs"
@@ -790,66 +567,13 @@ export function OrderDetailClient({
       </Panel>
 
       {/* Cost Summary */}
-      <Panel title="Cost Summary">
-        <div className="space-y-2 text-[13px]">
-          {[
-            ["Subtotal", `$${order.subtotal_price.toFixed(2)}`],
-            ["Tax", `$${order.total_tax.toFixed(2)}`],
-          ].map(([label, val]) => (
-            <div key={label} className="flex justify-between">
-              <span className="text-espresso/60 font-medium">{label}</span>
-              <span className="font-bold text-espresso">{val}</span>
-            </div>
-          ))}
-          <div className="flex justify-between border-t-[2px] border-dashed border-fog pt-2">
-            <span className="font-extrabold text-espresso text-[12px] uppercase tracking-[.06em]">Total Revenue</span>
-            <span className="font-extrabold text-espresso">${order.total_price.toFixed(2)}</span>
-          </div>
-          {/*
-            `not set` replaces the figure ONLY when there is genuinely nothing
-            costed. An order can carry components and custom costs while its
-            products are uncosted — printing "not set" over a real $12.14 would
-            be a lie. So: no cost at all → "not set"; some cost but incomplete →
-            the figure, in danger.
-
-            Red here means INCOMPLETE, not "known". A costed order's COGS is
-            equally known and renders in ink. Same rule as /orders
-            (OrdersWorksheetTable) — the two surfaces must not disagree.
-          */}
-          {/* `detail-cogs` and `detail-profit` are the elements
-              order-detail-capabilities.spec.ts asserts exact dollar deltas
-              against. They are a TEST CONTRACT, not decoration: the Instrument
-              rebuild (CoffeeOS#70) may move, restyle or re-parent these figures,
-              but must carry the testids with them — they are the only thing that
-              can tell a working control from one that renders perfectly and
-              silently no-ops, which a screenshot cannot. */}
-          <div className="flex justify-between pt-1">
-            <span className="text-espresso/60 font-medium">Total COGS</span>
-            <span
-              data-testid="detail-cogs"
-              className={`font-bold ${costKnown ? "text-espresso" : "text-tomato"}`}
-            >
-              {cogsLabel(cogs, costKnown)}
-            </span>
-          </div>
-          {costKnown ? (
-            <div className={`flex justify-between border-t-[2px] border-espresso pt-2 ${profit >= 0 ? "text-matcha" : "text-tomato"}`}>
-              <span className="font-extrabold text-[14px] uppercase tracking-[.06em]">Net Profit</span>
-              <span data-testid="detail-profit" className="font-extrabold text-[14px]">${profit.toFixed(2)}</span>
-            </div>
-          ) : (
-            <div className="border-t-[2px] border-espresso pt-2">
-              <div className="flex justify-between text-espresso/40">
-                <span className="font-extrabold text-[14px] uppercase tracking-[.06em]">Net Profit</span>
-                <span className="font-extrabold text-[14px]">—</span>
-              </div>
-              {/* The remedy, named. Never a bare "cannot compute". */}
-              <p className="text-[12px] font-medium text-tomato mt-2 leading-snug">{blockedBy}</p>
-            </div>
-          )}
-        </div>
-      </Panel>
-
+      <CostSummaryPanel
+        order={order}
+        cogs={cogs}
+        costKnown={costKnown}
+        profit={profit}
+        blockedBy={blockedBy}
+      />
       {/* Delete confirmation dialogs */}
       <AlertDialog open={!!deleteAssignmentId} onOpenChange={() => setDeleteAssignmentId(null)}>
         <AlertDialogContent className="border-[3px] border-espresso rounded-[16px] bg-chalk shadow-flat-lg">
