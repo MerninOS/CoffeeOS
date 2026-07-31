@@ -26,8 +26,17 @@ import type { OrderCostability } from "@/lib/orders/cogs";
  * accepts a negative amount — and `−$` + `-5.00` prints the double-negated
  * `−$-5.00`.
  */
+/**
+ * The sentinel `cogsLabel` returns when nothing is costed.
+ *
+ * Exported so a consumer can branch on it without hard-coding the wording. A
+ * component comparing against the literal "not set" breaks silently the day this
+ * string changes — the same class of drift as re-deriving the rule itself.
+ */
+export const COGS_NOT_SET = "not set";
+
 export function cogsLabel(cogs: number, costKnown: boolean): string {
-  if (!costKnown && cogs === 0) return "not set";
+  if (!costKnown && cogs === 0) return COGS_NOT_SET;
   return `${cogs < 0 ? "+" : "−"}$${Math.abs(cogs).toFixed(2)}`;
 }
 
