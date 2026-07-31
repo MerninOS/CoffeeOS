@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import type { ProductLookup } from "@/lib/orders/cogs";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -111,6 +112,13 @@ type Component = { id: string; name: string; type: string; cost_per_unit: number
 
 interface OrderDetailClientProps {
   order: Order;
+  /**
+   * Every product the owner has, keyed by id — NOT just the ones on this order.
+   * `classifyOrder` distinguishes "product no longer exists" from "product has no
+   * recipe" by absence from this map, so a narrower lookup silently collapses
+   * those two cases. Built server-side by `buildProductLookup`.
+   */
+  products: ProductLookup;
   coffeeStock: CoffeeStock[];
   components: Component[];
 }
@@ -229,6 +237,7 @@ function StatusPill({ status, type }: { status: string | null; type: "financial"
 
 export function OrderDetailClient({
   order: initialOrder,
+  products,
   coffeeStock: initialCoffeeStock,
   components: initialComponents,
 }: OrderDetailClientProps) {
