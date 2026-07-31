@@ -32,16 +32,44 @@ import type { Order, ProductRow } from "./types";
  * Instrument shell. Tailwind appears only where a breakpoint is needed.
  */
 
+/**
+ * The seven tracks, applied ONLY at >=900px.
+ *
+ * They total ~490px of fixed width before the 1fr item column, which does not
+ * fit a phone: at 375px the headers collided ("REVENUEUNIT COST"), the Qty track
+ * collapsed to nothing and printed its value on top of the wrapping item name.
+ * The geometry test only asserted 1280/1440/1600 — chosen because /orders shipped
+ * a defect above 1400 — so nothing was watching below the desktop range.
+ *
+ * Below the breakpoint the grid becomes ONE column and each row stacks, with
+ * every figure carrying its own label. Same approach as OrdersWorksheetTable,
+ * and the same reason: one rendering serving both layouts, rather than a
+ * duplicate mobile tree that doubles every testid.
+ */
 const GRID =
   "minmax(0,1fr) minmax(0,68px) minmax(0,84px) minmax(0,92px) minmax(0,116px) minmax(0,100px) 30px";
 
+/**
+ * Layout only — Tailwind is allowed here precisely because it is a breakpoint.
+ *
+ * Written as LITERAL strings, never composed from a variable: Tailwind's JIT
+ * scans source text, so `${PREFIX}flex` produces a class that is never
+ * generated and silently does nothing. Same reason OrdersWorksheetTable spells
+ * out every `min-[1180px]:` occurrence.
+ */
+const ROW = "ws-row gap-x-3";
+const HEAD_CELL = "ws-headcell";
+
+/**
+ * Visual only — NO display/alignment. Those live in HEAD_CELL, because an inline
+ * style beats a class: with `display: "flex"` here, the `hidden` in HEAD_CELL
+ * did nothing and the column headers rendered on top of the stacked rows.
+ */
 const HEAD: CSSProperties = {
   ...overline,
   color: "var(--ink-subtle)",
   padding: "0 12px",
   height: 32,
-  display: "flex",
-  alignItems: "center",
   whiteSpace: "nowrap",
   minWidth: 0,
   background: "var(--surface-sunken)",
@@ -52,25 +80,53 @@ const CELL: CSSProperties = {
   padding: "0 12px",
   minHeight: 40,
   minWidth: 0,
-  display: "flex",
-  alignItems: "center",
   fontSize: "var(--fs-body)",
 };
 
 const R: CSSProperties = { justifyContent: "flex-end" };
 const RULE: CSSProperties = { borderBottom: "1px solid var(--hairline)" };
 
+/**
+ * A figure that names itself when stacked.
+ *
+ * Below 900px the column headers are hidden, so an unlabelled "$16.42" says
+ * nothing. Showing the label inline — and hiding it again at the breakpoint —
+ * is what makes one rendering serve both layouts without a duplicate mobile
+ * tree that would double every testid.
+ */
+function Figure({
+  label,
+  align = "right",
+  children,
+  style,
+}: {
+  label: string;
+  align?: "left" | "right";
+  children: React.ReactNode;
+  style?: CSSProperties;
+}) {
+  return (
+    <div
+      className="ws-figure flex items-center justify-between gap-3"
+      style={{ ...CELL, ...RULE, ...(align === "right" ? R : null), ...style }}
+    >
+      <span style={{ ...overline, color: "var(--ink-subtle)" }} className="ws-figure-label">
+        {label}
+      </span>
+      <span>{children}</span>
+    </div>
+  );
+}
+
 /** A ruled band inside the worksheet — deliberately not a nested card. */
 export function GroupRow({ label, note }: { label: string; note?: string }) {
   return (
     <div
+      className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5"
       style={{
         gridColumn: "1 / -1",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "0 12px",
-        height: 30,
+        padding: "6px 12px",
+        minHeight: 30,
         background: "var(--surface-sunken)",
         borderTop: "1px solid var(--hairline-strong)",
         borderBottom: "1px solid var(--hairline)",
@@ -161,19 +217,24 @@ export function Worksheet({
           these grid tracks at three widths. Baselines only shoot 1280 and 375,
           and /orders shipped a defect that lived above 1400 where no baseline
           looks — so geometry is asserted, not pixels. */}
-      <div data-testid="worksheet" style={{ display: "grid", gridTemplateColumns: GRID }}>
-        <div style={HEAD}>Item</div>
-        <div style={{ ...HEAD, ...R }}>Qty</div>
-        <div style={{ ...HEAD, ...R }}>Price</div>
-        <div style={{ ...HEAD, ...R }}>Revenue</div>
-        <div style={{ ...HEAD, ...R }}>Unit cost</div>
-        <div style={{ ...HEAD, ...R }}>Cost</div>
-        <div style={HEAD} />
+      <div
+        data-testid="worksheet"
+        className="ws-grid"
+        style={{ ["--ws-grid" as string]: GRID }}
+      >
+        <div style={HEAD} className={HEAD_CELL}>Item</div>
+        <div style={{ ...HEAD, ...R }} className={HEAD_CELL}>Qty</div>
+        <div style={{ ...HEAD, ...R }} className={HEAD_CELL}>Price</div>
+        <div style={{ ...HEAD, ...R }} className={HEAD_CELL}>Revenue</div>
+        <div style={{ ...HEAD, ...R }} className={HEAD_CELL}>Unit cost</div>
+        <div style={{ ...HEAD, ...R }} className={HEAD_CELL}>Cost</div>
+        <div style={HEAD} className={HEAD_CELL} />
 
         {/* ── Line items ── */}
         <GroupRow label="Line items" />
         {rows.length === 0 && (
           <div
+          className="flex items-center justify-end"
             style={{
               gridColumn: "1 / -1",
               ...RULE,
@@ -186,17 +247,10 @@ export function Worksheet({
           </div>
         )}
         {rows.map((row) => (
-          <div key={row.id} style={{ display: "contents" }}>
+          <div key={row.id} className={ROW} style={{ borderBottom: "1px solid var(--hairline)" }}>
             <div
-              style={{
-                ...CELL,
-                ...RULE,
-                flexDirection: "column",
-                alignItems: "flex-start",
-                justifyContent: "center",
-                gap: 1,
-                padding: "8px 12px",
-              }}
+              className="flex flex-col items-start justify-center gap-px"
+              style={{ ...CELL, ...RULE, padding: "8px 12px" }}
             >
               <span style={{ color: "var(--ink)" }}>{row.title}</span>
               <span
@@ -206,22 +260,22 @@ export function Worksheet({
                 {row.variantTitle ? ` · ${row.variantTitle}` : ""}
               </span>
             </div>
-            <div style={{ ...CELL, ...R, ...RULE, ...mono, color: "var(--ink-muted)" }}>
+            <Figure label="Qty" style={{ ...mono, color: "var(--ink-muted)" }}>
               {row.qty}
-            </div>
-            <div style={{ ...CELL, ...R, ...RULE, ...mono }}>{money(row.price)}</div>
-            <div style={{ ...CELL, ...R, ...RULE, ...mono }}>{money(row.price * row.qty)}</div>
-            <div style={{ ...CELL, ...R, ...RULE }}>
+            </Figure>
+            <Figure label="Price" style={mono}>{money(row.price)}</Figure>
+            <Figure label="Revenue" style={mono}>{money(row.price * row.qty)}</Figure>
+            <Figure label="Unit cost">
               <CostCell row={row} />
-            </div>
-            <div style={{ ...CELL, ...R, ...RULE }}>
+            </Figure>
+            <Figure label="Cost">
               {row.linked && row.hasRecipe ? (
                 <span style={mono}>{money(row.unitCost * row.qty)}</span>
               ) : (
                 <span style={dash}>—</span>
               )}
-            </div>
-            <div style={{ ...CELL, ...RULE }} />
+            </Figure>
+            <div className="ws-headcell" style={{ ...CELL, ...RULE }} />
           </div>
         ))}
 
@@ -229,6 +283,7 @@ export function Worksheet({
         <GroupRow label="Order components" note="packaging and per-order materials" />
         {order.order_components.length === 0 && (
           <div
+          className="flex items-center justify-end"
             style={{
               gridColumn: "1 / -1",
               ...RULE,
@@ -241,20 +296,20 @@ export function Worksheet({
           </div>
         )}
         {order.order_components.map((oc) => (
-          <div key={oc.id} style={{ display: "contents" }}>
-            <div style={{ ...CELL, ...RULE }}>{oc.components?.name || "Unknown"}</div>
-            <div style={{ ...CELL, ...R, ...RULE, ...mono, color: "var(--ink-muted)" }}>
+          <div key={oc.id} className={ROW} style={{ borderBottom: "1px solid var(--hairline)" }}>
+            <div style={{ ...CELL, ...RULE }} className="flex items-center">{oc.components?.name || "Unknown"}</div>
+            <Figure label="Qty" style={{ ...mono, color: "var(--ink-muted)" }}>
               {oc.quantity}
-            </div>
-            <div style={{ ...CELL, ...RULE }} />
-            <div style={{ ...CELL, ...RULE }} />
-            <div style={{ ...CELL, ...R, ...RULE, ...mono, color: "var(--ink-muted)" }}>
+            </Figure>
+            <div className={HEAD_CELL} style={CELL} />
+            <div className={HEAD_CELL} style={CELL} />
+            <Figure label="Unit cost" style={{ ...mono, color: "var(--ink-muted)" }}>
               {money(oc.components?.cost_per_unit || 0)}
-            </div>
-            <div style={{ ...CELL, ...R, ...RULE, ...mono }}>
+            </Figure>
+            <Figure label="Cost" style={mono}>
               {money((oc.components?.cost_per_unit || 0) * oc.quantity)}
-            </div>
-            <div style={{ ...CELL, ...RULE, padding: "0 4px" }}>
+            </Figure>
+            <div className="flex items-center" style={{ ...CELL, ...RULE, padding: "0 4px" }}>
               <IconButton
                 size="sm"
                 icon={<X size={14} strokeWidth={1.5} />}
@@ -270,6 +325,7 @@ export function Worksheet({
         <GroupRow label="Custom costs" note="one-off charges against this order" />
         {order.order_custom_costs.length === 0 && (
           <div
+          className="flex items-center justify-end"
             style={{
               gridColumn: "1 / -1",
               ...RULE,
@@ -282,14 +338,14 @@ export function Worksheet({
           </div>
         )}
         {order.order_custom_costs.map((cc) => (
-          <div key={cc.id} style={{ display: "contents" }}>
-            <div style={{ ...CELL, ...RULE }}>{cc.description}</div>
-            <div style={{ ...CELL, ...RULE }} />
-            <div style={{ ...CELL, ...RULE }} />
-            <div style={{ ...CELL, ...RULE }} />
-            <div style={{ ...CELL, ...RULE }} />
-            <div style={{ ...CELL, ...R, ...RULE, ...mono }}>{money(cc.amount)}</div>
-            <div style={{ ...CELL, ...RULE, padding: "0 4px" }}>
+          <div key={cc.id} className={ROW} style={{ borderBottom: "1px solid var(--hairline)" }}>
+            <div style={{ ...CELL, ...RULE }} className="flex items-center">{cc.description}</div>
+            <div className={HEAD_CELL} style={CELL} />
+            <div className={HEAD_CELL} style={CELL} />
+            <div className={HEAD_CELL} style={CELL} />
+            <div className={HEAD_CELL} style={CELL} />
+            <Figure label="Cost" style={mono}>{money(cc.amount)}</Figure>
+            <div className="flex items-center" style={{ ...CELL, ...RULE, padding: "0 4px" }}>
               <IconButton
                 size="sm"
                 icon={<X size={14} strokeWidth={1.5} />}
@@ -325,31 +381,32 @@ export function Worksheet({
             ...(discount !== 0 ? ([["Discount", -discount]] as const) : []),
           ] as const
         ).map(([label, value]) => (
-          <div key={label} style={{ display: "contents" }}>
+          <div key={label} className="ws-row-2 gap-x-3">
             <div
-              style={{
-                ...CELL,
-                minHeight: 28,
-                gridColumn: "1 / 4",
-                justifyContent: "flex-end",
-                ...sans,
-                color: "var(--ink-muted)",
-              }}
+              className="ws-span-label flex items-center justify-end"
+              style={{ ...CELL, minHeight: 28, ...sans, color: "var(--ink-muted)" }}
             >
               {label}
             </div>
-            <div style={{ ...CELL, ...R, minHeight: 28, ...mono, color: "var(--ink-muted)" }}>
+            <div
+              className="flex items-center justify-end"
+              style={{ ...CELL, minHeight: 28, ...mono, color: "var(--ink-muted)" }}
+            >
               {money(value || 0)}
             </div>
-            <div style={{ gridColumn: "5 / -1" }} />
+            <div className="ws-span-tail" />
           </div>
         ))}
 
+        {/* The span is a CLASS, not an inline style. An inline `grid-column:
+            1 / 4` forces the grid to create three tracks at EVERY width, so the
+            stacked layout silently kept a three-column skeleton and the totals
+            rendered on top of each other. */}
+        <div className="ws-row-2 gap-x-3">
         <div
+          className="ws-span-label flex items-center justify-end"
           style={{
             ...CELL,
-            gridColumn: "1 / 4",
-            justifyContent: "flex-end",
             ...overline,
             color: "var(--ink-muted)",
             borderTop: "1px solid var(--hairline)",
@@ -358,6 +415,7 @@ export function Worksheet({
           Revenue
         </div>
         <div
+          className="flex items-center justify-end"
           style={{
             ...CELL,
             ...R,
@@ -369,6 +427,7 @@ export function Worksheet({
           {money(order.total_price)}
         </div>
         <div
+          className="flex items-center justify-end"
           style={{
             ...CELL,
             ...R,
@@ -382,7 +441,7 @@ export function Worksheet({
         {/* `cogsLabel` owns the not-set-vs-partial rule and the sign. Red here
             means INCOMPLETE, never merely present — a costed COGS is equally
             known and renders in ink. Do not re-derive this (criterion 12d). */}
-        <div style={{ ...CELL, ...R, borderTop: "1px solid var(--hairline)" }}>
+        <div className="flex items-center justify-end" style={{ ...CELL, ...R, borderTop: "1px solid var(--hairline)" }}>
           <span
             data-testid="detail-cogs"
             style={{
@@ -394,7 +453,8 @@ export function Worksheet({
             {cogsLabel(cogs, costKnown)}
           </span>
         </div>
-        <div style={{ borderTop: "1px solid var(--hairline)" }} />
+        </div>
+        <div className="ws-headcell" style={{ borderTop: "1px solid var(--hairline)" }} />
 
         <div style={{ gridColumn: "1 / -1", borderTop: "2px solid var(--ink)" }}>
           <div

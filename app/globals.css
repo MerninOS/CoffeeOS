@@ -579,3 +579,39 @@
 @media (max-width: 480px) {
   .lp-footer-grid { grid-template-columns: 1fr; gap: 20px; }
 }
+
+
+/* ─── /orders/[id] worksheet ───────────────────────────────────────────────
+   A real media query rather than Tailwind arbitrary-property variants.
+
+   `min-[900px]:[grid-template-columns:...]` did not behave as written: at 375px
+   the computed value came back as three tracks rather than the one that
+   `grid-cols-1` should have given, so the stacked layout never applied and the
+   headers, group bands and totals rendered on top of each other. Layout this
+   load-bearing should not depend on how a utility framework parses an arbitrary
+   property inside a variant.
+
+   Only LAYOUT lives here. Every colour, border and type value stays inline as
+   var(--token), per the design-system rule — a Tailwind colour utility in this
+   repo resolves to the LOUD palette. */
+
+.ws-grid            { display: grid; grid-template-columns: 1fr; }
+.ws-row             { display: grid; grid-template-columns: 1fr; }
+.ws-row-2           { display: grid; grid-template-columns: 1fr auto; }
+.ws-headcell        { display: none; }
+/* Spans that only mean something once there are seven tracks. */
+.ws-span-label      { }
+.ws-span-tail       { display: none; }
+
+.ws-figure-label    { display: inline; }
+
+@media (min-width: 900px) {
+  .ws-figure        { justify-content: flex-end; }
+  .ws-figure-label  { display: none; }
+  .ws-grid          { grid-template-columns: var(--ws-grid); }
+  .ws-row,
+  .ws-row-2         { display: contents; }
+  .ws-headcell      { display: flex; align-items: center; }
+  .ws-span-label    { grid-column: 1 / 4; }
+  .ws-span-tail     { display: block; grid-column: 5 / -1; }
+}
