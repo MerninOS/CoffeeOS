@@ -160,9 +160,12 @@ export function CoffeeBlock({
             size="sm"
             variant="primary"
             disabled={isPending}
-            onClick={() => {
-              handleAssignCoffee();
-              setAdding(false);
+            /* Close ONLY on success. Closing regardless discards the grams the
+               operator typed and hides the failure — and assignRoastedCoffeeToOrder
+               genuinely fails when the requested amount exceeds roasted stock,
+               which is the single most likely error on this control. */
+            onClick={async () => {
+              if (await handleAssignCoffee()) setAdding(false);
             }}
           >
             Pull coffee

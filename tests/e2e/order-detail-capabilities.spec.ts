@@ -279,3 +279,36 @@ test('cancelling an add row closes it and changes nothing', async ({ page }) => 
   await expectBaseline(page)
   await expect(page.getByText('Should never be saved')).toHaveCount(0)
 })
+
+// ── Failure path: the row must survive it ───────────────────────────────────
+
+/**
+ * A failed mutation must NOT close the row, lose the input, or stay silent.
+ *
+ * Every other test here drives a happy path, so the close-on-success logic was
+ * untested — and one of the three rows shipped without it, because a scripted
+ * edit silently no-op'd and the passing suite said nothing. This is the cheapest
+ * real failure available: assignRoastedCoffeeToOrder rejects an amount larger
+ * than the roasted stock on hand.
+ */
+test('a failed assignment keeps the row open, keeps the input, and says so', async ({ page }) => {
+  await openOrder(page, ORDER)
+
+  await page.getByRole('button', { name: 'Pull coffee', exact: true }).click()
+  await page.getByLabel('Roasted coffee').selectOption({ index: 1 })
+  await page.getByLabel('Amount in grams').fill('99999999')
+  await page.getByRole('button', { name: 'Pull coffee', exact: true }).last().click()
+
+  // The operator is told.
+  await expect(page.getByText(/did not save|not enough|exceed/i).first()).toBeVisible({
+    timeout: 15_000,
+  })
+
+  // The row is still open with the typed value intact — retyping it after a
+  // failure is the tax the old optimistic close charged.
+  await expect(page.getByLabel('Amount in grams')).toHaveValue('99999999')
+
+  // And nothing was assigned.
+  await expect(page.getByTestId('coffee-assignment')).toHaveCount(0)
+  await expectBaseline(page)
+})
