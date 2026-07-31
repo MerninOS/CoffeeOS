@@ -7,7 +7,7 @@ import {
   resolvePeriod,
 } from "@/lib/orders/constants";
 import { aggregate, type CostableOrder } from "@/lib/orders/cogs";
-import { buildProductLookup } from "@/lib/products/costing";
+import { loadProductLookup, asLookupClient } from "@/lib/products/load-lookup";
 
 export default async function OrdersPage({
   searchParams,
@@ -79,68 +79,19 @@ export default async function OrdersPage({
     .gt("current_green_quantity_g", 0)
     .order("name");
 
-  // Fetch all products with their components and component costs
-  // This allows us to calculate COGS for each line item
-  // `title` is here for the excluded-row badge, which has to NAME the product
-  // blocking an order. Keep `.eq("user_id", ownerId)` on THIS query rather than
-  // relying on any parent scope — CoffeeOS#75 is exactly that mistake, an
-  // unscoped product_components count that read as true for every account.
-  const { data: productsWithCogs, error: productsError } = await supabase
-    .from("products")
-    .select(`
-      id,
-      title,
-      product_components (
-        quantity,
-        components (
-          cost_per_unit
-        )
-      )
-    `)
-    .eq("user_id", ownerId);
-
-  // FAIL LOUDLY. Without this lookup there is no cost data at all, so every
-  // order classifies `unlinked` and the page states, as fact, that each one's
-  // Shopify product "was deleted or replaced" — a specific, confident, wrong
-  // diagnosis of a transient database error. Every figure would also be wrong
-  // while looking entirely plausible, which is the exact defect this page was
-  // rebuilt to remove. A blank error beats a convincing lie.
-  if (productsError) {
-    throw new Error(`Could not load product costs: ${productsError.message}`);
-  }
-
-  // A recipe can live at PRODUCT level or at VARIANT level, and this page used to
-  // read only the first — so a product costed per-variant looked uncosted, its
-  // orders were excluded, and the operator was told to add a recipe that was
-  // already there. On this account it took covered revenue to $0.00 of $261.80
-  // over 30 days while every order in that window was fully costed.
+  // Cost every line item on this page through the same lookup the order detail
+  // page uses. The two queries, the tenancy scope and the fail-loudly behaviour
+  // live in lib/products/load-lookup.ts — extracted so the `user_id` filter is
+  // pinned by a test rather than by a comment. See that file for why each of
+  // those matters; the reasoning that used to sit here moved with the code.
   //
-  // `order_line_items.shopify_variant_id` is null for 432 of 436 rows (the sync
-  // never populates it), so a line item cannot be matched to the variant that
-  // actually sold. The cost is therefore only KNOWABLE when it does not depend on
-  // that choice: every variant costed, and all of them agreeing. Anything else
-  // stays uncosted rather than guessing — this page exists to stop plausible
-  // figures standing in for unknown ones.
-  const { data: variantRows, error: variantsError } = await supabase
-    .from("product_variants")
-    .select(`
-      id,
-      product_id,
-      product_variant_components (
-        quantity,
-        components ( cost_per_unit )
-      )
-    `)
-    .in("product_id", (productsWithCogs || []).map((p) => p.id));
-
-  if (variantsError) {
-    throw new Error(`Could not load variant costs: ${variantsError.message}`);
-  }
-
-  // The product/variant precedence rule lives in lib/products/costing.ts so that
-  // /products resolves costing identically — see CoffeeOS#69. The comments that
-  // used to sit here moved with it; they are the specification for that rule.
-  const productLookup = buildProductLookup(productsWithCogs, variantRows);
+  // NOT yet shared by every surface: lib/orders/packing-state.ts and
+  // app/(dashboard)/products/page.tsx still build their own lookups from
+  // buildProductLookup with their own copies of these queries. The selects are
+  // equivalent today, so those surfaces agree by coincidence rather than by
+  // construction — adding a column here would silently leave them behind. Worth
+  // migrating; do not read this call as a guarantee that it is already done.
+  const productLookup = await loadProductLookup(asLookupClient(supabase), ownerId);
 
   // Check if Shopify Admin API is configured
   const { data: settings } = await supabase
