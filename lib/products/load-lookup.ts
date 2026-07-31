@@ -69,12 +69,18 @@ export function asLookupClient(client: unknown): LookupQueryClient {
  *
  * Throws rather than degrading. An empty lookup classifies every order
  * `unlinked` and makes the UI state, as fact, that the product was deleted — a
- * confident, specific, wrong diagnosis of a transient database error.
+ * confident, specific, wrong diagnosis of a transient database error. Every
+ * figure downstream would also be wrong while looking entirely plausible, which
+ * is the exact defect /orders was rebuilt to remove. A blank error beats a
+ * convincing lie.
  */
 export async function loadProductLookup(
   supabase: LookupQueryClient,
   ownerId: string,
 ): Promise<ProductLookup> {
+  // `title` is selected for /orders' excluded-row badge, which has to NAME the
+  // product blocking an order — not decoration, and not safe to drop from this
+  // select just because a given caller does not read it.
   const { data: productsWithCogs, error: productsError } = await supabase
     .from("products")
     .select(`
@@ -96,12 +102,23 @@ export async function loadProductLookup(
 
   const products = (productsWithCogs || []) as Array<{ id: string }>;
 
-  // A recipe can live at PRODUCT level or at VARIANT level, and this page read
-  // only the first — the defect CoffeeOS#85 fixed for the list and CoffeeOS#100
-  // fixes here. `order_line_items.shopify_variant_id` is null for 432 of 436
-  // rows, so a line item cannot be matched to the variant that actually sold;
-  // the cost is only KNOWABLE when it does not depend on that choice. The
-  // agreement rule itself lives in buildProductLookup.
+  // A recipe can live at PRODUCT level or at VARIANT level, and both call sites
+  // once read only the first — the defect CoffeeOS#85 fixed for /orders and
+  // CoffeeOS#100 fixed for the detail page. A product costed per-variant looked
+  // uncosted, its orders were excluded, and the operator was told to add a recipe
+  // that was already there. On this account it took covered revenue to $0.00 of
+  // $261.80 over 30 days while every order in that window was fully costed.
+  //
+  // `order_line_items.shopify_variant_id` is null for 432 of 436 rows (the sync
+  // never populates it), so a line item cannot be matched to the variant that
+  // actually sold. The cost is therefore only KNOWABLE when it does not depend on
+  // that choice: every variant costed, and all of them agreeing. Anything else
+  // stays uncosted rather than guessing — these pages exist to stop plausible
+  // figures standing in for unknown ones.
+  //
+  // The agreement rule and the product/variant precedence it implements live in
+  // buildProductLookup (lib/products/costing.ts) so that /products resolves
+  // costing identically — see CoffeeOS#69.
   //
   // Scoped by the product ids above, which are already owner-filtered — so this
   // query inherits the tenancy scope rather than restating it.
