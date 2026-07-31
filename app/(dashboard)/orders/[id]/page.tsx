@@ -31,21 +31,7 @@ export default async function OrderDetailPage({
         quantity,
         price,
         total_price,
-        product_id,
-        products (
-          id,
-          title,
-          product_components (
-            id,
-            quantity,
-            components (
-              id,
-              name,
-              type,
-              cost_per_unit
-            )
-          )
-        )
+        product_id
       ),
       order_components (
         id,

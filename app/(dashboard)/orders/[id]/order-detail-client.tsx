@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import type { ProductLookup } from "@/lib/orders/cogs";
+import { getOrderCogs, type ProductLookup } from "@/lib/orders/cogs";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -61,16 +61,17 @@ type OrderLineItem = {
   quantity: number;
   price: number;
   total_price: number;
+  /**
+   * The only thing costing needs from a line item. The nested `products` relation
+   * that used to hang here fed `calculateCOGS` and nothing else — cost now comes
+   * from the owner-wide ProductLookup, keyed by this id.
+   *
+   * Note the display fields above are the order's HISTORICAL values: `title` is
+   * what the item was called when it sold, which is deliberately not the
+   * product's current title. Anything naming a product to send an operator to
+   * fix it must read the lookup instead (CoffeeOS#78).
+   */
   product_id: string | null;
-  products: {
-    id: string;
-    title: string;
-    product_components: Array<{
-      id: string;
-      quantity: number;
-      components: { id: string; name: string; type: string; cost_per_unit: number } | null;
-    }>;
-  } | null;
 };
 
 type OrderComponent = {
@@ -272,26 +273,16 @@ export function OrderDetailClient({
   }));
   const totalAssignedCoffeeG = assignedCoffeeList.reduce((sum, c) => sum + c.amountG, 0);
 
-  const calculateCOGS = () => {
-    let total = 0;
-    for (const lineItem of order.order_line_items) {
-      const product = lineItem.products;
-      if (!product) continue;
-      for (const pc of product.product_components || []) {
-        if (!pc.components) continue;
-        total += pc.quantity * pc.components.cost_per_unit * lineItem.quantity;
-      }
-    }
-    for (const oc of order.order_components) {
-      if (oc.components) total += oc.quantity * oc.components.cost_per_unit;
-    }
-    for (const cost of order.order_custom_costs) {
-      total += cost.amount;
-    }
-    return total;
-  };
-
-  const cogs = calculateCOGS();
+  // Costed through lib/orders/cogs.ts — the one implementation /orders and the
+  // Shopify packing block already share. This page used to carry its own
+  // (`calculateCOGS`), which walked `lineItem.products.product_components`
+  // directly and was wrong twice over: it never saw variant-level recipes (the
+  // query did not even fetch them), and it skipped a line item resolving to no
+  // product before dividing anyway, so an unlinked item contributed full revenue
+  // and zero cost. On production that inflated the margin on 240 of 316 orders.
+  //
+  // A fourth implementation of this formula is not wanted. CoffeeOS#100.
+  const cogs = getOrderCogs(order, products);
   const profit = order.total_price - cogs;
   const margin = order.total_price > 0 ? (profit / order.total_price) * 100 : 0;
   const shipping = (order.total_price || 0) - (order.subtotal_price || 0) - (order.total_tax || 0);
