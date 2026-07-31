@@ -44,18 +44,26 @@ export function DeleteDialogs({
   return (
     <>
   <AlertDialog open={!!deleteAssignmentId} onOpenChange={() => setDeleteAssignmentId(null)}>
-    <AlertDialogContent className="border-[3px] border-espresso rounded-[16px] bg-chalk shadow-flat-lg">
+    <AlertDialogContent
+          data-surface="app"
+          style={{
+            border: "1px solid var(--hairline-strong)",
+            borderRadius: "var(--r-lg)",
+            background: "var(--surface)",
+            boxShadow: "var(--shadow-modal)",
+          }}
+        >
       <AlertDialogHeader>
-        <AlertDialogTitle className="font-extrabold text-[15px] uppercase tracking-[.06em] text-espresso">Remove Coffee Assignment?</AlertDialogTitle>
-        <AlertDialogDescription className="text-[13px] text-espresso/60">
+        <AlertDialogTitle style={{ fontFamily: "var(--font-display)", fontVariationSettings: "var(--display-settings)", fontSize: "var(--fs-title)", color: "var(--ink)" }}>Remove Coffee Assignment?</AlertDialogTitle>
+        <AlertDialogDescription style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", color: "var(--ink-muted)" }}>
           This will return the coffee to your roasted stock.
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <AlertDialogCancel className="font-extrabold text-[11px] uppercase tracking-[.08em] border-[2px] border-espresso rounded-[8px]">Cancel</AlertDialogCancel>
+        <AlertDialogCancel style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", border: "1px solid var(--hairline-strong)", borderRadius: "var(--r-md)", background: "var(--surface-sunken)", color: "var(--ink)" }}>Cancel</AlertDialogCancel>
         <AlertDialogAction
           onClick={() => deleteAssignmentId && handleRemoveCoffeeAssignment(deleteAssignmentId)}
-          className="bg-tomato text-cream font-extrabold text-[11px] uppercase tracking-[.08em] border-[2px] border-espresso rounded-[8px] shadow-[3px_3px_0_#1C0F05]"
+          style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", background: "var(--danger)", color: "var(--on-danger, #fff)", border: "1px solid var(--danger)", borderRadius: "var(--r-md)" }}
         >
           Remove
         </AlertDialogAction>
@@ -64,16 +72,24 @@ export function DeleteDialogs({
   </AlertDialog>
 
   <AlertDialog open={!!deleteCostId} onOpenChange={() => setDeleteCostId(null)}>
-    <AlertDialogContent className="border-[3px] border-espresso rounded-[16px] bg-chalk shadow-flat-lg">
+    <AlertDialogContent
+          data-surface="app"
+          style={{
+            border: "1px solid var(--hairline-strong)",
+            borderRadius: "var(--r-lg)",
+            background: "var(--surface)",
+            boxShadow: "var(--shadow-modal)",
+          }}
+        >
       <AlertDialogHeader>
-        <AlertDialogTitle className="font-extrabold text-[15px] uppercase tracking-[.06em] text-espresso">Delete Custom Cost?</AlertDialogTitle>
-        <AlertDialogDescription className="text-[13px] text-espresso/60">This action cannot be undone.</AlertDialogDescription>
+        <AlertDialogTitle style={{ fontFamily: "var(--font-display)", fontVariationSettings: "var(--display-settings)", fontSize: "var(--fs-title)", color: "var(--ink)" }}>Delete Custom Cost?</AlertDialogTitle>
+        <AlertDialogDescription style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", color: "var(--ink-muted)" }}>This action cannot be undone.</AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <AlertDialogCancel className="font-extrabold text-[11px] uppercase tracking-[.08em] border-[2px] border-espresso rounded-[8px]">Cancel</AlertDialogCancel>
+        <AlertDialogCancel style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", border: "1px solid var(--hairline-strong)", borderRadius: "var(--r-md)", background: "var(--surface-sunken)", color: "var(--ink)" }}>Cancel</AlertDialogCancel>
         <AlertDialogAction
           onClick={() => deleteCostId && handleRemoveCustomCost(deleteCostId)}
-          className="bg-tomato text-cream font-extrabold text-[11px] uppercase tracking-[.08em] border-[2px] border-espresso rounded-[8px] shadow-[3px_3px_0_#1C0F05]"
+          style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", background: "var(--danger)", color: "var(--on-danger, #fff)", border: "1px solid var(--danger)", borderRadius: "var(--r-md)" }}
         >
           Delete
         </AlertDialogAction>
@@ -82,16 +98,24 @@ export function DeleteDialogs({
   </AlertDialog>
 
   <AlertDialog open={!!deleteComponentId} onOpenChange={() => setDeleteComponentId(null)}>
-    <AlertDialogContent className="border-[3px] border-espresso rounded-[16px] bg-chalk shadow-flat-lg">
+    <AlertDialogContent
+          data-surface="app"
+          style={{
+            border: "1px solid var(--hairline-strong)",
+            borderRadius: "var(--r-lg)",
+            background: "var(--surface)",
+            boxShadow: "var(--shadow-modal)",
+          }}
+        >
       <AlertDialogHeader>
-        <AlertDialogTitle className="font-extrabold text-[15px] uppercase tracking-[.06em] text-espresso">Remove Component?</AlertDialogTitle>
-        <AlertDialogDescription className="text-[13px] text-espresso/60">This action cannot be undone.</AlertDialogDescription>
+        <AlertDialogTitle style={{ fontFamily: "var(--font-display)", fontVariationSettings: "var(--display-settings)", fontSize: "var(--fs-title)", color: "var(--ink)" }}>Remove Component?</AlertDialogTitle>
+        <AlertDialogDescription style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", color: "var(--ink-muted)" }}>This action cannot be undone.</AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <AlertDialogCancel className="font-extrabold text-[11px] uppercase tracking-[.08em] border-[2px] border-espresso rounded-[8px]">Cancel</AlertDialogCancel>
+        <AlertDialogCancel style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", border: "1px solid var(--hairline-strong)", borderRadius: "var(--r-md)", background: "var(--surface-sunken)", color: "var(--ink)" }}>Cancel</AlertDialogCancel>
         <AlertDialogAction
           onClick={() => deleteComponentId && handleRemoveComponent(deleteComponentId)}
-          className="bg-tomato text-cream font-extrabold text-[11px] uppercase tracking-[.08em] border-[2px] border-espresso rounded-[8px] shadow-[3px_3px_0_#1C0F05]"
+          style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body)", background: "var(--danger)", color: "var(--on-danger, #fff)", border: "1px solid var(--danger)", borderRadius: "var(--r-md)" }}
         >
           Remove
         </AlertDialogAction>

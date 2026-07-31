@@ -204,11 +204,13 @@ test('assigning roasted coffee does not change COGS', async ({ page }) => {
   await drainAssignedCoffee(page)
   await expectBaseline(page)
 
-  await page.getByRole('button', { name: 'Assign Coffee', exact: true }).click()
-  await page.getByRole('combobox').click()
-  await page.getByRole('option').first().click()
-  await page.getByPlaceholder('Enter amount in grams').fill('100')
-  await page.getByRole('button', { name: 'Assign Coffee', exact: true }).last().click()
+  // Stage B: the assign dialog became an inline row, and the picker is
+  // Instrument's native <select>. Chosen by index rather than label because the
+  // option text embeds a live stock figure that changes as tests run.
+  await page.getByRole('button', { name: 'Pull coffee', exact: true }).click()
+  await page.getByLabel('Roasted coffee').selectOption({ index: 1 })
+  await page.getByLabel('Amount in grams').fill('100')
+  await page.getByRole('button', { name: 'Pull coffee', exact: true }).last().click()
 
   await expect(page.locator('[data-testid="coffee-assignment"]')).toHaveCount(1)
 
@@ -228,8 +230,8 @@ test('toggling ready to ship flips the control and leaves the money alone', asyn
   await openOrder(page, ORDER)
   await expectBaseline(page)
 
-  const markReady = page.getByRole('button', { name: /Mark Ready to Ship/ })
-  const markNotReady = page.getByRole('button', { name: /Mark Not Ready/ })
+  const markReady = page.getByRole('button', { name: /Mark ready to ship/i })
+  const markNotReady = page.getByRole('button', { name: /Mark not ready/i })
 
   const startedReady = await markNotReady.isVisible()
   if (startedReady) {

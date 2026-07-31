@@ -17,8 +17,8 @@ import {
 } from "../actions";
 import type { OrderDetailClientProps, ProductRow } from "./components/types";
 import { OrderHeader } from "./components/OrderHeader";
-import { SummaryCards } from "./components/SummaryCards";
-import { RoastedCoffeePanel } from "./components/RoastedCoffeePanel";
+import { MarginHero } from "./components/MarginHero";
+import { CoffeeBlock } from "./components/CoffeeBlock";
 import { Worksheet } from "./components/Worksheet";
 import { AddComponentRow } from "./components/AddComponentRow";
 import { AddCostRow } from "./components/AddCostRow";
@@ -190,30 +190,23 @@ export function OrderDetailClient({
   };
 
   return (
-    <div className="p-6 space-y-5 bg-cream min-h-full">
+    <div className="p-6" style={{ display: "flex", flexDirection: "column", gap: 20, minHeight: "100%" }}>
       {/* Header */}
       <OrderHeader
         order={order}
         isPending={isPending}
         handleToggleReadyToShip={handleToggleReadyToShip}
       />
-      {/* Status + summary cards */}
-      <SummaryCards order={order} costKnown={costKnown} margin={margin} profit={profit} />
-      {/* Assigned Roasted Coffee */}
-      <RoastedCoffeePanel
-        isAddCoffeeOpen={isAddCoffeeOpen}
-        setIsAddCoffeeOpen={setIsAddCoffeeOpen}
-        coffeeStock={coffeeStock}
-        selectedCoffeeId={selectedCoffeeId}
-        setSelectedCoffeeId={setSelectedCoffeeId}
-        coffeeAmount={coffeeAmount}
-        setCoffeeAmount={setCoffeeAmount}
-        handleAssignCoffee={handleAssignCoffee}
-        isPending={isPending}
-        assignedCoffeeList={assignedCoffeeList}
-        totalAssignedCoffeeG={totalAssignedCoffeeG}
-        gramsToLbs={gramsToLbs}
-        setDeleteAssignmentId={setDeleteAssignmentId}
+      {/* ONE hero figure + a ruled strip. Never a row of equal cards — the
+          statuses moved to header badges, where states belong. */}
+      <MarginHero
+        costKnown={costKnown}
+        margin={margin}
+        profit={profit}
+        revenue={order.total_price}
+        cogs={cogs}
+        itemCount={rows.reduce((n, r) => n + r.qty, 0)}
+        reason={blockedBy}
       />
       {/* The worksheet — line items, order components, custom costs and the
           totals that reconcile them, on ONE set of column tracks. Replaces four
@@ -250,6 +243,22 @@ export function OrderDetailClient({
             isPending={isPending}
           />
         }
+      />
+
+      {/* Fulfillment, not cost — deliberately below the worksheet and outside
+          it. Draws down roasted stock; never enters COGS. */}
+      <CoffeeBlock
+        coffeeStock={coffeeStock}
+        selectedCoffeeId={selectedCoffeeId}
+        setSelectedCoffeeId={setSelectedCoffeeId}
+        coffeeAmount={coffeeAmount}
+        setCoffeeAmount={setCoffeeAmount}
+        handleAssignCoffee={handleAssignCoffee}
+        isPending={isPending}
+        assignedCoffeeList={assignedCoffeeList}
+        totalAssignedCoffeeG={totalAssignedCoffeeG}
+        gramsToLbs={gramsToLbs}
+        setDeleteAssignmentId={setDeleteAssignmentId}
       />
 
       {/* Delete confirmation dialogs */}

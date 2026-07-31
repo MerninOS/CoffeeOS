@@ -2,18 +2,50 @@
 
 import Link from "next/link";
 import { format } from "date-fns";
-import { ArrowLeft, CheckCircle2, Clock, Truck } from "lucide-react";
-import { Btn } from "./primitives";
+import { ArrowLeft, Check, Clock } from "lucide-react";
+import { Badge, Button, IconButton } from "@merninos/ui/instrument";
+import { mono, sans } from "../../components/tokens";
 import type { Order } from "./types";
 
 /**
- * Order identity and the one primary action.
+ * Order identity, its states, and the one primary action.
  *
- * Moved out of order-detail-client.tsx byte-for-byte (CoffeeOS#70 Stage A).
- * Props are named exactly as the parent's locals were, so the markup below
- * needed no edits at all — the safest possible extraction, and the reason the
- * baselines can prove it.
+ * The four metric cards used to carry Payment and Fulfillment alongside two
+ * money figures, at equal weight. They are STATES, not measurements, so they
+ * belong here as badges — which also frees the metric row to be what Instrument
+ * requires: one hero figure and a ruled strip.
+ *
+ * The primary action is INK, never brand red. Red in this system means
+ * "happening now / needs you" — the live register — and a button that is merely
+ * available is not that. The old page filled this button with --color-tomato.
  */
+
+const FINANCIAL: Record<
+  string,
+  { tone: "success" | "warning" | "danger" | "neutral"; label: string }
+> = {
+  paid: { tone: "success", label: "Paid" },
+  pending: { tone: "warning", label: "Pending" },
+  refunded: { tone: "neutral", label: "Refunded" },
+  partially_refunded: { tone: "neutral", label: "Partly refunded" },
+};
+
+const FULFILLMENT: Record<string, { tone: "success" | "info" | "neutral"; label: string }> = {
+  fulfilled: { tone: "success", label: "Fulfilled" },
+  partial: { tone: "info", label: "Partial" },
+  partially_fulfilled: { tone: "info", label: "Partial" },
+};
+
+/**
+ * A separator with its own padding.
+ *
+ * JSX collapses literal whitespace around an inline element, so `' · '` written
+ * as text renders as `Cafe·Jul`. Found in the design mock.
+ */
+function Dot() {
+  return <span style={{ padding: "0 7px", color: "var(--ink-subtle)" }}>·</span>;
+}
+
 export function OrderHeader({
   order,
   isPending,
@@ -23,44 +55,90 @@ export function OrderHeader({
   isPending: boolean;
   handleToggleReadyToShip: () => void;
 }) {
-  return (
-  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-    <div className="flex items-center gap-3">
-      <Link href="/orders">
-        <button className="p-2 rounded-[10px] border-[2.5px] border-espresso bg-cream text-espresso hover:bg-espresso hover:text-cream transition-all duration-[120ms] shadow-[2px_2px_0_#1C0F05]">
-          <ArrowLeft size={16} strokeWidth={2.2} />
-        </button>
-      </Link>
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="font-extrabold text-[24px] uppercase tracking-[.04em] text-espresso leading-none">
-            {order.order_name}
-          </h1>
-          {order.ready_to_ship && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full border-[2px] border-matcha bg-matcha/20 text-matcha text-[11px] font-extrabold uppercase">
-              <Truck size={11} strokeWidth={2.2} className="mr-1" />
-              Ready to Ship
-            </span>
-          )}
-        </div>
-        <p className="text-[12px] text-espresso/50 font-medium mt-0.5">
-          {format(new Date(order.created_at_shopify), "MMM d, yyyy 'at' h:mm a")}
-        </p>
-      </div>
-    </div>
-    <Btn
-      onClick={handleToggleReadyToShip}
-      disabled={isPending}
-      variant={order.ready_to_ship ? "outline" : "primary"}
-      className="w-full sm:w-auto"
-    >
-      {order.ready_to_ship ? (
-        <><Clock size={13} strokeWidth={2.2} className="mr-1.5" />Mark Not Ready</>
-      ) : (
-        <><CheckCircle2 size={13} strokeWidth={2.2} className="mr-1.5" />Mark Ready to Ship</>
-      )}
-    </Btn>
-  </div>
+  const fin = FINANCIAL[(order.financial_status || "").toLowerCase()];
+  const ful = FULFILLMENT[(order.fulfillment_status || "").toLowerCase()];
 
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        gap: 16,
+        flexWrap: "wrap",
+      }}
+    >
+      <div style={{ display: "flex", gap: 14, alignItems: "flex-start", minWidth: 0 }}>
+        <div style={{ paddingTop: 4 }}>
+          <Link href="/orders" aria-label="Back to orders">
+            <IconButton
+              size="sm"
+              icon={<ArrowLeft size={16} strokeWidth={1.5} />}
+              aria-label="Back to orders"
+            />
+          </Link>
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <h1
+              style={{
+                fontFamily: "var(--font-display)",
+                fontVariationSettings: "var(--display-settings)",
+                fontWeight: "var(--display-weight)" as unknown as number,
+                letterSpacing: "var(--display-tracking)",
+                fontSize: "var(--fs-display)",
+                color: "var(--ink)",
+                margin: 0,
+                lineHeight: 1,
+              }}
+            >
+              {order.order_name}
+            </h1>
+            {fin && (
+              <Badge tone={fin.tone} dot>
+                {fin.label}
+              </Badge>
+            )}
+            {ful ? (
+              <Badge tone={ful.tone}>{ful.label}</Badge>
+            ) : (
+              <Badge tone="neutral">Unfulfilled</Badge>
+            )}
+            {order.ready_to_ship && <Badge tone="info">Ready to ship</Badge>}
+          </div>
+          <p
+            style={{
+              ...sans,
+              color: "var(--ink-muted)",
+              margin: "8px 0 0",
+              display: "flex",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <span style={{ ...mono, fontSize: "var(--fs-caption)" }}>
+              {format(new Date(order.created_at_shopify), "MMM d, yyyy 'at' h:mm a")}
+            </span>
+            <Dot />
+            <span style={{ ...mono, fontSize: "var(--fs-caption)" }}>{order.currency}</span>
+          </p>
+        </div>
+      </div>
+
+      <Button
+        variant={order.ready_to_ship ? "secondary" : "primary"}
+        disabled={isPending}
+        onClick={handleToggleReadyToShip}
+        iconLeft={
+          order.ready_to_ship ? (
+            <Clock size={14} strokeWidth={1.5} />
+          ) : (
+            <Check size={14} strokeWidth={1.5} />
+          )
+        }
+      >
+        {order.ready_to_ship ? "Mark not ready" : "Mark ready to ship"}
+      </Button>
+    </div>
   );
 }
