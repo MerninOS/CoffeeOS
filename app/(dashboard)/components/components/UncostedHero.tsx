@@ -40,7 +40,7 @@ export function UncostedHero({
 }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "end" }}>
-      <div style={{ flex: "0 0 268px" }}>
+      <div data-testid="hero-column" style={{ flex: "0 0 268px" }}>
         {uncosted === 0 ? (
           /**
            * No figure at zero — a quiet confirmation instead.
@@ -139,7 +139,7 @@ export function UncostedHero({
           </div>
         )}
       </div>
-      <div style={{ flex: "1 1 440px", minWidth: 0 }}>
+      <div data-testid="strip-column" style={{ flex: "1 1 440px", minWidth: 0 }}>
         <StatStrip stats={census} />
       </div>
     </div>
