@@ -630,7 +630,16 @@ async function seedDemoData(admin, ownerId) {
         shopify_order_id: "gid://shopify/Order/2000000001",
         shopify_order_number: "1001",
         order_name: "#1001",
-        created_at_shopify: new Date(Date.now() - 3 * 86400000).toISOString(),
+        // Deliberately the OLDEST of the costed orders, and deliberately off the
+        // rendered page — see the slot budget above #1003. #1002 already covers
+        // "a costed order keeps its derived figures" on the list; #1001's own
+        // assertions (order-detail-layout.spec.ts) are on the DETAIL route,
+        // which navigates by id via tests/fixtures/seeded-orders.json and does
+        // not care about ORDERS_PAGE_LIMIT.
+        //
+        // Still inside the 30-day window, so it stays in the period aggregate
+        // and the exact revenue/COGS totals are unchanged by this move.
+        created_at_shopify: new Date(Date.now() - 12 * 86400000).toISOString(),
         financial_status: "paid",
         fulfillment_status: "fulfilled",
         total_price: 114,
@@ -645,6 +654,24 @@ async function seedDemoData(admin, ownerId) {
         shopify_order_id: "gid://shopify/Order/2000000002",
         shopify_order_number: "1002",
         order_name: "#1002",
+        // THE ONLY ORDER INSIDE THE 7-DAY WINDOW, and it must stay that way.
+        //
+        // Two independent tests pin the 7-day view, and together they leave
+        // exactly one arrangement:
+        //
+        //   orders-query.spec.ts:30      period=7 must return FEWER rows than
+        //                                period=365. The wide view is capped at
+        //                                ORDERS_PAGE_LIMIT (3), so the 7-day
+        //                                window has to hold at most 2 orders.
+        //   orders-exclusion.spec.ts:146 period=7 must show no exclusion banner
+        //                                and no "of $" qualifier, so every order
+        //                                inside 7 days must be fully costed.
+        //
+        // Anything inside 7 days is necessarily among the newest three, and
+        // #1003 and #1006 must hold two of those slots (see the note on #1003).
+        // That leaves exactly one 7-day slot, and it must be a costed order.
+        // This is it. Adding a second order inside 7 days pushes #1006 off the
+        // page and silently SKIPS the mixed-order case instead of failing.
         created_at_shopify: new Date(Date.now() - 1 * 86400000).toISOString(),
         financial_status: "paid",
         fulfillment_status: "partial",
@@ -664,7 +691,30 @@ async function seedDemoData(admin, ownerId) {
         shopify_order_id: "gid://shopify/Order/2000000003",
         shopify_order_number: "1003",
         order_name: "#1003",
-        created_at_shopify: new Date(Date.now() - 20 * 86400000).toISOString(),
+        // MUST stay within the newest three. `playwright.config.ts` pins
+        // ORDERS_PAGE_LIMIT to 3 so /orders' Criterion 5 can detect its
+        // pagination bug, and the list renders the newest three orders and
+        // nothing else — no period and no search reaches past it, because search
+        // filters the fetched page rather than the range.
+        //
+        // At -20d this order was FIFTH newest, so it never rendered, and the
+        // four tests that name it failed rather than skipped:
+        // orders-exclusion.spec.ts:67, :177, :185 and orders-uncosted.spec.ts:40.
+        // The fixture was never missing — it was unreachable. The dates above
+        // were chosen to keep exclusion fixtures inside the 30-day WINDOW, which
+        // guards the wrong trap: CoffeeOS#88 later added the LIMIT, and nothing
+        // rechecked this arrangement against it.
+        //
+        // The three page slots are a budget. Spending two on costed orders
+        // (#1001 and #1002) left none for the pure-uncosted state, so the newest
+        // three are now one of each: #1002 costed, #1003 uncosted, #1006 mixed.
+        // Moving this NEWER rather than raising the limit keeps Criterion 5
+        // detectable, which is the whole reason the limit is 3.
+        //
+        // OUTSIDE the 7-day window, though — see the budget note on #1002. This
+        // order is uncosted, and `orders-exclusion.spec.ts:146` asserts that a
+        // 7-day view shows no exclusion banner at all.
+        created_at_shopify: new Date(Date.now() - 8 * 86400000).toISOString(),
         financial_status: "pending",
         fulfillment_status: null,
         total_price: 246,
@@ -709,6 +759,14 @@ async function seedDemoData(admin, ownerId) {
       // Inside the 30-day default window on purpose: a fixture the default view
       // cannot reach gets verified by nobody.
       //
+      // THE WINDOW IS NOT THE ONLY GATE. Being inside 30 days is necessary and
+      // NOT sufficient — the list renders only the newest ORDERS_PAGE_LIMIT (3)
+      // orders, so a fixture can sit well inside the window and still never
+      // appear. That is precisely what happened to #1003, which sat at -20d
+      // inside the window, rendered nowhere, and failed four tests that named
+      // it. Order these fixtures by RANK among the newest three, not by whether
+      // the date looks recent enough.
+      //
       // The uncosted PRODUCT these lean on (Guatemala Huehuetenango 12oz) comes
       // from CoffeeOS#68 and is already above — not duplicated here.
       {
@@ -720,7 +778,11 @@ async function seedDemoData(admin, ownerId) {
         shopify_order_id: "gid://shopify/Order/2000000007",
         shopify_order_number: "1006",
         order_name: "#1006",
-        created_at_shopify: new Date(Date.now() - 5 * 86400000).toISOString(),
+        // Third-newest, and outside the 7-day window. Third-newest keeps it on
+        // the page so its test runs instead of skipping through requireOrder;
+        // outside 7 days keeps it clear of the no-banner assertion, since a
+        // mixed order IS excluded.
+        created_at_shopify: new Date(Date.now() - 9 * 86400000).toISOString(),
         financial_status: "paid",
         fulfillment_status: "fulfilled",
         total_price: 43,
@@ -738,7 +800,14 @@ async function seedDemoData(admin, ownerId) {
         shopify_order_id: "gid://shopify/Order/2000000008",
         shopify_order_number: "1007",
         order_name: "#1007",
-        created_at_shopify: new Date(Date.now() - 9 * 86400000).toISOString(),
+        // Fourth-newest, so it falls off the page and its tests SKIP through
+        // requireOrder rather than fail. That is the pre-existing state, not
+        // something this arrangement introduced — there are three page slots and
+        // four states competing for them (costed, uncosted, mixed, unlinked).
+        // The unlinked case is the one that gives up its slot because it is the
+        // only one also covered on the detail route, which reaches orders by id
+        // through tests/fixtures/seeded-orders.json and ignores the limit.
+        created_at_shopify: new Date(Date.now() - 10 * 86400000).toISOString(),
         financial_status: "paid",
         fulfillment_status: "fulfilled",
         total_price: 31,
