@@ -4,36 +4,16 @@ import { useSearchParams } from "next/navigation";
 import { SessionsClient, type Session } from "./sessions-client";
 import { RoastRequestsClient } from "./roast-requests-client";
 import { Coffee, Package } from "lucide-react";
+import type { RoastRequest, CoffeeInventory } from "./components/requests/types";
 
 const LBS_TO_GRAMS = 453.592;
 const gramsToLbs = (g: number) => (g / LBS_TO_GRAMS).toFixed(2);
-
-interface CoffeeInventory {
-  id: string;
-  name: string;
-  origin: string;
-  current_green_quantity_g: number;
-}
 
 interface RoastedCoffeeStock {
   id: string;
   name: string;
   origin: string;
   roasted_stock_g: number;
-}
-
-interface RoastRequest {
-  id: string;
-  coffee_inventory_id: string;
-  requested_quantity_g: number;
-  fulfilled_quantity_g: number;
-  priority: "low" | "normal" | "high" | "urgent";
-  status: "pending" | "in_progress" | "completed" | "cancelled";
-  due_date: string | null;
-  order_id: string | null;
-  notes: string | null;
-  created_at: string;
-  green_coffee_inventory?: { name: string; origin: string };
 }
 
 interface RoastingPageClientProps {

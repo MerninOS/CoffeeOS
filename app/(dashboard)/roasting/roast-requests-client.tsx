@@ -36,31 +36,7 @@ import {
   updateRoastRequest,
   deleteRoastRequest,
 } from "./actions";
-
-interface CoffeeInventory {
-  id: string;
-  name: string;
-  origin: string;
-  current_green_quantity_g: number;
-}
-
-interface RoastRequest {
-  id: string;
-  green_coffee_id: string;
-  coffee_name: string;
-  requested_roasted_g: number;
-  fulfilled_roasted_g: number;
-  priority: "low" | "normal" | "high" | "urgent";
-  status: "pending" | "in_progress" | "fulfilled" | "cancelled";
-  due_date: string | null;
-  order_id: string | null;
-  notes: string | null;
-  created_at: string;
-  green_coffee_inventory?: {
-    name: string;
-    origin: string;
-  };
-}
+import type { RoastRequest, CoffeeInventory } from "./components/requests/types";
 
 interface RoastRequestsClientProps {
   requests: RoastRequest[];
