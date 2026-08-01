@@ -8,12 +8,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, UserPlus } from "lucide-react";
-import { Btn, FieldLabel, MerninInput } from "./LoudPrimitives";
+import { Button, Field, Input } from "@merninos/ui/instrument";
+import { Loader2, Mail, UserPlus } from "lucide-react";
+import {
+  SELECT_CONTENT,
+  SELECT_ITEM,
+  SELECT_TRIGGER,
+} from "@/app/(dashboard)/products/[id]/components/selectStyles";
 
 /**
- * The invite form. Moved out of team-management.tsx verbatim (CoffeeOS#74 Stage
- * A); the parent still owns every piece of its state.
+ * The invite form, below the list it adds to.
+ *
+ * Radix rather than instrument's Select for the role, matching the role control
+ * in the row above it: a native <select> beside a listbox on the same screen
+ * would be two different controls for the same choice. Content is retokenized
+ * and carries data-surface="app" — Radix portals outside the token scope.
  */
 export function InviteRow({
   inviteEmail,
@@ -31,42 +40,51 @@ export function InviteRow({
   onSubmit: (e: React.FormEvent) => void;
 }) {
   return (
-    <div className="bg-cream border-t-[2.5px] border-dashed border-fog px-5 py-4">
-      <form onSubmit={onSubmit} className="flex flex-col gap-3 sm:flex-row">
-        <div className="flex-1">
-          <FieldLabel htmlFor="inviteEmail">
-            <span className="sr-only">Email address</span>
-          </FieldLabel>
-          <MerninInput
-            id="inviteEmail"
-            type="email"
-            placeholder="team@example.com"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            required
-          />
-        </div>
-        <Select
-          value={inviteRole}
-          onValueChange={(v) => setInviteRole(v as "admin" | "roaster")}
-        >
-          <SelectTrigger className="w-full sm:w-32 border-[2.5px] border-espresso rounded-xl bg-chalk shadow-[3px_3px_0_#1C0F05] font-body text-sm font-bold">
+    <form
+      onSubmit={onSubmit}
+      style={{
+        display: "flex",
+        gap: 12,
+        flexWrap: "wrap",
+        alignItems: "flex-end",
+        paddingTop: 20,
+      }}
+    >
+      <Field label="Invite by email" style={{ flex: "1 1 240px", minWidth: 0 }}>
+        <Input
+          id="inviteEmail"
+          type="email"
+          required
+          placeholder="team@example.com"
+          value={inviteEmail}
+          leading={<Mail />}
+          onChange={(e) => setInviteEmail(e.target.value)}
+        />
+      </Field>
+
+      <Field label="Role" style={{ flex: "0 1 150px" }}>
+        <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as "admin" | "roaster")}>
+          <SelectTrigger style={{ ...SELECT_TRIGGER, height: 38 }}>
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="admin">Admin</SelectItem>
-            <SelectItem value="roaster">Roaster</SelectItem>
+          <SelectContent data-surface="app" style={SELECT_CONTENT}>
+            <SelectItem value="admin" style={SELECT_ITEM}>
+              Admin
+            </SelectItem>
+            <SelectItem value="roaster" style={SELECT_ITEM}>
+              Roaster
+            </SelectItem>
           </SelectContent>
         </Select>
-        <Btn type="submit" disabled={isInviting || !inviteEmail.trim()}>
-          {isInviting ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <UserPlus className="h-3.5 w-3.5" />
-          )}
-          Invite
-        </Btn>
-      </form>
-    </div>
+      </Field>
+
+      <Button
+        type="submit"
+        iconLeft={isInviting ? <Loader2 /> : <UserPlus />}
+        disabled={isInviting || !inviteEmail.trim()}
+      >
+        Invite
+      </Button>
+    </form>
   );
 }

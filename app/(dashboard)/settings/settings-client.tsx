@@ -152,6 +152,7 @@ export function SettingsClient({ user, userRole, isOwner, shopifySettings, membe
         {/* Profile */}
         <ProfileSection
           user={user}
+          role={userRole}
           profileData={profileData}
           setProfileData={setProfileData}
           isSaving={isProfileSaving}

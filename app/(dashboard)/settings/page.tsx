@@ -66,7 +66,14 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-full">
+    /* pb-28 clears the onboarding tour widget, which is `fixed bottom-4 right-4
+       z-50` on every dashboard route and keeps that corner even when dismissed —
+       dismissing collapses it to a "Show Onboarding" pill in the same place. The
+       converted page is short enough that its last row lands there, and the
+       widget then intercepts the pointer events for whatever sits underneath.
+       The general fix belongs in the dashboard layout; this keeps THIS page's
+       actions clickable. */
+    <div className="flex flex-col min-h-full pb-28">
       <div className="px-6 pt-6 space-y-4">
         <div>
           <h1 className="text-[28px] md:text-[36px] font-extrabold uppercase tracking-tight leading-none text-espresso">
