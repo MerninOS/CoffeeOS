@@ -24,6 +24,8 @@ import {
   Scale,
   Warehouse,
 } from "lucide-react";
+import { gramsToLbs } from "@/lib/inventory/units";
+import { lotValue, stockState, totals } from "@/lib/inventory/valuation";
 import {
   createCoffeeInventory,
   updateCoffeeInventory,
@@ -46,8 +48,6 @@ interface CoffeeInventory {
   is_active: boolean;
   created_at: string;
 }
-
-const LBS_TO_GRAMS = 453.592;
 
 interface InventoryClientProps {
   initialInventory: CoffeeInventory[];
@@ -256,8 +256,6 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
     notes: "",
   });
 
-  const gramsToLbs = (g: number) => g / LBS_TO_GRAMS;
-
   const filteredInventory = inventory.filter(
     (coffee) =>
       coffee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -266,18 +264,13 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
         false)
   );
 
-  const totalGreenLbs = inventory.reduce(
-    (sum, c) => sum + gramsToLbs(c.current_green_quantity_g),
-    0
-  );
-  const totalRoastedLbs = inventory.reduce(
-    (sum, c) => sum + gramsToLbs(c.roasted_stock_g || 0),
-    0
-  );
-  const totalValue = inventory.reduce(
-    (sum, c) => sum + gramsToLbs(c.current_green_quantity_g) * c.price_per_lb,
-    0
-  );
+  // Totals over the WHOLE CATALOGUE, which is what this page does today even
+  // though the footer renders inside the filtered table. That mismatch is a real
+  // defect (spec Criterion 12) but fixing it here would move pixels, and this
+  // stage has to prove it changed nothing. Stage 4 passes the visible rows to
+  // the footer and leaves the strip on the catalogue.
+  const { greenLbs: totalGreenLbs, roastedLbs: totalRoastedLbs, value: totalValue } =
+    totals(inventory);
 
   const resetForm = () => {
     setFormData({
@@ -393,7 +386,7 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
       lot_code: coffee.lot_code || "",
       supplier: coffee.supplier || "",
       price_per_lb: coffee.price_per_lb.toString(),
-      quantity_lbs: (coffee.initial_quantity_g / LBS_TO_GRAMS).toFixed(2),
+      quantity_lbs: gramsToLbs(coffee.initial_quantity_g).toFixed(2),
       purchase_date: coffee.purchase_date || "",
       notes: coffee.notes || "",
     });
@@ -673,8 +666,8 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
                   {filteredInventory.map((coffee, i) => {
                     const greenLbs = gramsToLbs(coffee.current_green_quantity_g);
                     const roastedLbs = gramsToLbs(coffee.roasted_stock_g || 0);
-                    const totalCoffeeValue = greenLbs * coffee.price_per_lb;
-                    const isLow = greenLbs < 5 && greenLbs > 0;
+                    const totalCoffeeValue = lotValue(coffee);
+                    const isLow = stockState(greenLbs) === "low";
                     return (
                       <tr
                         key={coffee.id}
@@ -799,8 +792,8 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
               {filteredInventory.map((coffee) => {
                 const greenLbs = gramsToLbs(coffee.current_green_quantity_g);
                 const roastedLbs = gramsToLbs(coffee.roasted_stock_g || 0);
-                const totalCoffeeValue = greenLbs * coffee.price_per_lb;
-                const isLow = greenLbs < 5 && greenLbs > 0;
+                const totalCoffeeValue = lotValue(coffee);
+                const isLow = stockState(greenLbs) === "low";
                 return (
                   <div key={coffee.id} className="px-5 py-4 space-y-3">
                     <div className="flex items-start justify-between gap-2">

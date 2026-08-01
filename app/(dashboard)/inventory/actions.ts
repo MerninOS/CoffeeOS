@@ -3,9 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEffectiveOwnerId } from "@/lib/team";
 import { revalidatePath } from "next/cache";
+import { lbsToGrams } from "@/lib/inventory/units";
 
-// Conversion: 1 lb = 453.592 grams
-const LBS_TO_GRAMS = 453.592;
 
 export async function createCoffeeInventory(data: {
   name: string;
@@ -24,7 +23,7 @@ export async function createCoffeeInventory(data: {
     return { error: ownerError || "Unauthorized" };
   }
 
-  const quantityGrams = data.quantity_lbs * LBS_TO_GRAMS;
+  const quantityGrams = lbsToGrams(data.quantity_lbs);
 
   const { data: inventory, error } = await supabase
     .from("green_coffee_inventory")
@@ -122,7 +121,7 @@ export async function adjustInventoryQuantity(
     return { error: "Unauthorized" };
   }
 
-  const quantityChangeGrams = quantityChangeLbs * LBS_TO_GRAMS;
+  const quantityChangeGrams = lbsToGrams(quantityChangeLbs);
   const newQuantityGrams = coffee.current_green_quantity_g + quantityChangeGrams;
 
   if (newQuantityGrams < 0) {
