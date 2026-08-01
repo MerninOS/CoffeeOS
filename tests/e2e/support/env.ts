@@ -60,3 +60,26 @@ export function demoAccount(): { email: string; password: string } {
     password: process.env.DEMO_PASSWORD ?? 'DemoCoffeeOS!2026',
   }
 }
+
+/**
+ * The roaster identity this worktree owns — a role that can manage nothing.
+ *
+ * /settings renders three ways by role, and a suite that only ever signs in as
+ * the owner cannot see a role-gating regression (CoffeeOS#74 criterion 18).
+ *
+ * Derived from `demoAccount()` by sub-addressing rather than hard-coded, so it
+ * inherits this worktree's isolation instead of reintroducing the shared
+ * account that isolation exists to remove. `scripts/seed-demo-account.mjs`
+ * derives it identically and is the source of truth for what the account
+ * contains; change one and you must change the other.
+ */
+export function roasterAccount(): { email: string; password: string } {
+  loadEnvLocal()
+  const demo = demoAccount()
+  return {
+    email:
+      process.env.DEMO_ROASTER_EMAIL ??
+      demo.email.replace(/^([^@]+)@/, '$1+roaster@'),
+    password: process.env.DEMO_ROASTER_PASSWORD ?? demo.password,
+  }
+}
