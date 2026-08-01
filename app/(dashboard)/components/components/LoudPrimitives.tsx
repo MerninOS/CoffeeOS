@@ -24,6 +24,7 @@ export function Btn({
   onClick,
   type = "button",
   className = "",
+  testId,
 }: {
   children: React.ReactNode;
   variant?: "primary" | "outline" | "ghost" | "danger";
@@ -32,6 +33,10 @@ export function Btn({
   onClick?: () => void;
   type?: "button" | "submit";
   className?: string;
+  /** The capability specs select by testid, never by class or copy — those are
+   *  exactly what Stage B rewrites. Btn does not spread arbitrary props, so the
+   *  hook has to be explicit. */
+  testId?: string;
 }) {
   const base =
     "inline-flex items-center justify-center font-body font-extrabold uppercase tracking-widest transition-all duration-100 cursor-pointer disabled:opacity-50 disabled:pointer-events-none";
@@ -54,6 +59,7 @@ export function Btn({
       type={type}
       disabled={disabled}
       onClick={onClick}
+      data-testid={testId}
       className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}
     >
       {children}

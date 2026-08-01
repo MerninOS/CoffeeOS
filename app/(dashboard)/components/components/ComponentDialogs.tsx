@@ -64,7 +64,7 @@ export function ComponentFormDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-[8px_8px_0_#1C0F05]">
+      <DialogContent data-testid="component-dialog" className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-[8px_8px_0_#1C0F05]">
         <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
           <DialogHeader>
             <DialogTitle className="font-body font-extrabold uppercase tracking-widest text-espresso text-sm">
@@ -78,6 +78,7 @@ export function ComponentFormDialog({
               <FieldLabel htmlFor="name">Name</FieldLabel>
               <MerninInput
                 id="name"
+                data-testid="field-name"
                 placeholder="e.g., 12oz Kraft Bag"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -128,6 +129,7 @@ export function ComponentFormDialog({
               <FieldLabel htmlFor="costPerUnit">Cost per Unit ($)</FieldLabel>
               <MerninInput
                 id="costPerUnit"
+                data-testid="field-cost"
                 type="number"
                 step="0.00000001"
                 min="0"
@@ -141,6 +143,7 @@ export function ComponentFormDialog({
               <FieldLabel htmlFor="description">Description (optional)</FieldLabel>
               <MerninTextarea
                 id="description"
+                data-testid="field-notes"
                 placeholder="Additional details about this component"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -157,7 +160,7 @@ export function ComponentFormDialog({
             >
               Cancel
             </Btn>
-            <Btn type="submit" disabled={isLoading}>
+            <Btn type="submit" testId="dialog-save" disabled={isLoading}>
               {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               {editingComponent ? "Save Changes" : "Create"}
             </Btn>
@@ -181,7 +184,7 @@ export function DeleteComponentDialog({
 }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-sm p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-[8px_8px_0_#1C0F05]">
+      <AlertDialogContent data-testid="delete-dialog" className="max-w-sm p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-[8px_8px_0_#1C0F05]">
         <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-body font-extrabold uppercase tracking-widest text-espresso text-sm">
@@ -200,6 +203,7 @@ export function DeleteComponentDialog({
             Cancel
           </AlertDialogCancel>
           <AlertDialogAction
+            data-testid="delete-confirm"
             onClick={onConfirm}
             disabled={isLoading}
             className="inline-flex items-center justify-center gap-1.5 font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-tomato text-cream border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"

@@ -63,11 +63,12 @@ export function ComponentsTable({
             {items.map((component) => (
               <div
                 key={component.id}
+                data-testid="component-row"
                 className="bg-cream border-[2.5px] border-espresso rounded-[16px] shadow-[3px_3px_0_#1C0F05] p-3"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="font-body font-extrabold text-sm text-espresso">
+                    <p data-testid="row-name" className="font-body font-extrabold text-sm text-espresso">
                       {component.name}
                     </p>
                     {component.notes && (
@@ -80,6 +81,7 @@ export function ComponentsTable({
                     <Btn
                       variant="ghost"
                       size="sm"
+                      testId="row-edit"
                       onClick={() => onEdit(component)}
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -87,6 +89,7 @@ export function ComponentsTable({
                     <Btn
                       variant="ghost"
                       size="sm"
+                      testId="row-delete"
                       onClick={() => onDelete(component.id)}
                       className="text-tomato hover:text-tomato"
                     >
@@ -94,7 +97,7 @@ export function ComponentsTable({
                     </Btn>
                   </div>
                 </div>
-                <p className="mt-2 text-sm font-extrabold font-body text-espresso">
+                <p data-testid="row-cost" className="mt-2 text-sm font-extrabold font-body text-espresso">
                   ${component.cost_per_unit.toFixed(COST_PER_UNIT_DECIMALS)}/{component.unit}
                 </p>
               </div>
@@ -119,21 +122,23 @@ export function ComponentsTable({
               {items.map((component, i) => (
                 <div
                   key={component.id}
+                  data-testid="component-row"
                   className={`grid grid-cols-[minmax(160px,1fr)_minmax(200px,2fr)_160px_80px] gap-x-4 px-4 py-3 items-center ${i < items.length - 1 ? "border-b-[1.5px] border-dashed border-fog" : ""} hover:bg-cream/60 transition-colors`}
                 >
-                  <span className="font-body font-extrabold text-sm text-espresso truncate">
+                  <span data-testid="row-name" className="font-body font-extrabold text-sm text-espresso truncate">
                     {component.name}
                   </span>
                   <span className="font-body text-sm text-espresso/60 truncate">
                     {component.notes || "—"}
                   </span>
-                  <span className="font-body font-extrabold text-sm text-espresso text-right tabular-nums">
+                  <span data-testid="row-cost" className="font-body font-extrabold text-sm text-espresso text-right tabular-nums">
                     ${component.cost_per_unit.toFixed(COST_PER_UNIT_DECIMALS)}/{component.unit}
                   </span>
                   <div className="flex items-center justify-end gap-1">
                     <Btn
                       variant="ghost"
                       size="sm"
+                      testId="row-edit"
                       onClick={() => onEdit(component)}
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -141,6 +146,7 @@ export function ComponentsTable({
                     <Btn
                       variant="ghost"
                       size="sm"
+                      testId="row-delete"
                       onClick={() => onDelete(component.id)}
                       className="text-tomato hover:text-tomato"
                     >
