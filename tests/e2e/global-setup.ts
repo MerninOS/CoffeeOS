@@ -1,7 +1,8 @@
 import { chromium } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
-import { demoAccount } from './support/env'
+import { createClient } from '@supabase/supabase-js'
+import { demoAccount, loadEnvLocal } from './support/env'
 
 /**
  * Logs in once with the seeded demo account and saves the session, so specs
@@ -32,6 +33,42 @@ export default async function globalSetup() {
     // failed login silently stays on /auth/login, and every later spec would
     // then screenshot the login page instead of failing here.
     await page.waitForURL(/\/(dashboard|orders)/, { timeout: 30_000 })
+
+    /**
+     * Dismiss the onboarding tour widget before saving the session.
+     *
+     * `components/onboarding-tour-widget.tsx` renders `fixed bottom-4 right-4
+     * z-50 w-[350px]`, which sits over the bottom-right of every page — i.e.
+     * over table row actions. Playwright reports the target as "visible,
+     * enabled and stable" and then retries the click for the full timeout while
+     * the widget eats every pointer event, so the failure reads as a missing
+     * element rather than an overlay.
+     *
+     * It hides only when all six setup steps complete or when this key is set.
+     * The long-lived demo account completes them via a real Shopify OAuth
+     * connection, which a seeded per-worktree account cannot reproduce.
+     *
+     * The id comes from the admin API, NOT from localStorage: this app uses
+     * @supabase/ssr, which keeps the session in COOKIES, so scanning
+     * localStorage for an `sb-*-auth-token` finds nothing and quietly skips the
+     * dismissal — which is exactly the silent no-op this comment exists to stop
+     * anyone reintroducing.
+     */
+    loadEnvLocal()
+    const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!url || !key) {
+      throw new Error('global-setup needs SUPABASE_SERVICE_ROLE_KEY to dismiss the onboarding widget')
+    }
+    const admin = createClient(url, key, { auth: { persistSession: false } })
+    const { data: users } = await admin.auth.admin.listUsers()
+    const userId = users.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())?.id
+    if (!userId) throw new Error(`could not resolve a user id for ${email}`)
+
+    await page.evaluate((id) => {
+      window.localStorage.setItem(`coffeeos:onboarding:${id}:hidden`, 'true')
+    }, userId)
+    await page.reload()
 
     await page.context().storageState({ path: STATE })
   } catch (err) {
