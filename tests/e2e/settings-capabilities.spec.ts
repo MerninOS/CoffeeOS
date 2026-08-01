@@ -108,13 +108,26 @@ test.describe('/settings — team invitations', () => {
     await hideOnboardingWidget(page)
   })
 
+  /**
+   * Cancels EVERY qa-invite- row, not just this run's.
+   *
+   * Scoping the cleanup to one address made it share a failure mode with the
+   * test: when the cancel control broke, the test failed at the cancel step AND
+   * this cleanup failed at the same step, so eight invitations accumulated
+   * across retries and drifted the /settings baseline — which then read as a
+   * rendering regression rather than as leaked data.
+   *
+   * Sweeping the prefix makes it self-healing: the next run clears whatever an
+   * earlier one stranded, whether or not that run got as far as creating it.
+   */
   test.afterEach(async ({ page }) => {
     await page.goto('/settings')
-    const row = invitationRow(page, INVITEE)
-    if (await row.count()) {
-      await row.getByTestId('cancel-invitation').click()
-      await expect(row).toHaveCount(0)
+    const stale = page.locator('[data-testid="invitation-row"][data-invitation-email^="qa-invite-"]')
+    for (let guard = 0; (await stale.count()) > 0 && guard < 20; guard++) {
+      await stale.first().getByTestId('cancel-invitation').click()
+      await expect(page.getByText(/invitation cancelled/i)).toBeVisible()
     }
+    await expect(stale).toHaveCount(0)
   })
 
   test('an invitation appears, then cancels', async ({ page }) => {
