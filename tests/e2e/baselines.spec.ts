@@ -26,6 +26,7 @@ const DASHBOARD = [
   '/inventory',
   '/components',
   '/roasting',
+  '/roasting?tab=requests',
   '/roasting/batches',
   '/roasting/settings',
   '/settings',
@@ -75,6 +76,12 @@ test.describe('dashboard baselines (authenticated)', () => {
       // A redirect to /auth/login means storageState did not apply; without this
       // the suite would happily baseline nine identical login screens.
       await expect(page).not.toHaveURL(/\/auth\//)
+
+      // The requests tab is reached by query param, so a dropped param would
+      // silently baseline the sessions tab a second time.
+      if (route.includes('tab=requests')) {
+        await expect(page.getByRole('heading', { name: 'Roast Requests' })).toBeVisible()
+      }
       await page.waitForLoadState('networkidle')
 
       // The sidebar/top-bar identity chrome renders the signed-in EMAIL —
