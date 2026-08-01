@@ -115,8 +115,8 @@ export async function saveStorefrontSettings(data: {
     return { error: error.message };
   }
 
-  revalidatePath("/settings", "max");
-  revalidatePath("/products", "max");
+  revalidatePath("/settings");
+  revalidatePath("/products");
 
   return { success: true };
 }
@@ -207,8 +207,8 @@ export async function saveAdminApiSettings(data: {
     return { error: error.message };
   }
 
-  revalidatePath("/settings", "max");
-  revalidatePath("/orders", "max");
+  revalidatePath("/settings");
+  revalidatePath("/orders");
 
   return { success: true };
 }
@@ -319,8 +319,8 @@ export async function updateProfile(data: { firstName: string; lastName: string 
     },
   });
 
-  revalidatePath("/settings", "max");
-  revalidatePath("/dashboard", "max");
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
 
   return { success: true };
 }
