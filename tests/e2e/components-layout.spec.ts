@@ -45,7 +45,16 @@ async function openList(page: Page) {
   await page.goto('/components')
   await page.waitForLoadState('networkidle')
   await page.addStyleTag({
-    content: '[class*="fixed"][class*="bottom-4"][class*="right-4"]{display:none !important}',
+    content: [
+      // The onboarding tour widget, collapsed or expanded — both roots are
+      // `fixed bottom-4 right-4 z-50` and it covers the bottom of the list.
+      '[class*="fixed"][class*="bottom-4"][class*="right-4"]{display:none !important}',
+      // The Next.js dev-tools overlay. It does not exist in production, and at
+      // 375px it sits over the bottom of the viewport where a row scrolled into
+      // view lands — Playwright reported it intercepting pointer events on a
+      // row action that was otherwise the topmost element at its own centre.
+      'nextjs-portal{display:none !important}',
+    ].join(''),
   })
   await expect(page.locator('[data-testid="component-row"]').first()).toBeVisible()
 }
