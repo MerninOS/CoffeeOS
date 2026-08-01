@@ -146,6 +146,116 @@ test.describe('/settings — team invitations', () => {
   })
 })
 
+/**
+ * Every `?error=` code settings-client.tsx maps, and the fallback it must not
+ * fall through to. Copy is asserted verbatim because Stage B moves this map into
+ * lib/settings/errors.ts and a reworded string would go unnoticed otherwise.
+ *
+ * `billing_not_active` is deliberately absent — it is the one code that does not
+ * merely render. See the test below it.
+ */
+const ERROR_FALLBACK = 'An error occurred connecting to Shopify'
+
+const ERROR_CODES: Array<[string, RegExp]> = [
+  ['missing_params', /Missing required parameters from Shopify/i],
+  ['config_error', /Shopify app not configured correctly/i],
+  ['invalid_signature', /Invalid signature from Shopify/i],
+  ['invalid_state', /Invalid state/i],
+  ['state_expired', /Connection timed out/i],
+  ['shop_mismatch', /Shop mismatch/i],
+  ['token_exchange_failed', /Failed to exchange token with Shopify/i],
+  ['save_failed', /Failed to save connection/i],
+  ['callback_error', /An error occurred during connection/i],
+  ['billing_create_failed', /managed pricing apps/i],
+  ['billing_check_failed', /Could not verify Shopify billing status/i],
+  ['shopify_not_connected', /Connect your Shopify store before activating billing/i],
+]
+
+test.describe('/settings — Shopify error codes', () => {
+  test.beforeEach(async ({ page }) => {
+    await hideOnboardingWidget(page)
+  })
+
+  for (const [code, copy] of ERROR_CODES) {
+    test(`?error=${code} renders its own message`, async ({ page }) => {
+      await page.goto(`/settings?error=${code}`)
+
+      await expect(page.getByText(copy)).toBeVisible()
+
+      // Asserting the specific copy is not enough on its own: if a key fell
+      // through, the fallback could still contain the words being matched. This
+      // is what makes the table meaningful rather than decorative.
+      await expect(page.getByText(ERROR_FALLBACK, { exact: true })).toHaveCount(0)
+
+      // The page strips the query string once it has shown the message, so a
+      // refresh does not resurrect a stale error.
+      await expect(page).toHaveURL(/\/settings$/)
+    })
+  }
+
+  /**
+   * The thirteenth code, which does not render at all.
+   *
+   * settings-client.tsx maps copy for `billing_not_active`, but on a connected
+   * store with inactive billing — the seeded state, and the only state that can
+   * produce this code — the auto-check effect fires first and navigates to
+   * /api/shopify/billing/ensure. Measured: the message is never painted.
+   *
+   * That effect is the piece design.md §4 rules must NOT move into a child
+   * component during Stage A, because its `hasAutoCheckedBillingRef` guard is
+   * per-mount. This test is what will notice if it does: extract the effect into
+   * something that remounts and the navigation either fires twice or stops
+   * firing, and either way this fails.
+   *
+   * Asserts departure from /settings rather than the destination — where the
+   * ensure route lands depends on whether the billing bypass is on, and pinning
+   * that would make this a test of playwright.config.ts.
+   */
+  test('billing_not_active re-checks billing instead of rendering a message', async ({ page }) => {
+    await page.goto('/settings?error=billing_not_active')
+    await expect(page).not.toHaveURL(/\/settings/, { timeout: 15_000 })
+    await expect(page.getByText(/Billing is required to use the app/i)).toHaveCount(0)
+  })
+
+  test('an unmapped code falls through to the generic message', async ({ page }) => {
+    // The negative control for the twelve above. Without it, a map that returned
+    // the fallback for EVERY key would still pass any test whose regex happened
+    // to match the fallback's wording.
+    await page.goto('/settings?error=not_a_real_code')
+    await expect(page.getByText(ERROR_FALLBACK, { exact: true })).toBeVisible()
+  })
+})
+
+/**
+ * The workspace status, asserted as WIRING only.
+ *
+ * The three states themselves are unit tests over the pure function in
+ * lib/settings/status.ts (spec criterion 20). Driving all three through a
+ * browser would mean writing three different shopify_settings rows for the
+ * account tests/e2e/baselines.spec.ts photographs — the ordering hazard /orders
+ * already paid for — to re-test a function that needs no browser.
+ *
+ * So this asserts the one thing units cannot: that the page renders that
+ * function's output for the state actually in the database.
+ *
+ * The seeded workspace is connected (connected_via_oauth + admin_access_token)
+ * with billing_status null, so it is BLOCKED. Before Stage B the page says so in
+ * the Shopify panel; after Stage B it says so as the hero, in --brand. Naming
+ * the state exactly is the point — a page that renders "Live" over a workspace
+ * that cannot trade is the failure this is here to catch.
+ */
+test.describe('/settings — workspace status', () => {
+  test.beforeEach(async ({ page }) => {
+    await hideOnboardingWidget(page)
+  })
+
+  test('the page reports the seeded workspace as not billing-active', async ({ page }) => {
+    await page.goto('/settings')
+    await expect(page.getByText(/billing required|not active|blocked/i).first()).toBeVisible()
+    await expect(page.getByText(/billing active/i)).toHaveCount(0)
+  })
+})
+
 test.describe('/settings — member roles', () => {
   const ROASTER = 'roaster@coffeeos.io'
 
