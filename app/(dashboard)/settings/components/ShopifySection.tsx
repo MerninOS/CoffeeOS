@@ -1,18 +1,8 @@
 "use client";
 
 import React from "react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { ExternalLink, Loader2, Store, Unplug } from "lucide-react";
+import { ExternalLink, Loader2, Store } from "lucide-react";
+import { DisconnectStoreDialog } from "./SettingsDialogs";
 import { Btn, FieldLabel, InfoNote, MerninInput, PanelHeader, SectionPanel, StatusPill } from "./LoudPrimitives";
 import type { ShopifySettings } from "./types";
 
@@ -185,39 +175,7 @@ export function ShopifySection({
             >
               Manage Billing in Shopify
             </Btn>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <button className="inline-flex items-center justify-center gap-1.5 font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-transparent text-tomato border-[2.5px] border-tomato rounded-full shadow-[3px_3px_0_#E8442A] hover:bg-tomato hover:text-cream transition-all cursor-pointer">
-                  <Unplug className="h-3.5 w-3.5" />
-                  Disconnect Store
-                </button>
-              </AlertDialogTrigger>
-              <AlertDialogContent className="max-w-sm p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-[8px_8px_0_#1C0F05]">
-                <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
-                  <AlertDialogHeader>
-                    <AlertDialogTitle className="font-body font-extrabold uppercase tracking-widest text-espresso text-sm">
-                      Disconnect Shopify Store?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription className="font-body text-sm text-espresso/60 mt-1">
-                      This will remove the connection to your Shopify store. You won&apos;t be able to sync products or orders until you reconnect. Your existing data will be preserved.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                </div>
-                <AlertDialogFooter className="px-6 py-4 flex justify-end gap-2">
-                  <AlertDialogCancel className="inline-flex items-center justify-center font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-transparent text-espresso border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:bg-espresso hover:text-cream transition-all cursor-pointer">
-                    Cancel
-                  </AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={onDisconnect}
-                    disabled={isDisconnecting}
-                    className="inline-flex items-center justify-center gap-1.5 font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-tomato text-cream border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
-                  >
-                    {isDisconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unplug className="h-3.5 w-3.5" />}
-                    Disconnect
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <DisconnectStoreDialog isDisconnecting={isDisconnecting} onDisconnect={onDisconnect} />
           </>
         ) : (
           <Btn onClick={onConnect} disabled={isConnecting || !storeDomain.trim()}>

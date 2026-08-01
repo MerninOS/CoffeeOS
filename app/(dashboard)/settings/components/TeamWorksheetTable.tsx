@@ -8,19 +8,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Clock, Flame, Loader2, Mail, Shield, Trash2, X } from "lucide-react";
+import { Clock, Flame, Loader2, Mail, Shield, X } from "lucide-react";
 import { Btn } from "./LoudPrimitives";
+import { RemoveMemberDialog } from "./SettingsDialogs";
 import { RolePill } from "./RolePill";
 import type { Invitation, TeamMember } from "./types";
 
@@ -125,37 +115,7 @@ export function TeamWorksheetTable({
                         <RolePill role={member.role} />
                       )}
 
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <button className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-espresso/40 hover:text-tomato hover:bg-tomato/10 transition-colors cursor-pointer">
-                            <Trash2 className="h-4 w-4" />
-                            <span className="sr-only">Remove member</span>
-                          </button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent className="max-w-sm p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-[8px_8px_0_#1C0F05]">
-                          <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle className="font-body font-extrabold uppercase tracking-widest text-espresso text-sm">
-                                Remove Team Member?
-                              </AlertDialogTitle>
-                              <AlertDialogDescription className="font-body text-sm text-espresso/60 mt-1">
-                                This will remove {member.first_name} {member.last_name} from your team. They will no longer have access to your workspace data.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                          </div>
-                          <AlertDialogFooter className="px-6 py-4 flex justify-end gap-2">
-                            <AlertDialogCancel className="inline-flex items-center justify-center font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-transparent text-espresso border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:bg-espresso hover:text-cream transition-all cursor-pointer">
-                              Cancel
-                            </AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => onRemoveMember(member.id)}
-                              className="inline-flex items-center justify-center font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-tomato text-cream border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
-                            >
-                              Remove
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <RemoveMemberDialog member={member} onRemoveMember={onRemoveMember} />
                     </>
                   )}
                 </div>
