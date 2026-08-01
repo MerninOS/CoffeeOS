@@ -192,7 +192,10 @@ export function InstrumentShell({ user, children }: InstrumentShellProps) {
       onToggleCollapse={() => setCollapsed((c) => !c)}
       actions={
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.2, minWidth: 0 }}>
+          <div
+            data-testid="identity-chrome"
+            style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.2, minWidth: 0 }}
+          >
             <span
               style={{
                 fontFamily: "var(--font-sans)",

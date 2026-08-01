@@ -289,7 +289,11 @@ export function AppSidebar({ user }: AppSidebarProps) {
           >
             Shopify Connected
           </div>
-          <div className="text-cream" style={{ opacity: 0.75 }}>
+          <div
+            data-testid="identity-chrome"
+            className="text-cream"
+            style={{ opacity: 0.75 }}
+          >
             {user.email.split("@")[0]}.myshopify.com
           </div>
         </div>
@@ -300,6 +304,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
+                  data-testid="identity-chrome"
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[12px] border-[2.5px] border-roast hover:border-cream/30 transition-all duration-100 text-left"
                   style={{ background: "#2a1508" }}
                 >

@@ -77,7 +77,17 @@ test.describe('dashboard baselines (authenticated)', () => {
       await expect(page).not.toHaveURL(/\/auth\//)
       await page.waitForLoadState('networkidle')
 
-      await expect(page).toHaveScreenshot(snapshotName(route), { fullPage: true })
+      // The sidebar/top-bar identity chrome renders the signed-in EMAIL —
+      // initials, display name, and `<local-part>.myshopify.com`. Each worktree
+      // now owns its own demo account (tests/e2e/support/env.ts), so that region
+      // differs per worktree and would fail every authenticated baseline for a
+      // reason that has nothing to do with the page under test. Masking it keeps
+      // these snapshots identity-independent; it is chrome, not a converted
+      // surface, and no conversion ticket asserts anything about it.
+      await expect(page).toHaveScreenshot(snapshotName(route), {
+        fullPage: true,
+        mask: [page.locator('[data-testid="identity-chrome"]')],
+      })
       expect(errors, `console errors on ${route}`).toEqual([])
     })
   }
@@ -147,6 +157,10 @@ test.describe('product detail baselines (authenticated)', () => {
       // relies on toHaveScreenshot's own stabilisation (it reshoots until two
       // consecutive frames match) rather than a fixed sleep.
       await expect(page).toHaveScreenshot(`_products_detail_${slug}.png`, {
+        // Identity chrome renders the signed-in email — masked so these stay
+        // account-independent under per-worktree demo accounts. See the dashboard
+        // loop above for the full reasoning.
+        mask: [page.locator('[data-testid="identity-chrome"]')],
         fullPage: true,
       })
       expect(errors, `console errors on /products/[id] (${slug})`).toEqual([])
@@ -235,6 +249,10 @@ test.describe('order detail baselines (authenticated)', () => {
       await page.waitForLoadState('networkidle')
 
       await expect(page).toHaveScreenshot(`_orders_detail_${slug}.png`, {
+        // Identity chrome renders the signed-in email — masked so these stay
+        // account-independent under per-worktree demo accounts. See the dashboard
+        // loop above for the full reasoning.
+        mask: [page.locator('[data-testid="identity-chrome"]')],
         fullPage: true,
       })
       expect(errors, `console errors on /orders/[id] (${slug})`).toEqual([])
@@ -254,7 +272,17 @@ test.describe('public baselines (logged out)', () => {
       await page.goto(route)
       await page.waitForLoadState('networkidle')
 
-      await expect(page).toHaveScreenshot(snapshotName(route), { fullPage: true })
+      // The sidebar/top-bar identity chrome renders the signed-in EMAIL —
+      // initials, display name, and `<local-part>.myshopify.com`. Each worktree
+      // now owns its own demo account (tests/e2e/support/env.ts), so that region
+      // differs per worktree and would fail every authenticated baseline for a
+      // reason that has nothing to do with the page under test. Masking it keeps
+      // these snapshots identity-independent; it is chrome, not a converted
+      // surface, and no conversion ticket asserts anything about it.
+      await expect(page).toHaveScreenshot(snapshotName(route), {
+        fullPage: true,
+        mask: [page.locator('[data-testid="identity-chrome"]')],
+      })
       expect(errors, `console errors on ${route}`).toEqual([])
     })
   }
