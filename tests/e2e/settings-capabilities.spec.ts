@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { roasterAccount } from './support/env'
 
 /**
  * The /settings editing capabilities, asserted by SERVER-OBSERVED EFFECT.
@@ -21,39 +22,7 @@ import { test, expect } from '@playwright/test'
 
 const SEEDED_LAST_NAME = 'User'
 
-/**
- * Hide the onboarding tour widget for the duration of a capability test.
- *
- * `components/onboarding-tour-widget.tsx` renders `fixed bottom-4 right-4 z-50`
- * and genuinely INTERCEPTS the click on /settings' "Save changes" — Playwright
- * reports "subtree intercepts pointer events" and the click never lands. That is
- * a real defect (an operator hits it too, even at 6/6 complete), but it lives
- * outside this route and is tracked separately; here it is noise between the
- * test and the thing under test.
- *
- * Suppressed by intercepting the getItem the widget reads on mount, rather than
- * by clicking its X: clicking would assert the widget's own behaviour, and
- * writing the key directly needs the user id. The pattern match keeps this
- * working for either seeded account.
- *
- * Deliberately NOT applied to baselines.spec.ts — the snapshots photograph the
- * page as an operator actually sees it, widget included.
- */
-async function hideOnboardingWidget(page: import('@playwright/test').Page) {
-  await page.addInitScript(() => {
-    const real = Storage.prototype.getItem
-    Storage.prototype.getItem = function (key: string) {
-      if (/^coffeeos:onboarding:.*:hidden$/.test(key)) return 'true'
-      return real.call(this, key)
-    }
-  })
-}
-
 test.describe('/settings — profile', () => {
-  test.beforeEach(async ({ page }) => {
-    await hideOnboardingWidget(page)
-  })
-
   test.afterEach(async ({ page }) => {
     await page.goto('/settings')
     const last = page.getByLabel(/last name/i)
@@ -103,10 +72,6 @@ test.describe('/settings — team invitations', () => {
   // refuses a still-pending duplicate, so a leaked row from an earlier run would
   // make this test assert against something it did not create.
   const INVITEE = `qa-invite-${Date.now()}@example.com`
-
-  test.beforeEach(async ({ page }) => {
-    await hideOnboardingWidget(page)
-  })
 
   /**
    * Cancels EVERY qa-invite- row, not just this run's.
@@ -185,10 +150,6 @@ const ERROR_CODES: Array<[string, RegExp]> = [
 ]
 
 test.describe('/settings — Shopify error codes', () => {
-  test.beforeEach(async ({ page }) => {
-    await hideOnboardingWidget(page)
-  })
-
   for (const [code, copy] of ERROR_CODES) {
     test(`?error=${code} renders its own message`, async ({ page }) => {
       await page.goto(`/settings?error=${code}`)
@@ -258,10 +219,6 @@ test.describe('/settings — Shopify error codes', () => {
  * that cannot trade is the failure this is here to catch.
  */
 test.describe('/settings — workspace status', () => {
-  test.beforeEach(async ({ page }) => {
-    await hideOnboardingWidget(page)
-  })
-
   test('the page reports the seeded workspace as not billing-active', async ({ page }) => {
     await page.goto('/settings')
     await expect(page.getByText(/billing required|not active|blocked/i).first()).toBeVisible()
@@ -270,11 +227,11 @@ test.describe('/settings — workspace status', () => {
 })
 
 test.describe('/settings — member roles', () => {
-  const ROASTER = 'roaster@coffeeos.io'
-
-  test.beforeEach(async ({ page }) => {
-    await hideOnboardingWidget(page)
-  })
+  // Resolved, never hard-coded: the roaster address is derived from this
+  // worktree's demo account (CoffeeOS#106), so a literal here would break the
+  // moment a worktree sets its own DEMO_EMAIL — and break as a confusing
+  // "member not found" rather than as a configuration error.
+  const ROASTER = roasterAccount().email
 
   test.afterEach(async ({ page }) => {
     await page.goto('/settings')
