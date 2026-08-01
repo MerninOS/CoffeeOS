@@ -14,22 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Plus,
-  MoreHorizontal,
-  Edit,
-  Trash2,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  Coffee,
-} from "lucide-react";
+import { Plus, Coffee } from "lucide-react";
 import {
   createRoastRequest,
   updateRoastRequest,
@@ -37,8 +22,8 @@ import {
 } from "./actions";
 import type { RoastRequest, CoffeeInventory } from "./components/requests/types";
 import { Btn, FieldLabel, MerninInput, MerninTextarea } from "./components/requests/primitives";
-import { PriorityPill, StatusPill } from "./components/requests/Pills";
-import { ProgressMeter } from "./components/requests/ProgressMeter";
+import { RequestsTable } from "./components/requests/RequestsTable";
+import { RequestCard } from "./components/requests/RequestCard";
 
 interface RoastRequestsClientProps {
   requests: RoastRequest[];
@@ -169,160 +154,26 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
       {pendingRequests.length > 0 && (
         <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden">
           {/* Desktop table */}
-          <div className="hidden md:block">
-            <div className="grid grid-cols-[1fr_100px_160px_90px_100px_100px_48px] border-b-[2px] border-espresso bg-cream px-5 py-2.5">
-              {["Coffee", "Quantity", "Progress", "Priority", "Due Date", "Status", ""].map((h) => (
-                <div key={h} className="text-[10px] font-extrabold uppercase tracking-[.1em] text-espresso/50">
-                  {h}
-                </div>
-              ))}
-            </div>
-            <div className="divide-y-[1.5px] divide-dashed divide-fog">
-              {pendingRequests.map((request) => {
-                const isOverdue = request.due_date && new Date(request.due_date) < new Date() && request.status !== "fulfilled";
-                return (
-                  <div key={request.id} className="grid grid-cols-[1fr_100px_160px_90px_100px_100px_48px] px-5 py-3 items-center">
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-bold text-espresso truncate">
-                        {request.green_coffee_inventory?.name || "Unknown"}
-                      </p>
-                      {request.green_coffee_inventory?.origin && (
-                        <p className="text-[11px] text-espresso/50 font-medium truncate">
-                          {request.green_coffee_inventory.origin}
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-[13px] font-bold text-espresso">
-                      {request.requested_roasted_g.toLocaleString()}g
-                    </div>
-                    <ProgressMeter
-                      fulfilled={request.fulfilled_roasted_g}
-                      requested={request.requested_roasted_g}
-                    />
-                    <div>
-                      <PriorityPill priority={request.priority} />
-                    </div>
-                    <div className="text-[12px] font-medium text-espresso">
-                      {request.due_date ? (
-                        <div className="flex items-center gap-1">
-                          {isOverdue && <AlertTriangle size={11} className="text-tomato shrink-0" />}
-                          <span className={isOverdue ? "text-tomato" : ""}>
-                            {new Date(request.due_date).toLocaleDateString()}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-espresso/30">—</span>
-                      )}
-                    </div>
-                    <div>
-                      <StatusPill status={request.status} />
-                    </div>
-                    <div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-transparent text-espresso/50 hover:border-fog hover:text-espresso hover:bg-fog/30 transition-all cursor-pointer">
-                            <MoreHorizontal size={14} strokeWidth={2} />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEditDialog(request)}>
-                            <Edit className="mr-2 h-4 w-4" />Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusChange(request.id, "fulfilled")}>
-                            <CheckCircle2 className="mr-2 h-4 w-4" />Mark Fulfilled
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusChange(request.id, "cancelled")}>
-                            <XCircle className="mr-2 h-4 w-4" />Cancel
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDelete(request.id)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <RequestsTable
+            requests={pendingRequests}
+            variant="active"
+            onEdit={openEditDialog}
+            onDelete={handleDelete}
+            onStatusChange={handleStatusChange}
+          />
 
           {/* Mobile cards */}
           <div className="md:hidden divide-y-[1.5px] divide-dashed divide-fog">
-            {pendingRequests.map((request) => {
-              const progressPercent = (request.fulfilled_roasted_g / request.requested_roasted_g) * 100;
-              const isOverdue = request.due_date && new Date(request.due_date) < new Date() && request.status !== "fulfilled";
-              return (
-                <div key={request.id} className="p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-[13px] font-bold text-espresso">
-                        {request.green_coffee_inventory?.name || "Unknown"}
-                      </p>
-                      {request.green_coffee_inventory?.origin && (
-                        <p className="text-[11px] text-espresso/50 font-medium">
-                          {request.green_coffee_inventory.origin}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <PriorityPill priority={request.priority} />
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-fog text-espresso/50 hover:text-espresso hover:bg-fog/30 transition-all cursor-pointer">
-                            <MoreHorizontal size={14} strokeWidth={2} />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEditDialog(request)}>
-                            <Edit className="mr-2 h-4 w-4" />Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusChange(request.id, "fulfilled")}>
-                            <CheckCircle2 className="mr-2 h-4 w-4" />Mark Fulfilled
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusChange(request.id, "cancelled")}>
-                            <XCircle className="mr-2 h-4 w-4" />Cancel
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDelete(request.id)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-espresso/50 font-medium">Progress</span>
-                      <span className="font-bold text-espresso">
-                        {request.fulfilled_roasted_g.toLocaleString()} / {request.requested_roasted_g.toLocaleString()}g
-                      </span>
-                    </div>
-                    <div className="w-full h-2 bg-fog rounded-full overflow-hidden border border-espresso/20">
-                      <div
-                        className="h-full bg-honey rounded-full"
-                        style={{ width: `${Math.min(progressPercent, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <StatusPill status={request.status} />
-                    {request.due_date && (
-                      <div className="flex items-center gap-1 text-[11px] font-medium">
-                        {isOverdue && <AlertTriangle size={11} className="text-tomato" />}
-                        <span className={isOverdue ? "text-tomato" : "text-espresso/50"}>
-                          Due: {new Date(request.due_date).toLocaleDateString()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {pendingRequests.map((request) => (
+              <RequestCard
+                key={request.id}
+                request={request}
+                variant="active"
+                onEdit={openEditDialog}
+                onDelete={handleDelete}
+                onStatusChange={handleStatusChange}
+              />
+            ))}
           </div>
         </div>
       )}
@@ -352,61 +203,24 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
           </h3>
           <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden opacity-75">
             {/* Desktop */}
-            <div className="hidden md:block">
-              <div className="grid grid-cols-[1fr_100px_100px_100px_48px] border-b-[2px] border-espresso bg-cream px-5 py-2.5">
-                {["Coffee", "Quantity", "Status", "Completed", ""].map((h) => (
-                  <div key={h} className="text-[10px] font-extrabold uppercase tracking-[.1em] text-espresso/50">
-                    {h}
-                  </div>
-                ))}
-              </div>
-              <div className="divide-y-[1.5px] divide-dashed divide-fog">
-                {completedRequests.slice(0, 5).map((request) => (
-                  <div key={request.id} className="grid grid-cols-[1fr_100px_100px_100px_48px] px-5 py-3 items-center">
-                    <p className="text-[13px] font-bold text-espresso truncate">
-                      {request.green_coffee_inventory?.name || "Unknown"}
-                    </p>
-                    <div className="text-[13px] font-bold text-espresso">
-                      {request.requested_roasted_g.toLocaleString()}g
-                    </div>
-                    <div>
-                      <StatusPill status={request.status} />
-                    </div>
-                    <div className="text-[12px] text-espresso/50 font-medium">
-                      {new Date(request.created_at).toLocaleDateString()}
-                    </div>
-                    <button
-                      onClick={() => handleDelete(request.id)}
-                      className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-transparent text-espresso/30 hover:border-tomato/30 hover:text-tomato hover:bg-tomato/10 transition-all"
-                    >
-                      <Trash2 size={13} strokeWidth={2} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <RequestsTable
+              requests={completedRequests.slice(0, 5)}
+              variant="completed"
+              onEdit={openEditDialog}
+              onDelete={handleDelete}
+              onStatusChange={handleStatusChange}
+            />
             {/* Mobile */}
             <div className="md:hidden divide-y-[1.5px] divide-dashed divide-fog">
               {completedRequests.slice(0, 5).map((request) => (
-                <div key={request.id} className="flex items-center justify-between p-4">
-                  <div>
-                    <p className="text-[13px] font-bold text-espresso">
-                      {request.green_coffee_inventory?.name || "Unknown"}
-                    </p>
-                    <p className="text-[11px] text-espresso/50 font-medium">
-                      {request.requested_roasted_g.toLocaleString()}g
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <StatusPill status={request.status} />
-                    <button
-                      onClick={() => handleDelete(request.id)}
-                      className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-transparent text-espresso/30 hover:border-tomato/30 hover:text-tomato hover:bg-tomato/10 transition-all"
-                    >
-                      <Trash2 size={13} strokeWidth={2} />
-                    </button>
-                  </div>
-                </div>
+                <RequestCard
+                  key={request.id}
+                  request={request}
+                  variant="completed"
+                  onEdit={openEditDialog}
+                  onDelete={handleDelete}
+                  onStatusChange={handleStatusChange}
+                />
               ))}
             </div>
           </div>
