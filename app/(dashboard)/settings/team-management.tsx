@@ -9,10 +9,10 @@ import {
   removeTeamMember,
   cancelInvitation,
 } from "./team-actions";
+import { InlineBanner } from "@merninos/ui/instrument";
 import { InviteRow } from "./components/InviteRow";
-import { RolePill } from "./components/RolePill";
+import { Section } from "./components/Section";
 import { TeamWorksheetTable } from "./components/TeamWorksheetTable";
-import { AlertCircle, CheckCircle2, Users } from "lucide-react";
 
 interface TeamMember {
   id: string;
@@ -110,77 +110,28 @@ export function TeamManagement({ currentUserId, isOwner }: TeamManagementProps) 
     }
   };
 
-  const getRoleDescription = (role: string) => {
-    switch (role) {
-      case "owner": return "Full access to everything";
-      case "admin": return "Full access to all features";
-      case "roaster": return "Roasting & Inventory only";
-      default: return "";
-    }
-  };
 
   return (
-    <div className="bg-chalk border-[3px] border-espresso rounded-[20px] shadow-[5px_5px_0_#1C0F05] overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-2.5 px-5 py-4 border-b-[2.5px] border-dashed border-fog">
-        <Users className="h-5 w-5 text-espresso/60" />
-        <div>
-          <h2 className="font-body font-extrabold text-sm uppercase tracking-widest text-espresso leading-none">
-            Team Members
-          </h2>
-          <p className="mt-0.5 text-xs text-espresso/50 font-body">
-            Manage who has access to your CoffeeOS workspace
-          </p>
-        </div>
-      </div>
+    <Section title="Team" meta={`${members.length} members · ${invitations.length} invited`}>
+      {message && (
+        <InlineBanner
+          tone={message.type === "error" ? "danger" : "success"}
+          style={{ marginTop: 14 }}
+        >
+          {message.text}
+        </InlineBanner>
+      )}
 
-      <div className="px-5 py-5 space-y-6">
-        {/* Message */}
-        {message && (
-          <div
-            className={`flex items-center gap-2 rounded-xl border-[2.5px] p-3 text-sm font-body font-bold ${
-              message.type === "error"
-                ? "bg-tomato/10 border-tomato text-tomato"
-                : "bg-matcha/10 border-matcha text-matcha"
-            }`}
-          >
-            {message.type === "error" ? (
-              <AlertCircle className="h-4 w-4 shrink-0" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-            )}
-            {message.text}
-          </div>
-        )}
-
-        <TeamWorksheetTable
-          members={members}
-          invitations={invitations}
-          currentUserId={currentUserId}
-          isOwner={isOwner}
-          isLoading={isLoading}
-          onRoleChange={handleRoleChange}
-          onRemoveMember={handleRemoveMember}
-          onCancelInvitation={handleCancelInvitation}
-        />
-        {/* Role Legend */}
-        <div className="bg-fog/20 border-[2px] border-fog rounded-[14px] px-4 py-3 space-y-2">
-          <p className="text-[0.65rem] font-extrabold uppercase tracking-widest text-espresso/50 font-body">
-            Role Permissions
-          </p>
-          <div className="space-y-1.5">
-            {[
-              { role: "admin", desc: "Full access to all features" },
-              { role: "roaster", desc: "Roasting & Inventory only" },
-            ].map(({ role, desc }) => (
-              <div key={role} className="flex items-center gap-3">
-                <RolePill role={role} />
-                <span className="text-xs text-espresso/50 font-body">{desc}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <TeamWorksheetTable
+        members={members}
+        invitations={invitations}
+        currentUserId={currentUserId}
+        isOwner={isOwner}
+        isLoading={isLoading}
+        onRoleChange={handleRoleChange}
+        onRemoveMember={handleRemoveMember}
+        onCancelInvitation={handleCancelInvitation}
+      />
 
       <InviteRow
         inviteEmail={inviteEmail}
@@ -190,6 +141,6 @@ export function TeamManagement({ currentUserId, isOwner }: TeamManagementProps) 
         isInviting={isInviting}
         onSubmit={handleInvite}
       />
-    </div>
+    </Section>
   );
 }

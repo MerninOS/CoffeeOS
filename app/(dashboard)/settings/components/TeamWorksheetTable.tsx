@@ -8,24 +8,78 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Clock, Flame, Loader2, Mail, Shield, X } from "lucide-react";
-import { Btn } from "./LoudPrimitives";
+import { EmptyState, IconButton } from "@merninos/ui/instrument";
+import { Loader2, Users, X } from "lucide-react";
+import {
+  SELECT_CONTENT,
+  SELECT_ITEM,
+  SELECT_TRIGGER,
+} from "@/app/(dashboard)/products/[id]/components/selectStyles";
 import { RemoveMemberDialog } from "./SettingsDialogs";
-import { RolePill } from "./RolePill";
+import { RoleBadge } from "./RoleBadge";
+import { mono, overline, sans } from "./tokens";
 import type { Invitation, TeamMember } from "./types";
 
 /**
- * Members and pending invitations. Moved out of team-management.tsx verbatim
- * (CoffeeOS#74 Stage A) — two separately chromed lists, exactly as they were.
+ * Members and pending invitations as ONE list.
  *
- * They become ONE list in Stage B. Keeping them apart here is the point: Stage
- * A's claim is only that it moved code, and merging them is a design change the
- * baselines would (correctly) fail.
+ * The loud page rendered two: a members list of bordered cards, then a
+ * separately chromed "Pending Invitations" list, then a static role legend
+ * repeating what the role pills already said. The legend and its unused
+ * getRoleDescription() are gone — Access says the same thing per row, where it
+ * is about someone in particular.
  *
- * The member-row / invitation-row / member-role / cancel-invitation testids are
- * a contract, not decoration — tests/e2e/settings-capabilities.spec.ts selects
- * through them, so the Stage B rewrite has to carry them across.
+ * WHY THIS IS HAND-ROLLED RATHER THAN instrument's `DataTable`
+ *
+ * DataTable has no responsive mode. It wraps itself in `overflow-x: auto`, so
+ * below its natural width the columns are reachable only by horizontal
+ * scrolling. /orders declined it for that reason and /products had to back it
+ * out after shipping it — "desktop-only baselines are how a completely broken
+ * mobile layout shipped". It is exported from the kit and imported nowhere in
+ * this app, which is not an oversight.
+ *
+ * So this follows ProductsWorksheetTable: ONE DOM, two layouts. Below 900px a
+ * row is a stack of labelled values; above it the same nodes flatten into grid
+ * tracks. No `md:hidden` twin — which is also what keeps each testid single.
+ *
+ * The Role control stays RADIX rather than instrument's Select, which is a
+ * native `<select>`: the capability test clicks through the listbox, and
+ * swapping the control would change what both the keyboard and the test reach.
+ * Its content is retokenized and carries `data-surface="app"`, because Radix
+ * portals to <body>, outside the scope the token layer is anchored to.
  */
+
+const GRID = "min-[900px]:grid-cols-[minmax(0,1fr)_150px_minmax(0,1fr)_140px_40px]";
+const ROW = `flex flex-col min-[900px]:grid ${GRID} min-[900px]:items-center gap-y-1 min-[900px]:gap-y-0`;
+const CELL = "flex items-center gap-2 px-3 py-1 min-[900px]:py-0 min-[900px]:h-14";
+
+const ACCESS: Record<string, string> = {
+  owner: "Everything, including billing",
+  admin: "Everything except billing",
+  roaster: "Roasting and inventory only",
+};
+
+const initials = (a: string, b: string) =>
+  `${(a?.[0] ?? "").toUpperCase()}${(b?.[0] ?? "").toUpperCase()}`;
+
+const caption: React.CSSProperties = {
+  fontFamily: "var(--font-sans)",
+  fontSize: "var(--fs-caption)",
+  color: "var(--ink-muted)",
+};
+
+/** A value that carries its own label, shown only while the row is stacked. */
+function Cell({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className={CELL}>
+      <span style={overline} className="min-[900px]:hidden">
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
 export function TeamWorksheetTable({
   members,
   invitations,
@@ -45,132 +99,208 @@ export function TeamWorksheetTable({
   onRemoveMember: (memberId: string) => void;
   onCancelInvitation: (invitationId: string) => void;
 }) {
-  return (
-    <>
-      <div className="space-y-2">
-        <p className="text-[0.65rem] font-extrabold uppercase tracking-widest text-espresso/50 font-body">
-          Current Members
-        </p>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-5 w-5 animate-spin text-espresso/40" />
-          </div>
-        ) : members.length === 0 ? (
-          <p className="py-6 text-center text-sm text-espresso/40 font-body">
-            No team members yet
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {members.map((member) => (
-              <div
-                key={member.id}
-                data-testid="member-row"
-                data-member-email={member.email}
-                className="flex items-center justify-between bg-cream border-[2.5px] border-espresso rounded-[14px] shadow-[2px_2px_0_#1C0F05] px-3 py-3 gap-3"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fog/60 border-[2px] border-espresso text-xs font-extrabold font-body text-espresso">
-                    {(member.first_name?.[0] || "").toUpperCase()}
-                    {(member.last_name?.[0] || "").toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-extrabold font-body text-espresso">
-                      {member.first_name} {member.last_name}
-                      {member.id === currentUserId && (
-                        <span className="ml-1.5 text-xs font-body font-bold text-espresso/40">(you)</span>
-                      )}
-                    </p>
-                    {member.email && (
-                      <p className="truncate text-xs text-espresso/50 font-body">{member.email}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {member.role === "owner" || member.id === currentUserId ? (
-                    <RolePill role={member.role} />
-                  ) : (
-                    <>
-                      {isOwner ? (
-                        <Select
-                          value={member.role}
-                          onValueChange={(v) => onRoleChange(member.id, v as "admin" | "roaster")}
-                        >
-                          <SelectTrigger data-testid="member-role" className="h-8 w-28 border-[2px] border-espresso rounded-lg bg-chalk text-xs font-body font-bold">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="admin">
-                              <span className="flex items-center gap-1.5">
-                                <Shield className="h-3 w-3" /> Admin
-                              </span>
-                            </SelectItem>
-                            <SelectItem value="roaster">
-                              <span className="flex items-center gap-1.5">
-                                <Flame className="h-3 w-3" /> Roaster
-                              </span>
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <RolePill role={member.role} />
-                      )}
+  if (isLoading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", padding: "40px 0" }}>
+        <Loader2
+          className="animate-spin"
+          width={20}
+          height={20}
+          style={{ color: "var(--ink-subtle)" }}
+        />
+      </div>
+    );
+  }
 
-                      <RemoveMemberDialog member={member} onRemoveMember={onRemoveMember} />
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
+  if (members.length === 0 && invitations.length === 0) {
+    return (
+      <EmptyState
+        compact
+        icon={<Users />}
+        title="No one else yet"
+        description="Invite a roaster or an admin to share this workspace."
+      />
+    );
+  }
+
+  return (
+    <div>
+      {/* The header only means anything once the row is a grid. */}
+      <div
+        className={`${ROW} hidden min-[900px]:grid`}
+        style={{
+          background: "var(--surface-sunken)",
+          borderBottom: "1px solid var(--hairline-strong)",
+        }}
+      >
+        {["Member", "Role", "Access", "Status"].map((h) => (
+          <div key={h} className="flex items-center px-3" style={{ height: 34 }}>
+            <span style={overline}>{h}</span>
           </div>
-        )}
+        ))}
+        <div />
       </div>
 
-      {/* Pending Invitations */}
-      {invitations.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[0.65rem] font-extrabold uppercase tracking-widest text-espresso/50 font-body">
-            Pending Invitations
-          </p>
-          <div className="space-y-2">
-            {invitations.map((invitation) => (
-              <div
-                key={invitation.id}
-                data-testid="invitation-row"
-                data-invitation-email={invitation.email}
-                className="flex items-center justify-between bg-cream border-[2px] border-dashed border-espresso/40 rounded-[14px] px-3 py-3 gap-3"
+      {members.map((member) => {
+        const editable = isOwner && member.role !== "owner" && member.id !== currentUserId;
+        return (
+          <div
+            key={member.id}
+            data-testid="member-row"
+            data-member-email={member.email}
+            className={ROW}
+            style={{ borderBottom: "1px solid var(--hairline)" }}
+          >
+            <div className={CELL}>
+              <span
+                style={{
+                  ...mono,
+                  fontSize: "var(--fs-caption)",
+                  width: 30,
+                  height: 30,
+                  flex: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "var(--r-sm)",
+                  background: "var(--surface-sunken)",
+                  color: "var(--ink-muted)",
+                }}
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fog/30 border-[2px] border-dashed border-espresso/40">
-                    <Mail className="h-4 w-4 text-espresso/40" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-extrabold font-body text-espresso">
-                      {invitation.email}
-                    </p>
-                    <div className="flex items-center gap-1.5 text-xs text-espresso/50 font-body">
-                      <Clock className="h-3 w-3" />
-                      Expires {new Date(invitation.expires_at).toLocaleDateString()}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <RolePill role={invitation.role} />
-                  <Btn
-                    variant="ghost"
-                    size="sm"
-                    data-testid="cancel-invitation"
-                    aria-label="Cancel invitation"
-                    onClick={() => onCancelInvitation(invitation.id)}
-                    className="text-espresso/40 hover:text-tomato"
-                  >
-                    <X className="h-4 w-4" />
-                  </Btn>
-                </div>
-              </div>
-            ))}
+                {initials(member.first_name, member.last_name)}
+              </span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ ...sans, fontWeight: "var(--fw-medium)", display: "block" }}>
+                  {member.first_name} {member.last_name}
+                  {member.id === currentUserId && (
+                    <span style={{ color: "var(--ink-subtle)", fontWeight: "var(--fw-regular)" }}>
+                      {" "}
+                      · you
+                    </span>
+                  )}
+                </span>
+                <span style={{ ...caption, color: "var(--ink-subtle)", overflowWrap: "anywhere" }}>
+                  {member.email}
+                </span>
+              </span>
+            </div>
+
+            <Cell label="Role">
+              {editable ? (
+                <Select
+                  value={member.role}
+                  onValueChange={(v) => onRoleChange(member.id, v as "admin" | "roaster")}
+                >
+                  <SelectTrigger data-testid="member-role" style={SELECT_TRIGGER}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent data-surface="app" style={SELECT_CONTENT}>
+                    <SelectItem value="admin" style={SELECT_ITEM}>
+                      Admin
+                    </SelectItem>
+                    <SelectItem value="roaster" style={SELECT_ITEM}>
+                      Roaster
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                /* Badge drops unknown props, so the testid goes on a wrapper —
+                   the same trap that already cost this branch one broken seam
+                   when LoudPrimitives' Btn swallowed it silently. */
+                <span data-testid="member-role">
+                  <RoleBadge role={member.role} />
+                </span>
+              )}
+            </Cell>
+
+            <Cell label="Access">
+              <span style={caption}>{ACCESS[member.role] ?? ""}</span>
+            </Cell>
+
+            <Cell label="Status">
+              <span style={{ ...caption, color: "var(--ink-subtle)" }}>
+                Since {new Date(member.created_at).toLocaleDateString()}
+              </span>
+            </Cell>
+
+            <div className={`${CELL} min-[900px]:justify-end`}>
+              {editable && <RemoveMemberDialog member={member} onRemoveMember={onRemoveMember} />}
+            </div>
+          </div>
+        );
+      })}
+
+      {invitations.map((invitation) => (
+        <div
+          key={invitation.id}
+          data-testid="invitation-row"
+          data-invitation-email={invitation.email}
+          className={ROW}
+          style={{ borderBottom: "1px solid var(--hairline)" }}
+        >
+          <div className={CELL}>
+            <span style={{ minWidth: 0 }}>
+              <span
+                style={{
+                  ...sans,
+                  color: "var(--ink-muted)",
+                  display: "block",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {invitation.email}
+              </span>
+              <span style={{ ...caption, color: "var(--ink-subtle)" }}>
+                Expires {new Date(invitation.expires_at).toLocaleDateString()}
+              </span>
+            </span>
+          </div>
+
+          <Cell label="Role">
+            <RoleBadge role={invitation.role} />
+          </Cell>
+
+          <Cell label="Access">
+            <span style={caption}>{ACCESS[invitation.role] ?? ""}</span>
+          </Cell>
+
+          <Cell label="Status">
+            {/* Brand red, and the only thing besides the hero on this page that
+                earns it: an invitation is outstanding work addressed to someone. */}
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontFamily: "var(--font-sans)",
+                fontSize: "var(--fs-caption)",
+                color: "var(--brand-hover)",
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: "var(--brand)",
+                  flex: "none",
+                }}
+              />
+              Invited
+            </span>
+          </Cell>
+
+          <div className={`${CELL} min-[900px]:justify-end`}>
+            <IconButton
+              size="sm"
+              aria-label="Cancel invitation"
+              data-testid="cancel-invitation"
+              icon={<X />}
+              onClick={() => onCancelInvitation(invitation.id)}
+            />
           </div>
         </div>
-      )}
-    </>
+      ))}
+    </div>
   );
 }
