@@ -17,8 +17,6 @@ export interface Component {
   created_at: string;
 }
 
-export const COST_PER_UNIT_DECIMALS = 8;
-
 export const COMPONENT_TYPES = [
   { value: "ingredient", label: "Ingredient" },
   { value: "labor", label: "Labor" },
