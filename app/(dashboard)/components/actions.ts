@@ -35,7 +35,15 @@ export async function createComponent(data: {
     return { error: error.message };
   }
 
-  revalidatePath("/components", "max");
+  // No second argument. `revalidatePath`'s optional second parameter is a route
+  // TYPE ("page" | "layout"), not a cache-lifetime profile — the "max" that used
+  // to be passed here belongs to `revalidateTag`, which grew a profile argument
+  // in Next 16 and is easy to confuse with this. Next does not validate it: the
+  // value is concatenated onto the tag, so `revalidatePath("/components", "max")`
+  // invalidated `_N_T_/components/max`, a tag no route ever registers. It was a
+  // silent no-op. Bare, the tag is `_N_T_/components`, which /components does
+  // register from its pathname — matching every other call site in this repo.
+  revalidatePath("/components");
   return { success: true, component };
 }
 
@@ -76,15 +84,22 @@ export async function updateComponent(
   // /products and /dashboard derive product cost at read time by joining
   // product_components -> components.cost_per_unit, so editing a component's
   // cost is already reflected on the next render — the revalidations below are
-  // what actually propagate this change, and both are load-bearing.
+  // what propagate this change, and all three are load-bearing.
   //
   // (The block that used to live here looped over every referencing product and
   // issued `products.update({ total_cogs })`. The column does not exist, the
   // result was never destructured, so every one of those writes failed silently
   // — one wasted query per referencing product on each save.)
-  revalidatePath("/components", "max");
-  revalidatePath("/products", "max");
-  revalidatePath("/dashboard", "max");
+  //
+  // /products and /dashboard are revalidated, not just /components, precisely
+  // because they read component costs: app/(dashboard)/products/page.tsx joins
+  // `product_components ( quantity, components ( cost_per_unit ) )` through
+  // lib/products/costing.ts, and the dashboard builds its own productCogs map
+  // from the same join. See createComponent above for why none of these pass a
+  // second argument.
+  revalidatePath("/components");
+  revalidatePath("/products");
+  revalidatePath("/dashboard");
 
   return { success: true };
 }
@@ -119,6 +134,6 @@ export async function deleteComponent(id: string) {
     return { error: error.message };
   }
 
-  revalidatePath("/components", "max");
+  revalidatePath("/components");
   return { success: true };
 }
