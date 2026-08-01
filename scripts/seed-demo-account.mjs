@@ -306,9 +306,29 @@ async function seedDemoData(admin, ownerId) {
         unit: "hour",
         cost_per_unit: 22,
       },
+      {
+        // UNCOSTED ON PURPOSE — do not price this one.
+        //
+        // cost_per_unit is `numeric NOT NULL DEFAULT 0`, so 0 is the only
+        // reachable "nobody has set this" state, and /components renders it as
+        // `not set` in --danger rather than a confident $0.00 (CoffeeOS#73,
+        // the same rule /orders adopted in CoffeeOS#68).
+        //
+        // Without a row like this the entire uncosted half of that screen —
+        // the red hero, the group's "1 not set" band, the danger banner, the
+        // cell itself — is unreachable, and tests/e2e/components-uncosted.spec.ts
+        // fails loudly rather than passing vacuously. It is also deliberately
+        // referenced by NO recipe, so it cannot perturb any COGS assertion.
+        user_id: ownerId,
+        name: "Cupping / QC",
+        type: "labor",
+        unit: "hour",
+        cost_per_unit: 0,
+        notes: "Added during onboarding, never priced.",
+      },
     ])
     .select("id,name");
-  if (componentsError || !components || components.length < 4) {
+  if (componentsError || !components || components.length < 5) {
     throw new Error(`Failed to insert components: ${componentsError?.message || "unknown error"}`);
   }
 
