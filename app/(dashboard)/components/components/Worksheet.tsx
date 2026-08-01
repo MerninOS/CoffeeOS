@@ -25,24 +25,25 @@ import type { Component } from "./types";
 
 const TYPE_ORDER = ["ingredient", "labor", "packaging", "other"];
 
+/**
+ * Colour, border and type only — NO layout.
+ *
+ * Inline styles beat classes, so a `display: "flex"` here would override the
+ * `.cw-headcell { display: none }` that drops the column headers when the
+ * worksheet stacks. That exact mistake silently defeated the first attempt at
+ * the /orders/[id] stacked layout. Layout lives in app/globals.css.
+ */
 const HEAD: React.CSSProperties = {
   ...overline,
   padding: "0 12px",
   height: 32,
-  display: "flex",
-  alignItems: "center",
   whiteSpace: "nowrap",
-  minWidth: 0,
   background: "var(--surface-sunken)",
   borderBottom: "1px solid var(--hairline-strong)",
 };
 
 const CELL: React.CSSProperties = {
   padding: "0 12px",
-  minHeight: 40,
-  minWidth: 0,
-  display: "flex",
-  alignItems: "center",
   fontSize: "var(--fs-body)",
 };
 
@@ -93,6 +94,21 @@ function GroupRow({
 }
 
 /**
+ * The column header, repeated inline when the worksheet stacks and the real
+ * headers are gone. A stacked column of bare numbers is not a table.
+ */
+function FigureLabel() {
+  return (
+    <span
+      className="cw-figure-label"
+      style={{ ...overline, color: "var(--ink-subtle)" }}
+    >
+      Cost / unit
+    </span>
+  );
+}
+
+/**
  * Two states. A missing figure is a claim about the DATA — nobody has priced
  * this — where "$0.00" would be a claim about the component, that it is free and
  * the margin above it is real. Same language /orders adopted in CoffeeOS#68.
@@ -103,15 +119,20 @@ function GroupRow({
 export function CostCell({ component }: { component: Component }) {
   if (isUncosted(component)) {
     return (
-      <span
-        data-testid="row-cost"
-        style={{ ...mono, fontSize: "var(--fs-caption)", color: "var(--danger)" }}
-      >
-        {COST_NOT_SET}
+      <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
+        <FigureLabel />
+        <span
+          data-testid="row-cost"
+          style={{ ...mono, fontSize: "var(--fs-caption)", color: "var(--danger)" }}
+        >
+          {COST_NOT_SET}
+        </span>
       </span>
     );
   }
   return (
+    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
+      <FigureLabel />
     <span
       data-testid="row-cost"
       style={{ display: "inline-flex", alignItems: "baseline", gap: 2 }}
@@ -120,6 +141,7 @@ export function CostCell({ component }: { component: Component }) {
       <span style={{ ...mono, fontSize: "var(--fs-overline)", color: "var(--ink-subtle)" }}>
         /{component.unit}
       </span>
+    </span>
     </span>
   );
 }
@@ -146,56 +168,54 @@ function Row({
     onBlur: () => setActive(false),
   };
 
-  const rule = { borderBottom: "1px solid var(--hairline)" };
   const bg = active ? "var(--surface-hover)" : "transparent";
-  const cell = { ...CELL, ...rule, background: bg };
 
   return (
     /**
-     * `subgrid` rather than `display: contents`: the row needs to be a real box
-     * so the capability specs can select it (`display: contents` produces no
-     * bounding box, so Playwright reports every row as not visible and
-     * `[data-testid="component-row"]:visible` matches nothing). Subgrid keeps
-     * the columns defined once on the parent, which is the whole point of the
-     * conversion — every group measured against one ruler.
+     * One column stacked below 900px, `subgrid` above it (app/globals.css).
+     *
+     * Subgrid rather than `display: contents` at the wide end: the row must be a
+     * real box so the capability specs can select it — `display: contents`
+     * produces no bounding box, so Playwright reports every row as not visible
+     * and `[data-testid="component-row"]:visible` matches nothing. Subgrid also
+     * keeps the columns defined once on the parent, which is the point of the
+     * conversion: every group measured against one ruler.
+     *
+     * The rule sits on the ROW, not on each cell — stacked cells would otherwise
+     * each draw their own line.
      */
     <div
       data-testid="component-row"
-      style={{
-        gridColumn: "1 / -1",
-        display: "grid",
-        gridTemplateColumns: "subgrid",
-      }}
+      className="cw-row"
+      style={{ background: bg, borderBottom: "1px solid var(--hairline)" }}
       {...reveal}
     >
-      <div style={{ ...cell, ...sans }}>
+      <div className="cw-cell" style={{ ...CELL, ...sans }}>
         <span data-testid="row-name" style={TRUNC}>
           {component.name}
         </span>
       </div>
-      <div style={{ ...cell, ...sans, color: "var(--ink-muted)" }}>
+      <div className="cw-cell" style={{ ...CELL, ...sans, color: "var(--ink-muted)" }}>
         {component.notes ? (
           <span style={TRUNC}>{component.notes}</span>
         ) : (
           <span style={{ ...mono, color: "var(--ink-subtle)" }}>—</span>
         )}
       </div>
-      <div style={{ ...cell, ...RIGHT }}>
+      <div className="cw-cell" style={{ ...CELL, ...RIGHT }}>
         <CostCell component={component} />
       </div>
       {/* The fade lives on an inner wrapper, NOT on the cell. `opacity` applies
           to the element's border too, so fading the cell itself broke each row's
           hairline under this column — a visible gap at the right edge of every
           unhovered row. */}
-      <div style={{ ...cell, padding: "0 6px", justifyContent: "flex-end" }}>
-        <div
-          style={{
-            display: "flex",
-            gap: 2,
-            opacity: active ? 1 : 0,
-            transition: "opacity 140ms var(--ease)",
-          }}
-        >
+      <div className="cw-cell cw-actions" style={{ ...CELL, padding: "0 6px" }}>
+        {/* Always visible when stacked — there is no hover on a touch device, so
+            a hover-only control is simply unreachable there. The old mobile card
+            list showed both buttons outright; this restores that. The fade is a
+            wide-viewport affordance and lives in CSS, because an inline opacity
+            would beat the media query. */}
+        <div className="cw-rowactions" data-active={active ? "true" : "false"}>
         <IconButton
           size="sm"
           data-testid="row-edit"
@@ -238,11 +258,15 @@ export function Worksheet({
         background: "var(--surface)",
       }}
     >
-      <div data-testid="worksheet" style={{ display: "grid", gridTemplateColumns: GRID }}>
-        <div style={HEAD}>Name</div>
-        <div style={HEAD}>Notes</div>
-        <div style={{ ...HEAD, ...RIGHT }}>Cost / unit</div>
-        <div style={HEAD} />
+      <div
+        data-testid="worksheet"
+        className="cw-grid"
+        style={{ ["--cw-grid" as string]: GRID } as React.CSSProperties}
+      >
+        <div className="cw-headcell" style={HEAD}>Name</div>
+        <div className="cw-headcell" style={HEAD}>Notes</div>
+        <div className="cw-headcell" style={{ ...HEAD, ...RIGHT }}>Cost / unit</div>
+        <div className="cw-headcell" style={HEAD} />
 
         {groups.map(([type, items]) => (
           <React.Fragment key={type}>

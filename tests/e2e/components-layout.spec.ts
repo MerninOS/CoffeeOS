@@ -112,6 +112,55 @@ test.describe('/components wide-viewport geometry', () => {
     })
   }
 
+  // Below 900px the grid collapses to one column and every row stacks. Nothing
+  // in the snapshot suite watches this: the mobile baseline is a single 375px
+  // full-page shot at maxDiffPixelRatio 0.01, which tolerated /orders/[id]
+  // shipping headers collided into "REVENUEUNIT COST". Here the four tracks
+  // total 222px of fixed width before the two flexible ones, so at 375px every
+  // name truncated to one character — "R…", "C…" — and every note to three.
+  for (const width of [375, 414, 768]) {
+    test(`the worksheet stacks to a single column at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await openList(page)
+
+      const tracks = await page
+        .locator('[data-testid="component-row"]')
+        .first()
+        .evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length)
+      expect(tracks, `rows still have ${tracks} tracks at ${width}px`).toBe(1)
+
+      // A stacked column of bare numbers is not a table. Each figure must carry
+      // the column header inline, because the real headers are gone.
+      const labels = await page.locator('.cw-figure-label:visible').count()
+      expect(labels, `stacked figures carry no labels at ${width}px`).toBeGreaterThan(0)
+
+      // The name must not be TRUNCATED. This is the actual defect — at 375px
+      // every name clipped to one character plus an ellipsis.
+      //
+      // Asserted as overflow, not as width: a first version required the name
+      // box to exceed 120px, which measured the text span (it shrinks to its
+      // content, so "Roasted Coffee" is 93px however much room it has) rather
+      // than the space available. That assertion would fail on a short name in a
+      // perfect layout and pass on a clipped long one — precisely backwards.
+      const clipped = await page
+        .locator('[data-testid="row-name"]')
+        .evaluateAll((els) =>
+          els
+            .filter((el) => el.scrollWidth > el.clientWidth + 1)
+            .map((el) => el.textContent?.trim() ?? ''),
+        )
+      expect(clipped, `names truncated at ${width}px: ${clipped.join(', ')}`).toEqual([])
+
+      // And the row actions must be reachable — there is no hover on a touch
+      // device, so a hover-only control is simply unavailable there.
+      const actionOpacity = await page
+        .locator('.cw-rowactions')
+        .first()
+        .evaluate((el) => Number(getComputedStyle(el).opacity))
+      expect(actionOpacity, `row actions are hover-gated at ${width}px, where there is no hover`).toBe(1)
+    })
+  }
+
   test('every group is measured against the same ruler', async ({ page }) => {
     // Criterion 4. The page this replaces built a separate grid per type group,
     // so the columns did not line up across groups — the defect is invisible in
