@@ -1,19 +1,24 @@
 "use client";
 
 /**
- * /components — state, handlers and composition only.
+ * /components on the instrument design system (CoffeeOS#73 Stage B).
  *
- * CoffeeOS#73 Stage A reduced this from 594 lines by moving the primitives, the
- * grouped table and the two dialogs into ./components/. Nothing here changed
- * behaviour and no class string moved: the pre-existing baselines are the proof.
- * Stage B replaces the loud markup that remains below.
+ * This screen is the input side of every margin figure in CoffeeOS: a
+ * component's cost_per_unit multiplies through product_components and
+ * product_variant_components into product cost, and through order_components
+ * into order margin. It is visited rarely — a setup screen — which is exactly
+ * why it leads with the count of components nobody has priced rather than with
+ * the count of components.
  */
 
 import React, { useState } from "react";
+import { Plus, Search, Package } from "lucide-react";
+import { Button, EmptyState, InlineBanner, Input } from "@merninos/ui/instrument";
+import { isUncosted } from "@/lib/components/format";
+import { mono, sans } from "@/lib/instrument/tokens";
 import { createComponent, updateComponent, deleteComponent } from "./actions";
-import { Plus, Search, AlertCircle } from "lucide-react";
-import { Btn, MerninInput } from "./components/LoudPrimitives";
-import { ComponentsTable } from "./components/ComponentsTable";
+import { Worksheet } from "./components/Worksheet";
+import { UncostedHero } from "./components/UncostedHero";
 import {
   ComponentFormDialog,
   DeleteComponentDialog,
@@ -32,13 +37,24 @@ const EMPTY_FORM: ComponentFormData = {
   description: "",
 };
 
+const TYPE_ORDER = ["ingredient", "labor", "packaging", "other"];
+
+const PAGE_TITLE: React.CSSProperties = {
+  fontFamily: "var(--font-display)",
+  fontVariationSettings: "var(--display-settings)",
+  fontWeight: "var(--display-weight)" as unknown as number,
+  letterSpacing: "var(--display-tracking)",
+  fontSize: "var(--fs-display)",
+  lineHeight: 1,
+  color: "var(--ink)",
+  margin: 0,
+};
+
 export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
   const [components, setComponents] = useState(initialComponents);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingComponent, setEditingComponent] = useState<Component | null>(
-    null
-  );
+  const [editingComponent, setEditingComponent] = useState<Component | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{
@@ -54,14 +70,18 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
       c.type.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const groupedComponents = filteredComponents.reduce(
-    (acc, c) => {
-      if (!acc[c.type]) acc[c.type] = [];
-      acc[c.type].push(c);
-      return acc;
-    },
-    {} as Record<string, Component[]>
-  );
+  const uncosted = components.filter(isUncosted).length;
+
+  /**
+   * The strip is the type census — what TypePill's four coloured counts used to
+   * say, minus the decoration. Deliberately NOT a median or average cost: these
+   * figures are $/lb, $/oz, $/hour and $/each, so a single statistic across them
+   * is a number with no referent.
+   */
+  const census = TYPE_ORDER.map((type) => ({
+    label: type,
+    value: String(components.filter((c) => c.type === type).length),
+  })).filter((s) => s.value !== "0");
 
   const openCreateDialog = () => {
     setEditingComponent(null);
@@ -102,11 +122,18 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
         setComponents(
           components.map((c) =>
             c.id === editingComponent.id
-              ? { ...c, name: data.name, type: data.type, cost_per_unit: data.costPerUnit, unit: data.unit, notes: data.notes || null }
+              ? {
+                  ...c,
+                  name: data.name,
+                  type: data.type,
+                  cost_per_unit: data.costPerUnit,
+                  unit: data.unit,
+                  notes: data.notes || null,
+                }
               : c
           )
         );
-        setMessage({ type: "success", text: "Component updated successfully" });
+        setMessage({ type: "success", text: "Component updated" });
         setIsDialogOpen(false);
       }
     } else {
@@ -115,7 +142,7 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
         setMessage({ type: "error", text: result.error });
       } else if (result.component) {
         setComponents([...components, result.component]);
-        setMessage({ type: "success", text: "Component created successfully" });
+        setMessage({ type: "success", text: "Component added" });
         setIsDialogOpen(false);
       }
     }
@@ -131,74 +158,172 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
       setMessage({ type: "error", text: result.error });
     } else {
       setComponents(components.filter((c) => c.id !== deleteId));
-      setMessage({ type: "success", text: "Component deleted successfully" });
+      setMessage({ type: "success", text: "Component deleted" });
     }
     setIsLoading(false);
     setDeleteId(null);
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div
+      style={{
+        maxWidth: "var(--content-max)",
+        margin: "0 auto",
+        padding: "var(--space-6)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--gap-section)",
+      }}
+    >
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[28px] md:text-[36px] font-extrabold uppercase tracking-tight leading-none text-espresso">
-            Components
-          </h1>
-          <p className="text-[13px] text-espresso/60 font-body mt-1">
-            {components.length} component{components.length !== 1 ? "s" : ""} defined
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: "var(--space-4)",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <h1 style={PAGE_TITLE}>Components</h1>
+          <p
+            style={{
+              ...sans,
+              color: "var(--ink-muted)",
+              margin: "8px 0 0",
+              maxWidth: 620,
+            }}
+          >
+            The atoms of cost. Every figure here multiplies through product recipes
+            into order margin.
           </p>
         </div>
-        <Btn onClick={openCreateDialog} size="sm" testId="add-component">
-          <Plus className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Add Component</span>
-          <span className="sm:hidden">Add</span>
-        </Btn>
+        <Button
+          variant="primary"
+          size="sm"
+          data-testid="add-component"
+          onClick={openCreateDialog}
+          iconLeft={<Plus style={{ width: 15, height: 15 }} strokeWidth={1.5} />}
+        >
+          Add component
+        </Button>
       </div>
 
-      {/* Message */}
+      {components.length > 0 && (
+        <UncostedHero uncosted={uncosted} total={components.length} census={census} />
+      )}
+
       {message && (
-        <div
-          className={`flex items-center gap-2 rounded-xl border-[2.5px] p-3 text-sm font-body font-bold ${
-            message.type === "error"
-              ? "bg-tomato/10 border-tomato text-tomato"
-              : "bg-matcha/10 border-matcha text-matcha"
-          }`}
+        <InlineBanner
+          tone={message.type === "error" ? "danger" : "success"}
+          title={message.text}
+        />
+      )}
+
+      {uncosted > 0 && (
+        <InlineBanner
+          tone="danger"
+          title={`${uncosted} ${uncosted === 1 ? "component has" : "components have"} no cost`}
         >
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          {message.text}
+          They read <strong>not set</strong>, never <strong>$0.00</strong> — a missing
+          figure is a claim about the data, not about the component. Until each one is
+          priced, every product built on it understates its cost and overstates its
+          margin.
+        </InlineBanner>
+      )}
+
+      {/* Search — still the only filter, unchanged from before the conversion. */}
+      {components.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-3)",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ flex: "0 1 320px", minWidth: 220 }}>
+            <Input
+              data-testid="component-search"
+              aria-label="Search components"
+              placeholder="Search components"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              leading={<Search style={{ width: 15, height: 15 }} strokeWidth={1.5} />}
+            />
+          </div>
+          {searchQuery && (
+            <span
+              style={{
+                ...sans,
+                fontSize: "var(--fs-caption)",
+                color: "var(--ink-muted)",
+              }}
+            >
+              {filteredComponents.length} of {components.length} match “{searchQuery}”
+            </span>
+          )}
         </div>
       )}
 
-      {/* Component Library panel */}
-      <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden">
-        {/* Panel header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b-2 border-espresso bg-cream">
-          <h2 className="font-body font-extrabold text-sm uppercase tracking-widest text-espresso">
-            Component Library
-          </h2>
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-espresso/40 pointer-events-none" />
-            <MerninInput
-              data-testid="component-search"
-              placeholder="Search components..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-5">
-          <ComponentsTable
-            groupedComponents={groupedComponents}
-            totalCount={components.length}
-            onEdit={openEditDialog}
-            onDelete={setDeleteId}
+      {components.length === 0 ? (
+        <div
+          style={{
+            border: "1px solid var(--hairline)",
+            borderRadius: "var(--r-md)",
+            background: "var(--surface)",
+          }}
+        >
+          <EmptyState
+            icon={<Package style={{ width: 22, height: 22 }} strokeWidth={1.5} />}
+            title="No components yet"
+            description="Add the things your products are made of — green coffee, bags, labor — and what each one costs per unit."
+            action={
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={openCreateDialog}
+                iconLeft={<Plus style={{ width: 15, height: 15 }} strokeWidth={1.5} />}
+              >
+                Add component
+              </Button>
+            }
           />
         </div>
-      </div>
+      ) : filteredComponents.length === 0 ? (
+        <div
+          style={{
+            border: "1px solid var(--hairline)",
+            borderRadius: "var(--r-md)",
+            background: "var(--surface)",
+          }}
+        >
+          <EmptyState
+            compact
+            icon={<Search style={{ width: 22, height: 22 }} strokeWidth={1.5} />}
+            title="Nothing matches that"
+            description={`No component name or type contains “${searchQuery}”.`}
+          />
+        </div>
+      ) : (
+        <Worksheet
+          components={filteredComponents}
+          onEdit={openEditDialog}
+          onDelete={setDeleteId}
+        />
+      )}
+
+      <p
+        style={{
+          ...mono,
+          fontSize: "var(--fs-caption)",
+          color: "var(--ink-muted)",
+          margin: 0,
+        }}
+      >
+        Four decimals, extended only when four would round a real cost to zero.
+      </p>
 
       <ComponentFormDialog
         open={isDialogOpen}

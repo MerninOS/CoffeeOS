@@ -1,28 +1,11 @@
 "use client";
 
-/**
- * The create/edit dialog and the delete confirm.
- *
- * CoffeeOS#73 Stage A: lifted out of components-client.tsx with every class
- * string unchanged. Stage B retokenizes these onto Instrument; Stage C adds the
- * usage counts to the delete confirm.
- *
- * Radix stays through both. Instrument's own Modal may not render
- * `role="dialog"`, which is what the capability specs drive against — verify
- * against the built @merninos/ui/instrument package before ever swapping it.
- */
-
 import React from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -36,14 +19,83 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2 } from "lucide-react";
-import { Btn, FieldLabel, MerninInput, MerninTextarea } from "./LoudPrimitives";
+import { Button, Field, Input, Select, Textarea } from "@merninos/ui/instrument";
+import { sans } from "@/lib/instrument/tokens";
 import {
   COMPONENT_TYPES,
   UNITS,
   type Component,
   type ComponentFormData,
 } from "./types";
+
+/**
+ * Both dialogs, on instrument (CoffeeOS#73 Stage B).
+ *
+ * `data-surface="app"` ON THE CONTENT ROOTS IS LOAD-BEARING, not defensive.
+ * Radix portals these to <body>, i.e. OUTSIDE the AppShell subtree that scopes
+ * the instrument token layer — so without it every `var(--token)` inside
+ * resolves to nothing and the dialog renders unstyled. It cost real time to find
+ * on /orders and /products asserts it as a criterion; the same assertion lives
+ * in tests/unit/components-tokens.spec.ts here.
+ *
+ * Radix Dialog is kept rather than instrument's Modal on purpose: instrument's
+ * Modal renders no `role="dialog"`, so it cannot be driven from a test.
+ *
+ * The two Selects DO move to instrument's — it is a native `<select>`, which is
+ * the better control for a four-item list and needs no portal. That changes how
+ * the capability spec DRIVES the form (`selectOption` rather than clicking a
+ * Radix listbox) but not a single thing it ASSERTS. Drivers may follow the
+ * markup; assertions may not, which is the whole point of writing them at A.5.
+ */
+
+const PANEL: React.CSSProperties = {
+  background: "var(--surface)",
+  border: "1px solid var(--hairline)",
+  borderRadius: "var(--r-lg)",
+  boxShadow: "var(--shadow-modal)",
+  padding: 0,
+  overflow: "hidden",
+  gap: 0,
+};
+
+const HEAD: React.CSSProperties = {
+  padding: "var(--space-5) var(--space-6)",
+  borderBottom: "1px solid var(--hairline)",
+  background: "var(--surface-sunken)",
+};
+
+const FOOT: React.CSSProperties = {
+  padding: "var(--space-4) var(--space-6)",
+  borderTop: "1px solid var(--hairline)",
+  background: "var(--surface-sunken)",
+  display: "flex",
+  gap: 8,
+  justifyContent: "flex-end",
+};
+
+const TITLE: React.CSSProperties = {
+  fontFamily: "var(--font-display)",
+  fontVariationSettings: "var(--display-settings)",
+  fontWeight: "var(--display-weight)" as unknown as number,
+  letterSpacing: "var(--display-tracking)",
+  fontSize: "var(--fs-title)",
+  textTransform: "uppercase",
+  color: "var(--ink)",
+};
+
+const BODY: React.CSSProperties = {
+  padding: "var(--space-5) var(--space-6)",
+  display: "flex",
+  flexDirection: "column",
+  gap: "var(--gap-stack)",
+};
+
+const CAPTION: React.CSSProperties = {
+  ...sans,
+  fontSize: "var(--fs-caption)",
+  color: "var(--ink-muted)",
+  marginTop: 4,
+};
 
 export function ComponentFormDialog({
   open,
@@ -62,109 +114,141 @@ export function ComponentFormDialog({
   isLoading: boolean;
   onSubmit: (e: React.FormEvent) => void;
 }) {
+  const editing = !!editingComponent;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="component-dialog" className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-[8px_8px_0_#1C0F05]">
-        <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
-          <DialogHeader>
-            <DialogTitle className="font-body font-extrabold uppercase tracking-widest text-espresso text-sm">
-              {editingComponent ? "Edit Component" : "New Component"}
-            </DialogTitle>
-          </DialogHeader>
-        </div>
+      <DialogContent data-testid="component-dialog" data-surface="app" style={PANEL}>
+        <DialogHeader style={HEAD}>
+          <DialogTitle style={TITLE}>
+            {editing ? "Edit component" : "New component"}
+          </DialogTitle>
+          <DialogDescription style={CAPTION}>
+            {editing
+              ? "Changes apply to every product recipe using this component."
+              : "Components are the atoms of product cost. Every figure here feeds order margin."}
+          </DialogDescription>
+        </DialogHeader>
+
         <form onSubmit={onSubmit}>
-          <div className="px-6 py-5 space-y-4">
-            <div>
-              <FieldLabel htmlFor="name">Name</FieldLabel>
-              <MerninInput
+          <div style={BODY}>
+            <Field label="Name" htmlFor="name" required>
+              <Input
                 id="name"
                 data-testid="field-name"
-                placeholder="e.g., 12oz Kraft Bag"
+                placeholder="12oz Kraft Bag"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
               />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <FieldLabel htmlFor="category">Type</FieldLabel>
+            </Field>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "var(--gap-stack)",
+              }}
+            >
+              <Field label="Type" htmlFor="category" required>
                 <Select
+                  id="category"
+                  data-testid="field-type"
                   value={formData.category}
-                  onValueChange={(v) => setFormData({ ...formData, category: v })}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   required
                 >
-                  <SelectTrigger className="border-[2.5px] border-espresso rounded-xl bg-chalk shadow-[3px_3px_0_#1C0F05] font-body text-sm">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COMPONENT_TYPES.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                  <option value="" disabled>
+                    Select type
+                  </option>
+                  {COMPONENT_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
                 </Select>
-              </div>
-              <div>
-                <FieldLabel htmlFor="unit">Unit</FieldLabel>
+              </Field>
+
+              <Field label="Unit" htmlFor="unit" required>
                 <Select
+                  id="unit"
+                  data-testid="field-unit"
                   value={formData.unit}
-                  onValueChange={(v) => setFormData({ ...formData, unit: v })}
+                  onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
                   required
                 >
-                  <SelectTrigger className="border-[2.5px] border-espresso rounded-xl bg-chalk shadow-[3px_3px_0_#1C0F05] font-body text-sm">
-                    <SelectValue placeholder="Select unit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {UNITS.map((u) => (
-                      <SelectItem key={u} value={u}>
-                        {u}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                  <option value="" disabled>
+                    Select unit
+                  </option>
+                  {UNITS.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
                 </Select>
-              </div>
+              </Field>
             </div>
-            <div>
-              <FieldLabel htmlFor="costPerUnit">Cost per Unit ($)</FieldLabel>
-              <MerninInput
+
+            {/* The help line is new. This dialog is the only place an uncosted
+                component can be created, and the form gave no signal that 0 and
+                "I don't know yet" are different claims — precisely the confusion
+                the worksheet's `not set` rendering exists to undo. */}
+            <Field
+              label="Cost per unit"
+              htmlFor="costPerUnit"
+              required
+              help="Full precision — the worksheet rounds for reading, this is the stored figure. A component left at 0 shows as “not set” until you price it."
+            >
+              <Input
                 id="costPerUnit"
                 data-testid="field-cost"
                 type="number"
                 step="0.00000001"
                 min="0"
+                mono
                 placeholder="0.00"
                 value={formData.costPerUnit}
-                onChange={(e) => setFormData({ ...formData, costPerUnit: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, costPerUnit: e.target.value })
+                }
                 required
               />
-            </div>
-            <div>
-              <FieldLabel htmlFor="description">Description (optional)</FieldLabel>
-              <MerninTextarea
+            </Field>
+
+            <Field label="Notes" htmlFor="description" optional>
+              <Textarea
                 id="description"
                 data-testid="field-notes"
-                placeholder="Additional details about this component"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={2}
+                placeholder="Supplier, lot, or anything the next person needs"
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
               />
-            </div>
+            </Field>
           </div>
-          <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
-            <Btn
+
+          <DialogFooter style={FOOT}>
+            <Button
               type="button"
-              variant="outline"
+              variant="secondary"
+              size="sm"
               onClick={() => onOpenChange(false)}
               disabled={isLoading}
             >
               Cancel
-            </Btn>
-            <Btn type="submit" testId="dialog-save" disabled={isLoading}>
-              {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              {editingComponent ? "Save Changes" : "Create"}
-            </Btn>
-          </div>
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              data-testid="dialog-save"
+              disabled={isLoading}
+            >
+              {isLoading ? "Saving…" : editing ? "Save changes" : "Add component"}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
@@ -184,32 +268,27 @@ export function DeleteComponentDialog({
 }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent data-testid="delete-dialog" className="max-w-sm p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-[8px_8px_0_#1C0F05]">
-        <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-body font-extrabold uppercase tracking-widest text-espresso text-sm">
-              Delete Component
-            </AlertDialogTitle>
-            <AlertDialogDescription className="font-body text-sm text-espresso/60 mt-1">
-              This can&apos;t be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-        </div>
-        <AlertDialogFooter className="px-6 py-4 flex justify-end gap-2">
-          <AlertDialogCancel
-            disabled={isLoading}
-            className="inline-flex items-center justify-center font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-transparent text-espresso border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:bg-espresso hover:text-cream transition-all cursor-pointer"
-          >
-            Cancel
+      <AlertDialogContent data-testid="delete-dialog" data-surface="app" style={PANEL}>
+        <AlertDialogHeader style={HEAD}>
+          <AlertDialogTitle style={TITLE}>Delete component</AlertDialogTitle>
+          <AlertDialogDescription style={CAPTION}>
+            This can&apos;t be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter style={FOOT}>
+          {/* Destructive fill is `--danger`, NOT `--brand`. Brand red is the live
+              register on this system and never fills a control; --danger is
+              deliberately a darker, desaturated red so the two do not read as the
+              same signal. */}
+          <AlertDialogCancel disabled={isLoading} asChild>
+            <Button variant="secondary" size="sm">
+              Cancel
+            </Button>
           </AlertDialogCancel>
-          <AlertDialogAction
-            data-testid="delete-confirm"
-            onClick={onConfirm}
-            disabled={isLoading}
-            className="inline-flex items-center justify-center gap-1.5 font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-tomato text-cream border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
-          >
-            {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-            Delete
+          <AlertDialogAction disabled={isLoading} onClick={onConfirm} asChild>
+            <Button variant="destructive" size="sm" data-testid="delete-confirm">
+              {isLoading ? "Deleting…" : "Delete component"}
+            </Button>
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -26,12 +26,19 @@ import { test, expect, type Page } from '@playwright/test'
 const PROBE = 'E2E Capability Probe'
 
 /**
- * Cost is rendered with toFixed(8) today and will be reformatted in Stage B.
- * The spec asserts the CURRENT contract deliberately: if Stage B changes the
- * string, that is a real behavioural change to a figure that feeds COGS and it
- * should force a conscious edit here, not pass silently.
+ * The exact strings the cost cell must render, written out rather than computed.
+ *
+ * Deliberately NOT `fmtCost(0.55)`: importing the function under test would make
+ * this assertion agree with any rule the function happens to implement, which is
+ * no assertion at all. These are the values a human decided are correct.
+ *
+ * They CHANGED at Stage B, from `$0.55000000/each` to `$0.5500/each`, and that
+ * is the guard working as intended — the spec was written at A.5 asserting
+ * toFixed(8) precisely so a reformat could not slip through unremarked. The new
+ * values are criterion 2: two decimals at or above a dollar, four below it.
  */
-const costText = (n: number, unit: string) => `$${n.toFixed(8)}/${unit}`
+const COST_055 = '$0.5500/each'
+const COST_125 = '$1.25/each'
 
 /**
  * The onboarding tour widget is `fixed bottom-4 right-4 z-50` and sits over the
@@ -57,10 +64,18 @@ async function openList(page: Page) {
   await expect(rows(page).first()).toBeVisible()
 }
 
-/** Radix Select: click the trigger, then the option by its visible label. */
-async function pickOption(page: Page, index: number, label: string) {
-  await page.locator('[data-testid="component-dialog"] [role="combobox"]').nth(index).click()
-  await page.getByRole('option', { name: label, exact: true }).click()
+/**
+ * Stage B replaced the two Radix Selects with instrument's, which is a native
+ * `<select>` — so this DRIVER changed from click-trigger-then-click-option to
+ * `selectOption`.
+ *
+ * That is the allowed kind of change: nothing this spec ASSERTS moved. Drivers
+ * describe how you operate the control and may follow the markup; assertions
+ * describe what must be true afterwards and may not, or the spec stops being
+ * evidence and starts being a description of whatever was built.
+ */
+async function pickOption(page: Page, testId: string, value: string) {
+  await page.locator(`[data-testid="${testId}"]`).selectOption(value)
 }
 
 /** Leftovers from an interrupted run would make `create` fail on a duplicate. */
@@ -91,15 +106,15 @@ test.describe('/components editing capabilities', () => {
     await expect(page.locator('[data-testid="component-dialog"]')).toBeVisible()
 
     await page.locator('[data-testid="field-name"]').fill(PROBE)
-    await pickOption(page, 0, 'Packaging')
-    await pickOption(page, 1, 'each')
+    await pickOption(page, 'field-type', 'packaging')
+    await pickOption(page, 'field-unit', 'each')
     await page.locator('[data-testid="field-cost"]').fill('0.55')
     await page.locator('[data-testid="dialog-save"]').click()
 
     // The effect, not the control: one more row, and it carries the figure.
     await expect(rows(page)).toHaveCount(before + 1)
     await expect(rowFor(page, PROBE).locator('[data-testid="row-cost"]')).toHaveText(
-      costText(0.55, 'each')
+      COST_055
     )
 
     // Then survive a reload. `handleSubmit` appends to local state on success,
@@ -109,7 +124,7 @@ test.describe('/components editing capabilities', () => {
     // the row back from the database is what makes this assert persistence.
     await openList(page)
     await expect(rowFor(page, PROBE).locator('[data-testid="row-cost"]')).toHaveText(
-      costText(0.55, 'each')
+      COST_055
     )
   })
 
@@ -126,14 +141,14 @@ test.describe('/components editing capabilities', () => {
     await page.locator('[data-testid="dialog-save"]').click()
 
     await expect(rowFor(page, PROBE).locator('[data-testid="row-cost"]')).toHaveText(
-      costText(1.25, 'each')
+      COST_125
     )
 
     // Same reason as create: the optimistic local update would satisfy the
     // assertion above on its own.
     await openList(page)
     await expect(rowFor(page, PROBE).locator('[data-testid="row-cost"]')).toHaveText(
-      costText(1.25, 'each')
+      COST_125
     )
   })
 
