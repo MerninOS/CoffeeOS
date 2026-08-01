@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { updateProfile } from "./actions";
+import { shopifyErrorMessage } from "@/lib/settings/errors";
 import { ProfileSection } from "./components/ProfileSection";
 import { ShopifySection } from "./components/ShopifySection";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
@@ -75,22 +76,7 @@ export function SettingsClient({ user, userRole, isOwner, shopifySettings }: Set
       setMessage({ type: "success", text: "Billing is active. You now have full app access." });
       window.history.replaceState({}, "", "/settings");
     } else if (errorParam) {
-      const errorMessages: Record<string, string> = {
-        missing_params: "Missing required parameters from Shopify",
-        config_error: "Shopify app not configured correctly",
-        invalid_signature: "Invalid signature from Shopify",
-        invalid_state: "Invalid state — please try connecting again",
-        state_expired: "Connection timed out — please try again",
-        shop_mismatch: "Shop mismatch — please try connecting again",
-        token_exchange_failed: "Failed to exchange token with Shopify",
-        save_failed: "Failed to save connection",
-        callback_error: "An error occurred during connection",
-        billing_not_active: "Billing is required to use the app. Manage your app plan in Shopify Admin, then refresh status here.",
-        billing_create_failed: "Billing API charge creation is disabled for managed pricing apps.",
-        billing_check_failed: "Could not verify Shopify billing status. Please try again.",
-        shopify_not_connected: "Connect your Shopify store before activating billing.",
-      };
-      setMessage({ type: "error", text: errorMessages[errorParam] || "An error occurred connecting to Shopify" });
+      setMessage({ type: "error", text: shopifyErrorMessage(errorParam) });
       window.history.replaceState({}, "", "/settings");
     }
   }, [searchParams, isShopifyConnected, isBillingActive, shopifySettings?.store_domain]);
