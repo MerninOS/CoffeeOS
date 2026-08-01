@@ -75,6 +75,10 @@ function Btn({
   onClick,
   type = "button",
   className = "",
+  // Passed through so callers can attach data-testid / aria-label. Without this
+  // the destructure silently swallowed both, and the icon-only cancel button had
+  // no accessible name and nothing stable to select it by.
+  ...rest
 }: {
   children: React.ReactNode;
   variant?: "primary" | "outline" | "ghost" | "danger";
@@ -83,7 +87,7 @@ function Btn({
   onClick?: () => void;
   type?: "button" | "submit";
   className?: string;
-}) {
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const base =
     "inline-flex items-center justify-center font-body font-extrabold uppercase tracking-widest transition-all duration-100 cursor-pointer disabled:opacity-50 disabled:pointer-events-none";
   const sizes = { sm: "text-[0.65rem] px-3 py-1.5 gap-1", md: "text-[0.7rem] px-4 py-2 gap-1.5" };
@@ -98,7 +102,7 @@ function Btn({
       "bg-transparent text-tomato border-[2px] border-transparent rounded-lg hover:bg-tomato/10 active:bg-tomato/20",
   };
   return (
-    <button type={type} disabled={disabled} onClick={onClick} className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}>
+    <button type={type} disabled={disabled} onClick={onClick} className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} {...rest}>
       {children}
     </button>
   );
@@ -278,6 +282,8 @@ export function TeamManagement({ currentUserId, isOwner }: TeamManagementProps) 
               {members.map((member) => (
                 <div
                   key={member.id}
+                  data-testid="member-row"
+                  data-member-email={member.email}
                   className="flex items-center justify-between bg-cream border-[2.5px] border-espresso rounded-[14px] shadow-[2px_2px_0_#1C0F05] px-3 py-3 gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -307,7 +313,7 @@ export function TeamManagement({ currentUserId, isOwner }: TeamManagementProps) 
                             value={member.role}
                             onValueChange={(v) => handleRoleChange(member.id, v as "admin" | "roaster")}
                           >
-                            <SelectTrigger className="h-8 w-28 border-[2px] border-espresso rounded-lg bg-chalk text-xs font-body font-bold">
+                            <SelectTrigger data-testid="member-role" className="h-8 w-28 border-[2px] border-espresso rounded-lg bg-chalk text-xs font-body font-bold">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -377,6 +383,8 @@ export function TeamManagement({ currentUserId, isOwner }: TeamManagementProps) 
               {invitations.map((invitation) => (
                 <div
                   key={invitation.id}
+                  data-testid="invitation-row"
+                  data-invitation-email={invitation.email}
                   className="flex items-center justify-between bg-cream border-[2px] border-dashed border-espresso/40 rounded-[14px] px-3 py-3 gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -398,6 +406,8 @@ export function TeamManagement({ currentUserId, isOwner }: TeamManagementProps) 
                     <Btn
                       variant="ghost"
                       size="sm"
+                      data-testid="cancel-invitation"
+                      aria-label="Cancel invitation"
                       onClick={() => handleCancelInvitation(invitation.id)}
                       className="text-espresso/40 hover:text-tomato"
                     >

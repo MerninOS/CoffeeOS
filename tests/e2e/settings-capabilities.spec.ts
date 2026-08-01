@@ -82,3 +82,106 @@ test.describe('/settings — profile', () => {
     await expect(page.getByText(/profile updated/i)).toBeVisible()
   })
 })
+
+/**
+ * `member-row` / `invitation-row` / `member-role` / `cancel-invitation` are a
+ * TEST CONTRACT, the same way `detail-cogs` and `detail-profit` are on
+ * /orders/[id] (CoffeeOS#70). The Instrument rebuild may move, restyle or
+ * re-parent these — members and invitations become one table — but it must carry
+ * the testids with them. Selecting on the loud layout's class names instead
+ * would guarantee these tests die in Stage B, which is precisely when they are
+ * meant to be watching.
+ */
+const memberRow = (page: import('@playwright/test').Page, email: string) =>
+  page.locator(`[data-testid="member-row"][data-member-email="${email}"]`)
+
+const invitationRow = (page: import('@playwright/test').Page, email: string) =>
+  page.locator(`[data-testid="invitation-row"][data-invitation-email="${email}"]`)
+
+test.describe('/settings — team invitations', () => {
+  // A fresh address per run. inviteTeamMember upserts on (owner_id, email) and
+  // refuses a still-pending duplicate, so a leaked row from an earlier run would
+  // make this test assert against something it did not create.
+  const INVITEE = `qa-invite-${Date.now()}@example.com`
+
+  test.beforeEach(async ({ page }) => {
+    await hideOnboardingWidget(page)
+  })
+
+  test.afterEach(async ({ page }) => {
+    await page.goto('/settings')
+    const row = invitationRow(page, INVITEE)
+    if (await row.count()) {
+      await row.getByTestId('cancel-invitation').click()
+      await expect(row).toHaveCount(0)
+    }
+  })
+
+  test('an invitation appears, then cancels', async ({ page }) => {
+    await page.goto('/settings')
+
+    // Assert ABSENCE first. Without this the test would pass on a leaked row
+    // from a previous run without inviting anything at all.
+    await expect(invitationRow(page, INVITEE)).toHaveCount(0)
+
+    await page.getByPlaceholder('team@example.com').fill(INVITEE)
+    await page.getByRole('button', { name: /^invite$/i }).click()
+
+    // Wait for the acknowledgement BEFORE reloading. page.reload() fired
+    // straight after the click tears down the in-flight server action, and the
+    // invitation is then never written — which reads as "the feature is broken"
+    // rather than "the test raced it".
+    await expect(page.getByText(/invitation created/i)).toBeVisible()
+
+    // Reloaded, not just rendered — proves the row came back from the server
+    // rather than from the optimistic refetch the handler already triggered.
+    await page.reload()
+    await expect(invitationRow(page, INVITEE)).toBeVisible()
+
+    await invitationRow(page, INVITEE).getByTestId('cancel-invitation').click()
+    await expect(page.getByText(/invitation cancelled/i)).toBeVisible()
+
+    await page.reload()
+    await expect(invitationRow(page, INVITEE)).toHaveCount(0)
+  })
+})
+
+test.describe('/settings — member roles', () => {
+  const ROASTER = 'roaster@coffeeos.io'
+
+  test.beforeEach(async ({ page }) => {
+    await hideOnboardingWidget(page)
+  })
+
+  test.afterEach(async ({ page }) => {
+    await page.goto('/settings')
+    const role = memberRow(page, ROASTER).getByTestId('member-role')
+    if ((await role.count()) && !/roaster/i.test((await role.textContent()) ?? '')) {
+      await role.click()
+      await page.getByRole('option', { name: /roaster/i }).click()
+      await expect(page.getByText(/role updated/i)).toBeVisible()
+    }
+  })
+
+  test('a role change survives a reload', async ({ page }) => {
+    await page.goto('/settings')
+
+    const role = memberRow(page, ROASTER).getByTestId('member-role')
+    await expect(role).toContainText(/roaster/i)
+
+    await role.click()
+    await page.getByRole('option', { name: /admin/i }).click()
+    await expect(page.getByText(/role updated/i)).toBeVisible()
+
+    // Read the role back from the RELOADED row, never from the control's own
+    // value: a select reports its optimistic state and would agree with itself
+    // even if nothing was written.
+    await page.reload()
+    await expect(memberRow(page, ROASTER).getByTestId('member-role')).toContainText(/admin/i)
+
+    await memberRow(page, ROASTER).getByTestId('member-role').click()
+    await page.getByRole('option', { name: /roaster/i }).click()
+    await page.reload()
+    await expect(memberRow(page, ROASTER).getByTestId('member-role')).toContainText(/roaster/i)
+  })
+})
