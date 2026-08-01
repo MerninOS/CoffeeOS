@@ -42,9 +42,15 @@ const stripComments = (src: string) =>
  * Loud-palette utilities, plus the two arbitrary-value forms this route actually
  * used — `shadow-[3px_3px_0_#1C0F05]` and `border-[2.5px]`. A scan that only
  * knew the named colours would have passed over half of settings-client.tsx.
+ *
+ * The `font-*` arm carries a lookbehind because `var(--font-display)` contains
+ * the same substring as the Tailwind class `font-display`, and the instrument
+ * token is the thing this file exists to encourage. Matching it would have made
+ * the guard punish the correct code — the failure mode that gets a guard
+ * deleted rather than fixed.
  */
 const LOUD =
-  /\b(?:bg|text|border|ring|from|to|via|fill|stroke|divide|placeholder|accent|decoration|outline)-(?:cream|espresso|tomato|sun|sky|chalk|roast|honey|matcha|fog)\b|\bshadow-flat-(?:sm|md|lg)\b|\bfont-(?:display|headline|body)\b|\bshadow-\[[^\]]*#(?:1C0F05|E8442A|5BC8D5)[^\]]*\]|\bborder-\[[\d.]+px\]/i
+  /\b(?:bg|text|border|ring|from|to|via|fill|stroke|divide|placeholder|accent|decoration|outline)-(?:cream|espresso|tomato|sun|sky|chalk|roast|honey|matcha|fog)\b|\bshadow-flat-(?:sm|md|lg)\b|(?<!-)\bfont-(?:display|headline|body)\b|\bshadow-\[[^\]]*#(?:1C0F05|E8442A|5BC8D5)[^\]]*\]|\bborder-\[[\d.]+px\]/i
 
 test('no file under /settings resolves an instrument value through Tailwind', () => {
   const offences: string[] = []

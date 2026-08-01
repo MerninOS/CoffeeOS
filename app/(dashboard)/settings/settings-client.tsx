@@ -9,7 +9,7 @@ import { WorkspaceHero } from "./components/WorkspaceHero";
 import type { ShopifySettings } from "./components/types";
 import { ProfileSection } from "./components/ProfileSection";
 import { ShopifySection } from "./components/ShopifySection";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { InlineBanner } from "@merninos/ui/instrument";
 
 interface SettingsClientProps {
   user: {
@@ -122,26 +122,13 @@ export function SettingsClient({ user, userRole, isOwner, shopifySettings, membe
   };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Global message */}
+    <div className="px-6 pt-6" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {message && (
-        <div
-          className={`flex items-center gap-2 rounded-xl border-[2.5px] p-3 text-sm font-body font-bold ${
-            message.type === "error"
-              ? "bg-tomato/10 border-tomato text-tomato"
-              : "bg-matcha/10 border-matcha text-matcha"
-          }`}
-        >
-          {message.type === "error" ? (
-            <AlertCircle className="h-4 w-4 shrink-0" />
-          ) : (
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-          )}
+        <InlineBanner tone={message.type === "error" ? "danger" : "success"}>
           {message.text}
-        </div>
+        </InlineBanner>
       )}
 
-      <div className="grid gap-6">
         <WorkspaceHero
           shopifySettings={shopifySettings}
           canManage={canManageShopify}
@@ -171,7 +158,6 @@ export function SettingsClient({ user, userRole, isOwner, shopifySettings, membe
             onDisconnect={handleDisconnectShopify}
           />
         )}
-      </div>
     </div>
   );
 }

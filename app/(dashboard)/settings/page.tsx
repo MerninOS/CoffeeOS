@@ -76,14 +76,31 @@ export default async function SettingsPage() {
     <div className="flex flex-col min-h-full pb-28">
       <div className="px-6 pt-6 space-y-4">
         <div>
-          <h1 className="text-[28px] md:text-[36px] font-extrabold uppercase tracking-tight leading-none text-espresso">
+          <h1
+            style={{
+              fontFamily: "var(--font-display)",
+              fontVariationSettings: "var(--display-settings)",
+              fontWeight: "var(--display-weight)" as unknown as number,
+              letterSpacing: "var(--display-tracking)",
+              fontSize: "var(--fs-display)",
+              lineHeight: "var(--lh-tight)",
+              textTransform: "uppercase",
+              color: "var(--ink)",
+            }}
+          >
             Settings
           </h1>
-          <p className="text-[13px] text-espresso/60 font-medium mt-1">
+          <p
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "var(--fs-body)",
+              color: "var(--ink-muted)",
+              marginTop: 4,
+            }}
+          >
             Manage your account and integrations
           </p>
         </div>
-        <div className="border-b-[2px] border-dashed border-fog" />
       </div>
 
       <InvitationBanner />

@@ -12,22 +12,58 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, Unplug } from "lucide-react";
+import { Button, IconButton } from "@merninos/ui/instrument";
+import { Power, Trash2 } from "lucide-react";
+import { sans } from "./tokens";
 import type { TeamMember } from "./types";
 
 /**
- * The two destructive confirmations, moved here verbatim (CoffeeOS#74 Stage A),
- * trigger buttons included — the trigger is part of the dialog's contract with
- * Radix (`asChild`), so splitting it out would be a rewrite rather than a move.
+ * The two destructive confirmations.
  *
- * These stay Radix through Stage B and are NOT swapped for the instrument
- * `Modal`. Two reasons, both load-bearing: the kit's Modal renders no
- * `role="dialog"`, so Playwright cannot drive it, and it is imported nowhere in
- * this app for exactly that reason. Stage B retokenizes them in place and adds
- * `data-surface="app"` to each content root — Radix portals to <body>, outside
- * the token scope, so without it every var(--token) inside resolves to nothing.
- * app/(dashboard)/products/components/ProductDialogs.tsx already does this.
+ * RADIX, NOT instrument's `Modal`. Modal renders no `role="dialog"`, so
+ * Playwright cannot drive it, and it is imported nowhere in this app for exactly
+ * that reason. Retokenized in place instead.
+ *
+ * `data-surface="app"` ON EACH CONTENT ROOT IS LOAD-BEARING, not defensive.
+ * Radix portals content to <body>, outside the AppShell subtree the instrument
+ * token layer is scoped to — without it every var(--token) below resolves to
+ * nothing and the dialog renders unstyled. Same as
+ * app/(dashboard)/products/components/ProductDialogs.tsx.
+ *
+ * The filled danger button appears here and nowhere else on the page: a
+ * confirmation dialog is the one place the design system allows it.
  */
+
+const PANEL: React.CSSProperties = {
+  background: "var(--surface)",
+  border: "1px solid var(--hairline)",
+  borderRadius: "var(--r-lg)",
+  boxShadow: "var(--shadow-modal)",
+  padding: 0,
+  overflow: "hidden",
+  gap: 0,
+  maxWidth: 460,
+};
+
+const HEAD: React.CSSProperties = { padding: "20px 24px 0" };
+const TITLE: React.CSSProperties = {
+  fontFamily: "var(--font-sans)",
+  fontSize: "var(--fs-title)",
+  fontWeight: "var(--fw-semibold)" as unknown as number,
+  color: "var(--ink)",
+};
+const BODY: React.CSSProperties = {
+  ...sans,
+  color: "var(--ink-muted)",
+  lineHeight: "var(--lh-body)",
+  marginTop: 6,
+};
+const FOOT: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 10,
+  padding: "20px 24px",
+};
 
 export function DisconnectStoreDialog({
   isDisconnecting,
@@ -38,38 +74,34 @@ export function DisconnectStoreDialog({
 }) {
   return (
     <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <button className="inline-flex items-center justify-center gap-1.5 font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-transparent text-tomato border-[2.5px] border-tomato rounded-full shadow-[3px_3px_0_#E8442A] hover:bg-tomato hover:text-cream transition-all cursor-pointer">
-                      <Unplug className="h-3.5 w-3.5" />
-                      Disconnect Store
-                    </button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent className="max-w-sm p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-[8px_8px_0_#1C0F05]">
-                    <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle className="font-body font-extrabold uppercase tracking-widest text-espresso text-sm">
-                          Disconnect Shopify Store?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription className="font-body text-sm text-espresso/60 mt-1">
-                          This will remove the connection to your Shopify store. You won&apos;t be able to sync products or orders until you reconnect. Your existing data will be preserved.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                    </div>
-                    <AlertDialogFooter className="px-6 py-4 flex justify-end gap-2">
-                      <AlertDialogCancel className="inline-flex items-center justify-center font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-transparent text-espresso border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:bg-espresso hover:text-cream transition-all cursor-pointer">
-                        Cancel
-                      </AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={onDisconnect}
-                        disabled={isDisconnecting}
-                        className="inline-flex items-center justify-center gap-1.5 font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-tomato text-cream border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
-                      >
-                        {isDisconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unplug className="h-3.5 w-3.5" />}
-                        Disconnect
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+      <AlertDialogTrigger asChild>
+        {/* Tertiary, in danger ink — never a brand fill. Red on this page means
+            "the workspace needs you", and a red button here would compete with
+            the hero for that meaning. */}
+        <Button size="sm" variant="tertiary" iconLeft={<Power />} style={{ color: "var(--danger)" }}>
+          Disconnect
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent data-surface="app" style={PANEL}>
+        <AlertDialogHeader style={HEAD}>
+          <AlertDialogTitle style={TITLE}>Disconnect this Shopify store?</AlertDialogTitle>
+          <AlertDialogDescription style={BODY}>
+            Products and orders stop syncing immediately. Data already in CoffeeOS is kept, and you
+            can reconnect the same store later.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter style={FOOT}>
+          <AlertDialogCancel asChild>
+            <Button variant="secondary">Keep connected</Button>
+          </AlertDialogCancel>
+          <AlertDialogAction asChild>
+            <Button variant="destructive" disabled={isDisconnecting} onClick={onDisconnect}>
+              Disconnect store
+            </Button>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -82,35 +114,30 @@ export function RemoveMemberDialog({
 }) {
   return (
     <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <button className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-espresso/40 hover:text-tomato hover:bg-tomato/10 transition-colors cursor-pointer">
-                                <Trash2 className="h-4 w-4" />
-                                <span className="sr-only">Remove member</span>
-                              </button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent className="max-w-sm p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-[8px_8px_0_#1C0F05]">
-                              <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle className="font-body font-extrabold uppercase tracking-widest text-espresso text-sm">
-                                    Remove Team Member?
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription className="font-body text-sm text-espresso/60 mt-1">
-                                    This will remove {member.first_name} {member.last_name} from your team. They will no longer have access to your workspace data.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                              </div>
-                              <AlertDialogFooter className="px-6 py-4 flex justify-end gap-2">
-                                <AlertDialogCancel className="inline-flex items-center justify-center font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-transparent text-espresso border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:bg-espresso hover:text-cream transition-all cursor-pointer">
-                                  Cancel
-                                </AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => onRemoveMember(member.id)}
-                                  className="inline-flex items-center justify-center font-body font-extrabold uppercase tracking-widest text-[0.7rem] px-4 py-2 bg-tomato text-cream border-[2.5px] border-espresso rounded-full shadow-[3px_3px_0_#1C0F05] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
-                                >
-                                  Remove
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+      <AlertDialogTrigger asChild>
+        <IconButton size="sm" aria-label="Remove member" icon={<Trash2 />} />
+      </AlertDialogTrigger>
+      <AlertDialogContent data-surface="app" style={PANEL}>
+        <AlertDialogHeader style={HEAD}>
+          <AlertDialogTitle style={TITLE}>
+            Remove {member.first_name} {member.last_name}?
+          </AlertDialogTitle>
+          <AlertDialogDescription style={BODY}>
+            They lose access to this workspace&apos;s orders, roasting and inventory right away.
+            Their own account is not deleted.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter style={FOOT}>
+          <AlertDialogCancel asChild>
+            <Button variant="secondary">Cancel</Button>
+          </AlertDialogCancel>
+          <AlertDialogAction asChild>
+            <Button variant="destructive" onClick={() => onRemoveMember(member.id)}>
+              Remove member
+            </Button>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
