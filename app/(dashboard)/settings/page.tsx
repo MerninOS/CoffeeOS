@@ -43,13 +43,35 @@ export default async function SettingsPage() {
       shop_name: data.shop_name,
       connected_via_oauth: data.connected_via_oauth,
       oauth_scope: data.oauth_scope,
-      has_storefront_token: !!data.access_token,
       has_admin_credentials: !!data.admin_access_token,
       billing_status: data.billing_status,
       billing_plan_name: data.billing_plan_name,
       billing_current_period_end: data.billing_current_period_end,
       billing_test: data.billing_test,
     } : null;
+  }
+
+  /* Team counts for the workspace hero, resolved on the SERVER.
+     TeamManagement fetches the same lists client-side on mount, but the hero
+     must not wait for that — a strip that renders "Members —" and then jumps is
+     worse than one that renders once, and the counts are cheap. */
+  let memberCount = 0;
+  let invitedCount = 0;
+  if (canManageTeam && ownerId) {
+    const [members, invitations] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .or(`id.eq.${ownerId},owner_id.eq.${ownerId}`),
+      supabase
+        .from("team_invitations")
+        .select("id", { count: "exact", head: true })
+        .eq("owner_id", ownerId)
+        .is("accepted_at", null)
+        .gt("expires_at", new Date().toISOString()),
+    ]);
+    memberCount = members.count ?? 0;
+    invitedCount = invitations.count ?? 0;
   }
 
   return (
@@ -77,6 +99,8 @@ export default async function SettingsPage() {
         userRole={userRole}
         isOwner={isOwner}
         shopifySettings={shopifySettings}
+        memberCount={memberCount}
+        invitedCount={invitedCount}
       />
 
       {canManageTeam && (

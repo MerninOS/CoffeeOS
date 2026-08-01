@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { updateProfile } from "./actions";
 import { shopifyErrorMessage } from "@/lib/settings/errors";
+import { WorkspaceHero } from "./components/WorkspaceHero";
 import { ProfileSection } from "./components/ProfileSection";
 import { ShopifySection } from "./components/ShopifySection";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
@@ -16,6 +17,8 @@ interface SettingsClientProps {
   };
   userRole: string;
   isOwner: boolean;
+  memberCount: number;
+  invitedCount: number;
   shopifySettings: {
     store_domain: string;
     shop_name?: string;
@@ -32,7 +35,7 @@ interface SettingsClientProps {
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export function SettingsClient({ user, userRole, isOwner, shopifySettings }: SettingsClientProps) {
+export function SettingsClient({ user, userRole, isOwner, shopifySettings, memberCount, invitedCount }: SettingsClientProps) {
   const canManageShopify = isOwner || userRole === "admin";
   const [profileData, setProfileData] = useState({ firstName: user.firstName, lastName: user.lastName });
   const [storeDomain, setStoreDomain] = useState("");
@@ -146,6 +149,13 @@ export function SettingsClient({ user, userRole, isOwner, shopifySettings }: Set
       )}
 
       <div className="grid gap-6">
+        <WorkspaceHero
+          shopifySettings={shopifySettings}
+          canManage={canManageShopify}
+          members={memberCount}
+          invited={invitedCount}
+        />
+
         {/* Profile */}
         <ProfileSection
           user={user}
