@@ -72,45 +72,16 @@ export async function updateComponent(
     return { error: error.message };
   }
 
-  // Recalculate COGS for all products using this component
-  const { data: productComponents } = await supabase
-    .from("product_components")
-    .select("product_id")
-    .eq("component_id", id);
-
-  if (productComponents && productComponents.length > 0) {
-    const productIds = [...new Set(productComponents.map((pc) => pc.product_id))];
-
-    for (const productId of productIds) {
-      // Recalculate total COGS for each product
-      const { data: pcs } = await supabase
-        .from("product_components")
-        .select(
-          `
-          quantity,
-          components (
-            cost_per_unit
-          )
-        `
-        )
-        .eq("product_id", productId);
-
-      const totalCogs =
-        pcs?.reduce((sum, pc) => {
-          const component = pc.components as { cost_per_unit: number } | null;
-          if (component) {
-            return sum + pc.quantity * component.cost_per_unit;
-          }
-          return sum;
-        }, 0) || 0;
-
-      await supabase
-        .from("products")
-        .update({ total_cogs: totalCogs })
-        .eq("id", productId);
-    }
-  }
-
+  // No COGS write-back here: `products` has no `total_cogs` column. Both
+  // /products and /dashboard derive product cost at read time by joining
+  // product_components -> components.cost_per_unit, so editing a component's
+  // cost is already reflected on the next render — the revalidations below are
+  // what actually propagate this change, and both are load-bearing.
+  //
+  // (The block that used to live here looped over every referencing product and
+  // issued `products.update({ total_cogs })`. The column does not exist, the
+  // result was never destructured, so every one of those writes failed silently
+  // — one wasted query per referencing product on each save.)
   revalidatePath("/components", "max");
   revalidatePath("/products", "max");
   revalidatePath("/dashboard", "max");
