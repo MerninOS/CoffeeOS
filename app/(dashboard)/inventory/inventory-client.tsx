@@ -1,31 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Plus,
-  TrendingDown,
-  Edit,
-  Trash2,
-  Search,
-  Scale,
-  Warehouse,
-} from "lucide-react";
+import { Edit, Trash2, Search, Scale, Warehouse } from "lucide-react";
 import { gramsToLbs } from "@/lib/inventory/units";
 import { lotValue, stockState, totals } from "@/lib/inventory/valuation";
+import { InventoryWorksheetTable } from "./components/InventoryWorksheetTable";
+import { AdjustStockDialog, LotFormDialog } from "./components/InventoryDialogs";
+import { Panel, StatCard } from "./components/primitives";
+import type { CoffeeInventory } from "./components/types";
 import {
   createCoffeeInventory,
   updateCoffeeInventory,
@@ -33,198 +15,12 @@ import {
   deleteCoffeeInventory,
 } from "./actions";
 
-interface CoffeeInventory {
-  id: string;
-  name: string;
-  origin: string;
-  lot_code: string | null;
-  supplier: string | null;
-  price_per_lb: number;
-  initial_quantity_g: number;
-  current_green_quantity_g: number;
-  roasted_stock_g: number;
-  purchase_date: string | null;
-  notes: string | null;
-  is_active: boolean;
-  created_at: string;
-}
 
 interface InventoryClientProps {
   initialInventory: CoffeeInventory[];
 }
 
 // ── Primitives ──────────────────────────────────────────────────────────────
-
-function Btn({
-  children,
-  onClick,
-  disabled,
-  variant = "primary",
-  size = "md",
-  type = "button",
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  variant?: "primary" | "outline" | "ghost" | "danger";
-  size?: "sm" | "md";
-  type?: "button" | "submit";
-}) {
-  const base =
-    "inline-flex items-center justify-center font-extrabold uppercase tracking-[.08em] transition-all duration-[120ms] border-[2.5px] cursor-pointer disabled:opacity-50 disabled:pointer-events-none";
-  const sizes = {
-    sm: "text-[11px] px-3 py-1.5 rounded-[8px]",
-    md: "text-[12px] px-4 py-2 rounded-[10px]",
-  };
-  const variants = {
-    primary:
-      "bg-tomato text-cream border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[3px] active:translate-y-[3px] active:shadow-none",
-    outline:
-      "bg-transparent text-espresso border-espresso hover:bg-espresso hover:text-cream",
-    ghost:
-      "bg-transparent text-espresso border-transparent hover:bg-fog/50 shadow-none",
-    danger:
-      "bg-transparent text-tomato border-tomato hover:bg-tomato hover:text-cream",
-  };
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      className={`${base} ${sizes[size]} ${variants[variant]}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Panel({
-  title,
-  subtitle,
-  action,
-  children,
-  className = "",
-}: {
-  title?: string;
-  subtitle?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden ${className}`}
-    >
-      {title && (
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b-2 border-espresso bg-cream">
-          <div>
-            <div className="font-extrabold text-sm uppercase tracking-[.08em] text-espresso">
-              {title}
-            </div>
-            {subtitle && (
-              <div className="text-[11px] text-muted-foreground mt-0.5">
-                {subtitle}
-              </div>
-            )}
-          </div>
-          {action && <div className="shrink-0">{action}</div>}
-        </div>
-      )}
-      <div className="p-5">{children}</div>
-    </div>
-  );
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-[11px] font-extrabold uppercase tracking-[.08em] text-espresso mb-1">
-      {children}
-    </div>
-  );
-}
-
-function MerninInput({
-  id,
-  type = "text",
-  value,
-  onChange,
-  placeholder,
-  step,
-}: {
-  id?: string;
-  type?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  placeholder?: string;
-  step?: string;
-}) {
-  return (
-    <input
-      id={id}
-      type={type}
-      step={step}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className="w-full bg-cream border-[2.5px] border-espresso rounded-[10px] px-3 py-2 text-[13px] font-medium text-espresso placeholder:text-espresso/40 shadow-[3px_3px_0_#1C0F05] focus:outline-none focus:border-tomato focus:shadow-[3px_3px_0_#E8442A] focus:-translate-x-px focus:-translate-y-px transition-all duration-[120ms]"
-    />
-  );
-}
-
-function MerninTextarea({
-  id,
-  value,
-  onChange,
-  placeholder,
-  rows = 3,
-}: {
-  id?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-  placeholder?: string;
-  rows?: number;
-}) {
-  return (
-    <textarea
-      id={id}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      rows={rows}
-      className="w-full bg-cream border-[2.5px] border-espresso rounded-[10px] px-3 py-2 text-[13px] font-medium text-espresso placeholder:text-espresso/40 shadow-[3px_3px_0_#1C0F05] focus:outline-none focus:border-tomato focus:shadow-[3px_3px_0_#E8442A] focus:-translate-x-px focus:-translate-y-px transition-all duration-[120ms] resize-none"
-    />
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  sub,
-  testId,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  testId?: string;
-}) {
-  return (
-    <div className="bg-chalk border-[3px] border-espresso rounded-[14px] shadow-flat-sm px-5 py-4 flex flex-col gap-1">
-      <div className="text-[11px] font-extrabold uppercase tracking-[.1em] text-espresso/60">
-        {label}
-      </div>
-      <div
-        data-testid={testId}
-        className="text-[26px] font-extrabold text-espresso leading-none"
-      >
-        {value}
-      </div>
-      {sub && (
-        <div className="text-[11px] font-bold text-espresso/50">{sub}</div>
-      )}
-    </div>
-  );
-}
-
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export function InventoryClient({ initialInventory }: InventoryClientProps) {
@@ -416,166 +212,16 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
           </p>
         </div>
 
-        <Dialog
-          open={isAddDialogOpen}
-          onOpenChange={(open) => {
-            setIsAddDialogOpen(open);
-            if (!open) resetForm();
-          }}
-        >
-          <DialogTrigger asChild>
-            <Btn>
-              <Plus size={14} strokeWidth={2.5} className="mr-1.5" />
-              Add Coffee
-            </Btn>
-          </DialogTrigger>
-
-          <DialogContent data-testid="lot-form-dialog" className="max-w-2xl p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
-            {/* Dialog header */}
-            <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
-              <DialogHeader>
-                <DialogTitle className="font-extrabold text-[15px] uppercase tracking-[.08em] text-espresso">
-                  {editingCoffee ? "Edit Coffee" : "Add New Coffee"}
-                </DialogTitle>
-              </DialogHeader>
-            </div>
-
-            {/* Dialog body */}
-            <div className="px-6 py-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <FieldLabel>Name *</FieldLabel>
-                  <MerninInput
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    placeholder="Ethiopia Yirgacheffe"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Origin *</FieldLabel>
-                  <MerninInput
-                    id="origin"
-                    value={formData.origin}
-                    onChange={(e) =>
-                      setFormData({ ...formData, origin: e.target.value })
-                    }
-                    placeholder="Ethiopia"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <FieldLabel>Lot Code</FieldLabel>
-                  <MerninInput
-                    id="lot_code"
-                    value={formData.lot_code}
-                    onChange={(e) =>
-                      setFormData({ ...formData, lot_code: e.target.value })
-                    }
-                    placeholder="12345"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Supplier</FieldLabel>
-                  <MerninInput
-                    id="supplier"
-                    value={formData.supplier}
-                    onChange={(e) =>
-                      setFormData({ ...formData, supplier: e.target.value })
-                    }
-                    placeholder="Supplier Name"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <FieldLabel>Price per lb ($) *</FieldLabel>
-                  <MerninInput
-                    id="price_per_lb"
-                    type="number"
-                    step="0.01"
-                    value={formData.price_per_lb}
-                    onChange={(e) =>
-                      setFormData({ ...formData, price_per_lb: e.target.value })
-                    }
-                    placeholder="6.50"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Initial Qty (lbs) *</FieldLabel>
-                  <MerninInput
-                    id="quantity_lbs"
-                    type="number"
-                    step="0.01"
-                    value={formData.quantity_lbs}
-                    onChange={(e) =>
-                      setFormData({ ...formData, quantity_lbs: e.target.value })
-                    }
-                    placeholder="50"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Purchase Date</FieldLabel>
-                  <MerninInput
-                    id="purchase_date"
-                    type="date"
-                    value={formData.purchase_date}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        purchase_date: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-              <div>
-                <FieldLabel>Notes</FieldLabel>
-                <MerninTextarea
-                  id="notes"
-                  value={formData.notes}
-                  onChange={(e) =>
-                    setFormData({ ...formData, notes: e.target.value })
-                  }
-                  placeholder="Tasting notes, supplier info, etc."
-                  rows={3}
-                />
-              </div>
-            </div>
-
-            {/* Dialog footer */}
-            <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
-              <Btn
-                variant="outline"
-                onClick={() => {
-                  setIsAddDialogOpen(false);
-                  resetForm();
-                }}
-              >
-                Cancel
-              </Btn>
-              <Btn
-                onClick={handleAddOrEdit}
-                disabled={
-                  isSubmitting ||
-                  !formData.name ||
-                  !formData.origin ||
-                  !formData.price_per_lb ||
-                  (!editingCoffee && !formData.quantity_lbs)
-                }
-              >
-                {isSubmitting
-                  ? "Saving..."
-                  : editingCoffee
-                  ? "Save Changes"
-                  : "Add Coffee"}
-              </Btn>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <LotFormDialog
+          isAddDialogOpen={isAddDialogOpen}
+          setIsAddDialogOpen={setIsAddDialogOpen}
+          resetForm={resetForm}
+          editingCoffee={editingCoffee}
+          formData={formData}
+          setFormData={setFormData}
+          isSubmitting={isSubmitting}
+          handleAddOrEdit={handleAddOrEdit}
+        />
       </div>
 
       {/* Stat cards */}
@@ -617,166 +263,16 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
 
       {/* Inventory table */}
       <Panel title="Green Coffee" subtitle={`${filteredInventory.length} coffees`}>
-        {/* Desktop */}
-        <div className="hidden md:block -mx-5 -mb-5">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="border-b-[2px] border-dashed border-fog">
-                <th className="text-left px-5 py-2.5 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60">
-                  Coffee
-                </th>
-                <th className="text-left px-3 py-2.5 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60">
-                  Origin
-                </th>
-                <th className="text-left px-3 py-2.5 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60">
-                  Supplier
-                </th>
-                <th className="text-right px-3 py-2.5 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60">
-                  $/lb
-                </th>
-                <th className="text-right px-3 py-2.5 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60">
-                  Green
-                </th>
-                <th className="text-right px-3 py-2.5 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60">
-                  Roasted
-                </th>
-                <th className="text-right px-3 py-2.5 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60">
-                  Value
-                </th>
-                <th className="w-[100px]" />
-              </tr>
-            </thead>
-            <tbody>
-              {filteredInventory.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-5 py-10 text-center text-espresso/50 font-medium"
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <Warehouse size={28} strokeWidth={1.5} className="text-espresso/30" />
-                      {searchQuery
-                        ? "No coffees match your search."
-                        : "Nothing here yet. Add your first coffee to get started."}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                <>
-                  {filteredInventory.map((coffee, i) => {
-                    const greenLbs = gramsToLbs(coffee.current_green_quantity_g);
-                    const roastedLbs = gramsToLbs(coffee.roasted_stock_g || 0);
-                    const totalCoffeeValue = lotValue(coffee);
-                    const isLow = stockState(greenLbs) === "low";
-                    return (
-                      <tr
-                        key={coffee.id}
-                        data-testid="lot-row"
-                        data-lot-name={coffee.name}
-                        className={`border-b border-dashed border-fog/70 hover:bg-cream/60 transition-colors ${
-                          i === filteredInventory.length - 1
-                            ? "border-b-0"
-                            : ""
-                        }`}
-                      >
-                        <td className="px-5 py-3 font-bold text-espresso">
-                          {coffee.name}
-                        </td>
-                        <td className="px-3 py-3 text-espresso/70">
-                          {coffee.origin}
-                        </td>
-                        <td className="px-3 py-3 text-espresso/50">
-                          {coffee.supplier || "—"}
-                        </td>
-                        <td className="px-3 py-3 text-right font-bold text-espresso">
-                          ${coffee.price_per_lb.toFixed(2)}
-                        </td>
-                        <td className="px-3 py-3 text-right">
-                          <span
-                            data-testid="lot-green"
-                            className="font-bold text-espresso"
-                          >
-                            {greenLbs.toFixed(1)} lbs
-                          </span>
-                          {isLow && (
-                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full border-[2px] border-espresso bg-sun text-espresso text-[10px] font-extrabold uppercase tracking-[.06em]">
-                              Low
-                            </span>
-                          )}
-                        </td>
-                        <td
-                          data-testid="lot-roasted"
-                          className="px-3 py-3 text-right font-bold text-espresso"
-                        >
-                          {roastedLbs.toFixed(1)} lbs
-                        </td>
-                        <td
-                          data-testid="lot-value"
-                          className="px-3 py-3 text-right font-bold text-espresso"
-                        >
-                          ${totalCoffeeValue.toFixed(2)}
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => openAdjustDialog(coffee)}
-                              title="Adjust quantity"
-                              className="p-1.5 rounded-[8px] text-espresso/60 hover:text-espresso hover:bg-fog/50 transition-colors"
-                            >
-                              <Scale size={15} strokeWidth={2.2} />
-                            </button>
-                            <button
-                              onClick={() => openEditDialog(coffee)}
-                              title="Edit"
-                              className="p-1.5 rounded-[8px] text-espresso/60 hover:text-espresso hover:bg-fog/50 transition-colors"
-                            >
-                              <Edit size={15} strokeWidth={2.2} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(coffee.id)}
-                              title="Delete"
-                              className="p-1.5 rounded-[8px] text-espresso/60 hover:text-tomato hover:bg-tomato/10 transition-colors"
-                            >
-                              <Trash2 size={15} strokeWidth={2.2} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {/* Totals row */}
-                  <tr className="bg-cream border-t-[2px] border-espresso">
-                    <td
-                      colSpan={4}
-                      className="px-5 py-3 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60 text-right"
-                    >
-                      Totals
-                    </td>
-                    <td
-                      data-testid="total-green"
-                      className="px-3 py-3 text-right font-extrabold text-espresso"
-                    >
-                      {totalGreenLbs.toFixed(1)} lbs
-                    </td>
-                    <td
-                      data-testid="total-roasted"
-                      className="px-3 py-3 text-right font-extrabold text-espresso"
-                    >
-                      {totalRoastedLbs.toFixed(1)} lbs
-                    </td>
-                    <td
-                      data-testid="total-value"
-                      className="px-3 py-3 text-right font-extrabold text-espresso"
-                    >
-                      ${totalValue.toFixed(2)}
-                    </td>
-                    <td />
-                  </tr>
-                </>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <InventoryWorksheetTable
+          filteredInventory={filteredInventory}
+          searchQuery={searchQuery}
+          totalGreenLbs={totalGreenLbs}
+          totalRoastedLbs={totalRoastedLbs}
+          totalValue={totalValue}
+          openAdjustDialog={openAdjustDialog}
+          openEditDialog={openEditDialog}
+          handleDelete={handleDelete}
+        />
 
         {/* Mobile card layout */}
         <div className="md:hidden -mx-5 -mb-5 divide-y-[2px] divide-dashed divide-fog">
@@ -909,122 +405,16 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
       </Panel>
 
       {/* Adjust Quantity Dialog */}
-      <Dialog open={isAdjustDialogOpen} onOpenChange={setIsAdjustDialogOpen}>
-        <DialogContent data-testid="adjust-dialog" className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
-          <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
-            <DialogHeader>
-              <DialogTitle className="font-extrabold text-[15px] uppercase tracking-[.08em] text-espresso">
-                Adjust: {adjustingCoffee?.name}
-              </DialogTitle>
-            </DialogHeader>
-          </div>
-
-          <div className="px-6 py-5 space-y-4">
-            <div>
-              <FieldLabel>Adjustment Type</FieldLabel>
-              <Select
-                value={adjustmentData.change_type}
-                onValueChange={(value) =>
-                  setAdjustmentData({
-                    ...adjustmentData,
-                    change_type: value as typeof adjustmentData.change_type,
-                  })
-                }
-              >
-                <SelectTrigger className="border-[2.5px] border-espresso bg-cream rounded-[10px] shadow-[3px_3px_0_#1C0F05] focus:ring-0 focus:border-tomato">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manual_green_adjust">
-                    <div className="flex items-center gap-2">
-                      <Scale size={14} strokeWidth={2.2} className="text-espresso/60" />
-                      Manual Adjustment (+/-)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="roast_deduct">
-                    <div className="flex items-center gap-2">
-                      <TrendingDown size={14} strokeWidth={2.2} className="text-honey" />
-                      Roast (Deduct Stock)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="sale_deduct">
-                    <div className="flex items-center gap-2">
-                      <TrendingDown size={14} strokeWidth={2.2} className="text-tomato" />
-                      Sale (Deduct Stock)
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <FieldLabel>Quantity (lbs)</FieldLabel>
-              <MerninInput
-                id="adjust_quantity"
-                type="number"
-                step="0.01"
-                value={adjustmentData.quantity}
-                onChange={(e) =>
-                  setAdjustmentData({ ...adjustmentData, quantity: e.target.value })
-                }
-                placeholder="Enter amount"
-              />
-              {adjustmentData.quantity && (
-                <p className="mt-1.5 text-[11px] font-medium text-espresso/60">
-                  Current:{" "}
-                  {gramsToLbs(
-                    adjustingCoffee?.current_green_quantity_g || 0
-                  ).toFixed(1)}{" "}
-                  lbs →{" "}
-                  <span className="font-extrabold text-espresso">
-                    {adjustmentData.change_type === "manual_green_adjust"
-                      ? (
-                          gramsToLbs(
-                            adjustingCoffee?.current_green_quantity_g || 0
-                          ) + (parseFloat(adjustmentData.quantity) || 0)
-                        ).toFixed(1)
-                      : (
-                          gramsToLbs(
-                            adjustingCoffee?.current_green_quantity_g || 0
-                          ) - Math.abs(parseFloat(adjustmentData.quantity) || 0)
-                        ).toFixed(1)}{" "}
-                    lbs
-                  </span>{" "}
-                  after adjustment
-                </p>
-              )}
-            </div>
-
-            <div>
-              <FieldLabel>Notes (optional)</FieldLabel>
-              <MerninTextarea
-                id="adjust_notes"
-                value={adjustmentData.notes}
-                onChange={(e) =>
-                  setAdjustmentData({ ...adjustmentData, notes: e.target.value })
-                }
-                placeholder="Reason for adjustment..."
-                rows={2}
-              />
-            </div>
-          </div>
-
-          <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
-            <Btn
-              variant="outline"
-              onClick={() => setIsAdjustDialogOpen(false)}
-            >
-              Cancel
-            </Btn>
-            <Btn
-              onClick={handleAdjustQuantity}
-              disabled={isSubmitting || !adjustmentData.quantity}
-            >
-              {isSubmitting ? "Saving..." : "Apply Adjustment"}
-            </Btn>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Adjust Quantity Dialog */}
+      <AdjustStockDialog
+        isAdjustDialogOpen={isAdjustDialogOpen}
+        setIsAdjustDialogOpen={setIsAdjustDialogOpen}
+        adjustingCoffee={adjustingCoffee}
+        adjustmentData={adjustmentData}
+        setAdjustmentData={setAdjustmentData}
+        isSubmitting={isSubmitting}
+        handleAdjustQuantity={handleAdjustQuantity}
+      />
     </div>
   );
 }
