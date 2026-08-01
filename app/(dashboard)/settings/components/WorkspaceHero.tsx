@@ -102,7 +102,19 @@ export function WorkspaceHero({
           has no section for, and leaking a member count to a role with no team
           list is the gap criterion 18 asserts against. */}
       {canManage && (
-        <div style={{ marginTop: 22, overflowX: "auto", paddingBottom: 2 }}>
+        <div
+          style={{
+            marginTop: 22,
+            overflowX: "auto",
+            paddingBottom: 2,
+            /* min-width: 0 is what makes overflow-x actually clip. A flex item
+               defaults to min-width:auto — its content's width — so without this
+               the 760px strip below pushes the whole document wider than the
+               viewport instead of scrolling inside this box, and
+               tests/e2e/settings-layout.spec.ts fails at 375px. */
+            minWidth: 0,
+          }}
+        >
           {/* StatStrip is a row of flex:1 cells with no wrap of its own; below
               this width it crushes each label to about three characters, so it
               scrolls instead. */}

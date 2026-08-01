@@ -73,7 +73,7 @@ export default async function SettingsPage() {
        widget then intercepts the pointer events for whatever sits underneath.
        The general fix belongs in the dashboard layout; this keeps THIS page's
        actions clickable. */
-    <div className="flex flex-col min-h-full pb-28">
+    <div data-settings-page className="flex flex-col min-h-full pb-28">
       <div className="px-6 pt-6 space-y-4">
         <div>
           <h1
