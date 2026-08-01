@@ -1,4 +1,19 @@
 import { defineConfig } from '@playwright/test'
+import { loadEnvLocal } from './tests/e2e/support/env'
+
+// Before PORT is read below — this worktree's .env.local is its own config.
+loadEnvLocal()
+
+/**
+ * The dev-server port, overridable so two worktrees can run the suite at once.
+ *
+ * This repo now carries several concurrent worktrees, and `reuseExistingServer`
+ * below ADOPTS whatever is already on the port. With the port hard-coded, a run
+ * started in worktree A silently tests worktree B's code — the failures look
+ * like assertion bugs, not a wrong-server bug, because the page renders fine.
+ * Defaults to 3000, so nothing changes unless PORT is set.
+ */
+const PORT = process.env.PORT ?? '3000'
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -27,7 +42,7 @@ export default defineConfig({
   retries: 1,
 
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: `http://localhost:${PORT}`,
     storageState: 'tests/e2e/.auth/storageState.json',
   },
 
@@ -48,8 +63,8 @@ export default defineConfig({
     // node_modules/.bin/next directly, not `pnpm dev` — pnpm's deps-status check
     // runs an install on boot, which needs NODE_AUTH_TOKEN in the shell for the
     // private @merninos registry and fails the run when it is absent.
-    command: 'node_modules/.bin/next dev --port 3000',
-    url: 'http://localhost:3000/auth/login',
+    command: `node_modules/.bin/next dev --port ${PORT}`,
+    url: `http://localhost:${PORT}/auth/login`,
     reuseExistingServer: true,
     timeout: 180_000,
     env: {

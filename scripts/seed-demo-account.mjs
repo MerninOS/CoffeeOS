@@ -4,8 +4,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
-const DEMO_EMAIL = "demo@coffeeos.io";
-const DEMO_PASSWORD = "DemoCoffeeOS!2026";
+/**
+ * Resolved lazily, AFTER loadEnv() has read .env.local — a module-level const
+ * would be evaluated at import time, before the file is loaded, and would
+ * silently seed the shared account no matter what the worktree configured.
+ *
+ * Each worktree owns its own account because this script DELETES and reinserts
+ * the user's data wholesale; two worktrees sharing one account means every
+ * re-seed destroys the other's fixtures mid-run.
+ */
+const demoEmail = () => process.env.DEMO_EMAIL ?? "demo@coffeeos.io";
+const demoPassword = () => process.env.DEMO_PASSWORD ?? "DemoCoffeeOS!2026";
 
 function loadEnvFromFile(envPath) {
   if (!fs.existsSync(envPath)) return;
@@ -42,7 +51,7 @@ async function getOrCreateDemoUser(admin) {
     }
 
     const found = (data?.users || []).find(
-      (user) => user.email?.toLowerCase() === DEMO_EMAIL.toLowerCase()
+      (user) => user.email?.toLowerCase() === demoEmail().toLowerCase()
     );
     if (found) {
       userId = found.id;
@@ -55,8 +64,8 @@ async function getOrCreateDemoUser(admin) {
 
   if (!userId) {
     const { data, error } = await admin.auth.admin.createUser({
-      email: DEMO_EMAIL,
-      password: DEMO_PASSWORD,
+      email: demoEmail(),
+      password: demoPassword(),
       email_confirm: true,
       user_metadata: {
         first_name: "Demo",
@@ -80,8 +89,8 @@ async function getOrCreateDemoUser(admin) {
   }
 
   const { error: updateError } = await admin.auth.admin.updateUserById(userId, {
-    email: DEMO_EMAIL,
-    password: DEMO_PASSWORD,
+    email: demoEmail(),
+    password: demoPassword(),
     email_confirm: true,
     user_metadata: {
       first_name: "Demo",
@@ -186,7 +195,7 @@ async function seedDemoData(admin, ownerId) {
   const { error: profileError } = await admin.from("profiles").upsert(
     {
       id: ownerId,
-      email: DEMO_EMAIL,
+      email: demoEmail(),
       role: "owner",
       first_name: "Demo",
       last_name: "User",
@@ -997,8 +1006,8 @@ async function main() {
   await writeOrderIdFixture(admin, demoUserId);
 
   console.log("Demo account is ready.");
-  console.log(`Email: ${DEMO_EMAIL}`);
-  console.log(`Password: ${DEMO_PASSWORD}`);
+  console.log(`Email: ${demoEmail()}`);
+  console.log(`Password: ${demoPassword()}`);
 }
 
 /**
