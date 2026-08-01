@@ -28,6 +28,16 @@ export function Btn({
   href,
   target,
   rel,
+  // settings-client.tsx and team-management.tsx each had their own Btn. Merging
+  // them into one is the only place this extraction is not literally verbatim,
+  // so the merged version has to be the UNION: team-management's carried this
+  // rest spread, and dropping it silently swallowed the data-testid and
+  // aria-label on the cancel-invitation button.
+  //
+  // Silently is the operative word — the attributes vanish with no error, the
+  // button still renders identically, and the baselines still pass, because a
+  // missing testid moves no pixels. Only the Stage 0b capability test caught it.
+  ...rest
 }: {
   children: React.ReactNode;
   variant?: "primary" | "outline" | "ghost" | "danger";
@@ -40,7 +50,7 @@ export function Btn({
   href?: string;
   target?: string;
   rel?: string;
-}) {
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const base =
     "inline-flex items-center justify-center font-body font-extrabold uppercase tracking-widest transition-all duration-100 cursor-pointer disabled:opacity-50 disabled:pointer-events-none";
   const sizes = { sm: "text-[0.65rem] px-3 py-1.5 gap-1", md: "text-[0.7rem] px-4 py-2 gap-1.5" };
@@ -63,7 +73,7 @@ export function Btn({
     );
   }
   return (
-    <button type={type} disabled={disabled} onClick={onClick} className={cls}>
+    <button type={type} disabled={disabled} onClick={onClick} className={cls} {...rest}>
       {children}
     </button>
   );
