@@ -1,6 +1,7 @@
 import { chromium } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
+import { demoAccount } from './support/env'
 
 /**
  * Logs in once with the seeded demo account and saves the session, so specs
@@ -14,8 +15,7 @@ const AUTH_DIR = path.join(process.cwd(), 'tests/e2e/.auth')
 const STATE = path.join(AUTH_DIR, 'storageState.json')
 
 export default async function globalSetup() {
-  const email = process.env.DEMO_EMAIL ?? 'demo@coffeeos.io'
-  const password = process.env.DEMO_PASSWORD ?? 'DemoCoffeeOS!2026'
+  const { email, password } = demoAccount()
 
   mkdirSync(AUTH_DIR, { recursive: true })
 
@@ -23,7 +23,7 @@ export default async function globalSetup() {
   const page = await browser.newPage()
 
   try {
-    await page.goto('http://localhost:3000/auth/login')
+    await page.goto(`http://localhost:${process.env.PORT ?? '3000'}/auth/login`)
     await page.getByLabel(/email/i).fill(email)
     await page.getByLabel(/password/i).fill(password)
     await page.getByRole('button', { name: /sign in|log in|login/i }).click()
