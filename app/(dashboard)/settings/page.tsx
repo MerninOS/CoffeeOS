@@ -32,8 +32,13 @@ export default async function SettingsPage() {
   const ownerId = isOwner ? user.id : profile?.owner_id;
 
   // Get Shopify settings if owner or admin
+  /* Fetched for EVERY role, not just owner/admin. The hero states whether the
+     workspace can trade, and a roaster who is told "Not connected" about a store
+     that is connected-but-unbilled has been given a false answer to the one
+     question this page exists to answer. toShopifySettings() already reduces the
+     admin token to a boolean, so no credential reaches the client. */
   let shopifySettings = null;
-  if ((isOwner || isAdmin) && ownerId) {
+  if (ownerId) {
     const { data } = await supabase
       .from("shopify_settings")
       .select("*")
