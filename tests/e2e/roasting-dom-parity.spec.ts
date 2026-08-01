@@ -39,6 +39,12 @@ const normalize = (html: string) =>
     .replace(/radix-[^"'\s>]+/g, 'radix-ID')
     // Playwright/Next dev can vary trailing whitespace between text nodes
     .replace(/\s+$/gm, '')
+    // Rendered dates. scripts/seed-demo-account.mjs writes due dates RELATIVE to
+    // when it runs (`day(+3)`), so every re-seed shifts them and would otherwise
+    // require re-recording this baseline — a maintenance trap that ends with the
+    // check being deleted. Structure and every other value still compare exactly;
+    // only the date text is masked.
+    .replace(/\d{1,2}\/\d{1,2}\/\d{4}/g, 'M/D/YYYY')
 
 test.describe('roasting queue DOM parity', () => {
   test('the rendered queue DOM is byte-identical to the recorded baseline', async ({
