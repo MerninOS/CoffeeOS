@@ -143,7 +143,11 @@ const statValue = (page: Page) => page.getByTestId('stat-value')
 async function openInventory(page: Page) {
   await page.goto('/inventory')
   await expect(page).not.toHaveURL(/\/auth\//)
-  await expect(page.getByRole('heading', { name: /coffee inventory/i })).toBeVisible()
+  // Stage 4 renamed the page from "Coffee Inventory" to "Green inventory" per
+  // the approved design. This is a READINESS GUARD, not a behavioural
+  // assertion — the figure-delta assertions below are the contract and are
+  // deliberately untouched by the restyle.
+  await expect(page.getByRole('heading', { name: /green inventory/i })).toBeVisible()
 }
 
 /** Opens a lot's Adjust dialog by its row's scale button. */
@@ -220,8 +224,15 @@ test.describe('green inventory editing capabilities', () => {
     // The reason drives a SIGN INVERSION in the handler (`-Math.abs(qty)` for
     // anything that is not a manual adjust). Entering a positive 3 here and
     // expecting 7.0 lbs is the assertion that catches a rewrite dropping it.
-    await page.getByTestId('adjust-dialog').getByRole('combobox').click()
-    await page.getByRole('option', { name: /roast \(deduct stock\)/i }).click()
+    // Stage 4 swapped the Radix listbox for instrument's Select, which is a
+    // NATIVE <select> (the three reasons are plain text, so it is sufficient —
+    // /orders kept Radix only because its options needed icons). Native options
+    // cannot be clicked as `role=option`; selectOption is the equivalent. The
+    // assertion below is unchanged: a positive 3 must still come out as 7.0 lbs.
+    await page
+      .getByTestId('adjust-dialog')
+      .getByRole('combobox')
+      .selectOption('roast_deduct')
     await page.locator('#adjust_quantity').fill('3')
     await page.getByRole('button', { name: /apply adjustment/i }).click()
 
@@ -237,14 +248,22 @@ test.describe('green inventory editing capabilities', () => {
 
     const before = num(await statGreen(page).textContent())
 
-    // Playwright auto-DISMISSES dialogs, so without this handler window.confirm
-    // returns false and the delete never runs — the test would then pass only
-    // because the row it expected to survive did.
-    page.on('dialog', (d) => d.accept())
+    // Stage 4 replaced window.confirm with a Radix AlertDialog (spec Criterion
+    // 19), so the confirmation is now an in-page control rather than a native
+    // dialog. The native-dialog handler stays and is asserted NEVER to fire —
+    // if a confirm() came back, this would catch it.
+    const nativeDialogs: string[] = []
+    page.on('dialog', (d) => {
+      nativeDialogs.push(d.message())
+      return d.accept()
+    })
     await rowFor(page, name).getByTitle('Delete').click()
+    await expect(page.getByTestId('delete-dialog')).toBeVisible()
+    await page.getByRole('button', { name: /^delete lot$/i }).click()
 
     await expect(rowFor(page, name)).toHaveCount(0)
     await expect(statGreen(page)).toHaveText(`${(before - 10).toFixed(1)} lbs`)
+    expect(nativeDialogs, 'window.confirm must not be used any more').toEqual([])
   })
 
   test('deducting more than the lot holds is refused and writes nothing', async ({ page }) => {
@@ -252,19 +271,30 @@ test.describe('green inventory editing capabilities', () => {
     const lotId = await makeLot(name, 4, 10)
     await openInventory(page)
 
-    const messages: string[] = []
+    // Stage 4 moved server errors OUT of window.alert and into an InlineBanner
+    // inside the open dialog (spec Criterion 18), so the refusal is now asserted
+    // where the operator actually sees it. window.alert is still watched and
+    // asserted never to fire.
+    const nativeDialogs: string[] = []
     page.on('dialog', (d) => {
-      messages.push(d.message())
+      nativeDialogs.push(d.message())
       return d.accept()
     })
 
     await openAdjust(page, name)
-    await page.getByTestId('adjust-dialog').getByRole('combobox').click()
-    await page.getByRole('option', { name: /roast \(deduct stock\)/i }).click()
+    await page
+      .getByTestId('adjust-dialog')
+      .getByRole('combobox')
+      .selectOption('roast_deduct')
     await page.locator('#adjust_quantity').fill('999')
     await page.getByRole('button', { name: /apply adjustment/i }).click()
 
-    await expect.poll(() => messages.join(' ')).toMatch(/insufficient inventory/i)
+    // The dialog stays open, carrying the reason.
+    await expect(page.getByTestId('adjust-dialog')).toBeVisible()
+    await expect(page.getByTestId('adjust-dialog')).toContainText(
+      /insufficient inventory|not enough green/i,
+    )
+    expect(nativeDialogs, 'window.alert must not be used any more').toEqual([])
 
     // The figure must be untouched...
     await openInventory(page)

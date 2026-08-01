@@ -8,367 +8,445 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Plus, Scale, TrendingDown } from "lucide-react";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button, Field, InlineBanner, Input, Select, Textarea } from "@merninos/ui/instrument";
+import { Plus } from "lucide-react";
+import { mono, overline, sans } from "@/lib/instrument/tokens";
 import { gramsToLbs } from "@/lib/inventory/units";
-import { Btn, FieldLabel, MerninInput, MerninTextarea } from "./primitives";
 import type { CoffeeInventory } from "./types";
 
 /**
- * The add/edit and adjust dialogs, moved verbatim out of inventory-client.tsx
- * (CoffeeOS#72 Stage 3).
+ * The green-inventory dialogs, on instrument (CoffeeOS#72 Stage 4).
  *
- * EXTRACTION ONLY — the markup is byte-identical and /inventory's baselines do
- * not move. As with the worksheet table, the props keep the CALLER'S names so
- * the moved JSX needed no edits; Stage 4 renames them when it rewrites this.
+ * `data-surface="app"` ON EVERY PORTALLED CONTENT ROOT IS LOAD-BEARING, not
+ * defensive. Radix portals these to <body>, i.e. OUTSIDE the AppShell subtree
+ * that scopes the instrument token layer — so without it every `var(--token)`
+ * inside resolves to nothing and the dialog renders unstyled. It cost real time
+ * to find on /orders, /products asserts it, and spec Criterion 4 asserts it here.
  *
- * RADIX STAYS in Stage 4, rather than becoming instrument's Modal: that Modal
- * renders no `role="dialog"` and could not be driven by the capability tests
- * these extractions are proved against. `/products` documented the same call at
- * products/components/ProductDialogs.tsx. What Stage 4 must add is
- * `data-surface="app"` on each DialogContent — Radix portals these to <body>,
- * outside the subtree that scopes the instrument tokens, so without it every
- * var(--token) inside resolves to nothing.
+ * RADIX IS KEPT rather than instrument's `Modal`: that Modal renders no
+ * `role="dialog"`, so it cannot be driven from a test — and these dialogs are
+ * exactly what the Stage 1 capability tests drive to prove the conversion
+ * preserved behaviour. Same call /products documented.
+ *
+ * instrument's `Select` IS used here, unlike on /orders. It is a native
+ * <select>, which failed there because the options needed icons and two-column
+ * layout; the three adjustment reasons are plain text, so the native control is
+ * sufficient and one Radix dependency drops.
  */
 
-export function LotFormDialog({
-  isAddDialogOpen,
-  setIsAddDialogOpen,
-  resetForm,
-  editingCoffee,
-  formData,
-  setFormData,
-  isSubmitting,
-  handleAddOrEdit,
-}: {
-  isAddDialogOpen: boolean;
-  setIsAddDialogOpen: (open: boolean) => void;
-  resetForm: () => void;
-  editingCoffee: CoffeeInventory | null;
-  formData: {
-    name: string;
-    origin: string;
-    lot_code: string;
-    supplier: string;
-    price_per_lb: string;
-    quantity_lbs: string;
-    purchase_date: string;
-    notes: string;
-  };
-  setFormData: (data: LotFormDialogProps["formData"]) => void;
-  isSubmitting: boolean;
-  handleAddOrEdit: () => void;
-}) {
-  return (
-        <Dialog
-          open={isAddDialogOpen}
-          onOpenChange={(open) => {
-            setIsAddDialogOpen(open);
-            if (!open) resetForm();
-          }}
-        >
-          <DialogTrigger asChild>
-            <Btn>
-              <Plus size={14} strokeWidth={2.5} className="mr-1.5" />
-              Add Coffee
-            </Btn>
-          </DialogTrigger>
+const PANEL: React.CSSProperties = {
+  background: "var(--surface)",
+  border: "1px solid var(--hairline)",
+  borderRadius: "var(--r-lg)",
+  boxShadow: "var(--shadow-modal)",
+  padding: 0,
+  overflow: "hidden",
+  gap: 0,
+};
 
-          <DialogContent data-testid="lot-form-dialog" className="max-w-2xl p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
-            {/* Dialog header */}
-            <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
-              <DialogHeader>
-                <DialogTitle className="font-extrabold text-[15px] uppercase tracking-[.08em] text-espresso">
-                  {editingCoffee ? "Edit Coffee" : "Add New Coffee"}
-                </DialogTitle>
-              </DialogHeader>
-            </div>
+const HEAD: React.CSSProperties = {
+  padding: "var(--space-5) var(--space-6)",
+  borderBottom: "1px solid var(--hairline)",
+  background: "var(--surface-sunken)",
+};
 
-            {/* Dialog body */}
-            <div className="px-6 py-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <FieldLabel>Name *</FieldLabel>
-                  <MerninInput
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    placeholder="Ethiopia Yirgacheffe"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Origin *</FieldLabel>
-                  <MerninInput
-                    id="origin"
-                    value={formData.origin}
-                    onChange={(e) =>
-                      setFormData({ ...formData, origin: e.target.value })
-                    }
-                    placeholder="Ethiopia"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <FieldLabel>Lot Code</FieldLabel>
-                  <MerninInput
-                    id="lot_code"
-                    value={formData.lot_code}
-                    onChange={(e) =>
-                      setFormData({ ...formData, lot_code: e.target.value })
-                    }
-                    placeholder="12345"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Supplier</FieldLabel>
-                  <MerninInput
-                    id="supplier"
-                    value={formData.supplier}
-                    onChange={(e) =>
-                      setFormData({ ...formData, supplier: e.target.value })
-                    }
-                    placeholder="Supplier Name"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <FieldLabel>Price per lb ($) *</FieldLabel>
-                  <MerninInput
-                    id="price_per_lb"
-                    type="number"
-                    step="0.01"
-                    value={formData.price_per_lb}
-                    onChange={(e) =>
-                      setFormData({ ...formData, price_per_lb: e.target.value })
-                    }
-                    placeholder="6.50"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Initial Qty (lbs) *</FieldLabel>
-                  <MerninInput
-                    id="quantity_lbs"
-                    type="number"
-                    step="0.01"
-                    value={formData.quantity_lbs}
-                    onChange={(e) =>
-                      setFormData({ ...formData, quantity_lbs: e.target.value })
-                    }
-                    placeholder="50"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Purchase Date</FieldLabel>
-                  <MerninInput
-                    id="purchase_date"
-                    type="date"
-                    value={formData.purchase_date}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        purchase_date: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-              <div>
-                <FieldLabel>Notes</FieldLabel>
-                <MerninTextarea
-                  id="notes"
-                  value={formData.notes}
-                  onChange={(e) =>
-                    setFormData({ ...formData, notes: e.target.value })
-                  }
-                  placeholder="Tasting notes, supplier info, etc."
-                  rows={3}
-                />
-              </div>
-            </div>
+const BODY: React.CSSProperties = {
+  padding: "var(--space-5) var(--space-6)",
+  display: "flex",
+  flexDirection: "column",
+  gap: "var(--space-4)",
+};
 
-            {/* Dialog footer */}
-            <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
-              <Btn
-                variant="outline"
-                onClick={() => {
-                  setIsAddDialogOpen(false);
-                  resetForm();
-                }}
-              >
-                Cancel
-              </Btn>
-              <Btn
-                onClick={handleAddOrEdit}
-                disabled={
-                  isSubmitting ||
-                  !formData.name ||
-                  !formData.origin ||
-                  !formData.price_per_lb ||
-                  (!editingCoffee && !formData.quantity_lbs)
-                }
-              >
-                {isSubmitting
-                  ? "Saving..."
-                  : editingCoffee
-                  ? "Save Changes"
-                  : "Add Coffee"}
-              </Btn>
-            </div>
-          </DialogContent>
-        </Dialog>
-  );
+const FOOT: React.CSSProperties = {
+  padding: "var(--space-4) var(--space-6)",
+  borderTop: "1px solid var(--hairline)",
+  background: "var(--surface-sunken)",
+  display: "flex",
+  gap: 8,
+  justifyContent: "flex-end",
+};
+
+const TITLE: React.CSSProperties = {
+  fontFamily: "var(--font-display)",
+  fontVariationSettings: "var(--display-settings)",
+  fontWeight: "var(--display-weight)" as unknown as number,
+  letterSpacing: "var(--display-tracking)",
+  fontSize: "var(--fs-title)",
+  textTransform: "uppercase",
+  color: "var(--ink)",
+};
+
+export interface LotFormValues {
+  name: string;
+  origin: string;
+  lot_code: string;
+  supplier: string;
+  price_per_lb: string;
+  quantity_lbs: string;
+  purchase_date: string;
+  notes: string;
 }
 
-type LotFormDialogProps = Parameters<typeof LotFormDialog>[0];
-
-export function AdjustStockDialog({
-  isAdjustDialogOpen,
-  setIsAdjustDialogOpen,
-  adjustingCoffee,
-  adjustmentData,
-  setAdjustmentData,
+export function LotFormDialog({
+  open,
+  onOpenChange,
+  editingCoffee,
+  values,
+  onChange,
+  error,
   isSubmitting,
-  handleAdjustQuantity,
+  onSubmit,
 }: {
-  isAdjustDialogOpen: boolean;
-  setIsAdjustDialogOpen: (open: boolean) => void;
-  adjustingCoffee: CoffeeInventory | null;
-  adjustmentData: {
-    change_type: "manual_green_adjust" | "roast_deduct" | "sale_deduct";
-    quantity: string;
-    notes: string;
-  };
-  setAdjustmentData: (data: AdjustStockDialogProps["adjustmentData"]) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  editingCoffee: CoffeeInventory | null;
+  values: LotFormValues;
+  onChange: (next: LotFormValues) => void;
+  error: string | null;
   isSubmitting: boolean;
-  handleAdjustQuantity: () => void;
+  onSubmit: () => void;
 }) {
+  const set = (patch: Partial<LotFormValues>) => onChange({ ...values, ...patch });
+  const editing = !!editingCoffee;
+
   return (
-      <Dialog open={isAdjustDialogOpen} onOpenChange={setIsAdjustDialogOpen}>
-        <DialogContent data-testid="adjust-dialog" className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
-          <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
-            <DialogHeader>
-              <DialogTitle className="font-extrabold text-[15px] uppercase tracking-[.08em] text-espresso">
-                Adjust: {adjustingCoffee?.name}
-              </DialogTitle>
-            </DialogHeader>
-          </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        {/* Primary action fills `--action` (ink), never `--brand`. Red is the
+            live register on this system and never fills a control. */}
+        <Button variant="primary" iconLeft={<Plus size={14} strokeWidth={1.5} />}>
+          Add coffee
+        </Button>
+      </DialogTrigger>
+      <DialogContent
+        data-surface="app"
+        data-testid="lot-form-dialog"
+        style={{ ...PANEL, maxWidth: 680 }}
+      >
+        <DialogHeader style={HEAD}>
+          <DialogTitle style={TITLE}>{editing ? "Edit lot" : "Add lot"}</DialogTitle>
+        </DialogHeader>
 
-          <div className="px-6 py-5 space-y-4">
-            <div>
-              <FieldLabel>Adjustment Type</FieldLabel>
-              <Select
-                value={adjustmentData.change_type}
-                onValueChange={(value) =>
-                  setAdjustmentData({
-                    ...adjustmentData,
-                    change_type: value as typeof adjustmentData.change_type,
-                  })
-                }
-              >
-                <SelectTrigger className="border-[2.5px] border-espresso bg-cream rounded-[10px] shadow-[3px_3px_0_#1C0F05] focus:ring-0 focus:border-tomato">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manual_green_adjust">
-                    <div className="flex items-center gap-2">
-                      <Scale size={14} strokeWidth={2.2} className="text-espresso/60" />
-                      Manual Adjustment (+/-)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="roast_deduct">
-                    <div className="flex items-center gap-2">
-                      <TrendingDown size={14} strokeWidth={2.2} className="text-honey" />
-                      Roast (Deduct Stock)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="sale_deduct">
-                    <div className="flex items-center gap-2">
-                      <TrendingDown size={14} strokeWidth={2.2} className="text-tomato" />
-                      Sale (Deduct Stock)
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <div style={BODY}>
+          {/* Server errors render HERE, in the open dialog with the operator's
+              input intact — not in a window.alert that discards the context
+              (Criterion 18). */}
+          {error && <InlineBanner tone="danger" title={error} />}
 
-            <div>
-              <FieldLabel>Quantity (lbs)</FieldLabel>
-              <MerninInput
-                id="adjust_quantity"
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Name" required>
+              <Input
+                id="name"
+                value={values.name}
+                onChange={(e) => set({ name: e.target.value })}
+                placeholder="Ethiopia Yirgacheffe"
+              />
+            </Field>
+            <Field label="Origin" required>
+              <Input
+                id="origin"
+                value={values.origin}
+                onChange={(e) => set({ origin: e.target.value })}
+                placeholder="Ethiopia"
+              />
+            </Field>
+            <Field label="Lot code" help="Must be unique across green inventory.">
+              <Input
+                id="lot_code"
+                mono
+                value={values.lot_code}
+                onChange={(e) => set({ lot_code: e.target.value })}
+                placeholder="LOT-2416"
+              />
+            </Field>
+            <Field label="Supplier">
+              <Input
+                id="supplier"
+                value={values.supplier}
+                onChange={(e) => set({ supplier: e.target.value })}
+                placeholder="Cafe Imports"
+              />
+            </Field>
+            <Field label="Cost" required help="Per pound.">
+              <Input
+                id="price_per_lb"
+                mono
                 type="number"
                 step="0.01"
-                value={adjustmentData.quantity}
-                onChange={(e) =>
-                  setAdjustmentData({ ...adjustmentData, quantity: e.target.value })
-                }
-                placeholder="Enter amount"
+                value={values.price_per_lb}
+                onChange={(e) => set({ price_per_lb: e.target.value })}
+                placeholder="6.50"
               />
-              {adjustmentData.quantity && (
-                <p className="mt-1.5 text-[11px] font-medium text-espresso/60">
-                  Current:{" "}
-                  {gramsToLbs(
-                    adjustingCoffee?.current_green_quantity_g || 0
-                  ).toFixed(1)}{" "}
-                  lbs →{" "}
-                  <span className="font-extrabold text-espresso">
-                    {adjustmentData.change_type === "manual_green_adjust"
-                      ? (
-                          gramsToLbs(
-                            adjustingCoffee?.current_green_quantity_g || 0
-                          ) + (parseFloat(adjustmentData.quantity) || 0)
-                        ).toFixed(1)
-                      : (
-                          gramsToLbs(
-                            adjustingCoffee?.current_green_quantity_g || 0
-                          ) - Math.abs(parseFloat(adjustmentData.quantity) || 0)
-                        ).toFixed(1)}{" "}
-                    lbs
-                  </span>{" "}
-                  after adjustment
-                </p>
-              )}
-            </div>
-
-            <div>
-              <FieldLabel>Notes (optional)</FieldLabel>
-              <MerninTextarea
-                id="adjust_notes"
-                value={adjustmentData.notes}
-                onChange={(e) =>
-                  setAdjustmentData({ ...adjustmentData, notes: e.target.value })
-                }
-                placeholder="Reason for adjustment..."
-                rows={2}
-              />
-            </div>
+            </Field>
+            {/* Quantity is create-only: on an edit the figure is owned by the
+                adjustment log, and letting it be typed over here would silently
+                bypass the change row that explains where the coffee went. That
+                is the existing behaviour, preserved. */}
+            {!editing && (
+              <Field label="Quantity" required help="Pounds received.">
+                <Input
+                  id="quantity_lbs"
+                  mono
+                  type="number"
+                  step="0.01"
+                  value={values.quantity_lbs}
+                  onChange={(e) => set({ quantity_lbs: e.target.value })}
+                  placeholder="50"
+                />
+              </Field>
+            )}
+            {!editing && (
+              <Field label="Purchased">
+                <Input
+                  id="purchase_date"
+                  mono
+                  type="date"
+                  value={values.purchase_date}
+                  onChange={(e) => set({ purchase_date: e.target.value })}
+                />
+              </Field>
+            )}
           </div>
 
-          <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
-            <Btn
-              variant="outline"
-              onClick={() => setIsAdjustDialogOpen(false)}
-            >
-              Cancel
-            </Btn>
-            <Btn
-              onClick={handleAdjustQuantity}
-              disabled={isSubmitting || !adjustmentData.quantity}
-            >
-              {isSubmitting ? "Saving..." : "Apply Adjustment"}
-            </Btn>
-          </div>
-        </DialogContent>
-      </Dialog>
+          <Field label="Notes" optional>
+            <Textarea
+              id="notes"
+              rows={3}
+              value={values.notes}
+              onChange={(e) => set({ notes: e.target.value })}
+              placeholder="Cupping notes, contract, supplier detail"
+            />
+          </Field>
+        </div>
+
+        <div style={FOOT}>
+          <Button variant="secondary" size="sm" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={onSubmit}
+            disabled={
+              isSubmitting ||
+              !values.name ||
+              !values.origin ||
+              !values.price_per_lb ||
+              (!editing && !values.quantity_lbs)
+            }
+          >
+            {isSubmitting ? "Saving…" : editing ? "Save changes" : "Add coffee"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-type AdjustStockDialogProps = Parameters<typeof AdjustStockDialog>[0];
+export interface AdjustmentValues {
+  change_type: "manual_green_adjust" | "roast_deduct" | "sale_deduct";
+  quantity: string;
+  notes: string;
+}
+
+export function AdjustStockDialog({
+  open,
+  onOpenChange,
+  coffee,
+  values,
+  onChange,
+  error,
+  isSubmitting,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  coffee: CoffeeInventory | null;
+  values: AdjustmentValues;
+  onChange: (next: AdjustmentValues) => void;
+  error: string | null;
+  isSubmitting: boolean;
+  onSubmit: () => void;
+}) {
+  const currentLbs = gramsToLbs(coffee?.current_green_quantity_g || 0);
+  const entered = parseFloat(values.quantity) || 0;
+  /* The sign inversion is the behaviour under test: anything that is not a
+     manual adjust deducts, whatever sign the operator typed. */
+  const afterLbs =
+    values.change_type === "manual_green_adjust"
+      ? currentLbs + entered
+      : currentLbs - Math.abs(entered);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        data-surface="app"
+        data-testid="adjust-dialog"
+        style={{ ...PANEL, maxWidth: 460 }}
+      >
+        <DialogHeader style={HEAD}>
+          <DialogTitle style={TITLE}>Adjust {coffee?.name}</DialogTitle>
+        </DialogHeader>
+
+        <div style={BODY}>
+          {error && <InlineBanner tone="danger" title={error} />}
+
+          <Field label="Reason">
+            <Select
+              value={values.change_type}
+              onChange={(e) =>
+                onChange({
+                  ...values,
+                  change_type: e.target.value as AdjustmentValues["change_type"],
+                })
+              }
+            >
+              <option value="manual_green_adjust">Manual adjust (+/−)</option>
+              <option value="roast_deduct">Roast — deduct green</option>
+              <option value="sale_deduct">Sale — deduct green</option>
+            </Select>
+          </Field>
+
+          <Field
+            label="Quantity"
+            help="Pounds. Deductions are applied as a negative change."
+          >
+            <Input
+              id="adjust_quantity"
+              mono
+              type="number"
+              step="0.01"
+              value={values.quantity}
+              onChange={(e) => onChange({ ...values, quantity: e.target.value })}
+              placeholder="0.0"
+            />
+          </Field>
+
+          {coffee && values.quantity !== "" && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                gap: 10,
+                padding: "12px 14px",
+                background: "var(--surface-sunken)",
+                borderRadius: "var(--r-md)",
+              }}
+            >
+              <span style={{ ...mono, fontSize: "var(--fs-data)", color: "var(--ink-muted)" }}>
+                {currentLbs.toFixed(1)} lbs
+              </span>
+              <span style={{ color: "var(--ink-subtle)" }}>→</span>
+              <span
+                style={{
+                  ...mono,
+                  fontSize: "var(--fs-h3)",
+                  color: afterLbs < 0 ? "var(--danger)" : "var(--ink)",
+                }}
+              >
+                {Math.max(afterLbs, 0).toFixed(1)} lbs
+              </span>
+              <span style={{ ...overline, marginLeft: "auto" }}>After</span>
+            </div>
+          )}
+
+          {/* Told BEFORE submitting, not after the server refuses. The server
+              guard stays authoritative — this only saves a round trip. */}
+          {afterLbs < 0 && (
+            <InlineBanner tone="danger" title="Not enough green in this lot.">
+              {`Deducting ${values.quantity} lb would leave ${afterLbs.toFixed(1)} lb. `}
+              Reduce the quantity or reconcile the lot first.
+            </InlineBanner>
+          )}
+
+          <Field label="Notes" optional>
+            <Textarea
+              id="adjust_notes"
+              rows={2}
+              value={values.notes}
+              onChange={(e) => onChange({ ...values, notes: e.target.value })}
+              placeholder="Why this changed"
+            />
+          </Field>
+        </div>
+
+        <div style={FOOT}>
+          <Button variant="secondary" size="sm" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={onSubmit}
+            disabled={isSubmitting || !values.quantity}
+          >
+            {isSubmitting ? "Saving…" : "Apply adjustment"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Deletion confirmed in a dialog rather than `window.confirm` (Criterion 19).
+ *
+ * Destructive fill is `--danger`, NOT `--brand`: brand red is the live register
+ * and never fills a control, and `--danger` is deliberately darker and
+ * desaturated so the two do not read as the same signal.
+ */
+export function DeleteLotDialog({
+  open,
+  onOpenChange,
+  coffee,
+  isDeleting,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  coffee: CoffeeInventory | null;
+  isDeleting: boolean;
+  onConfirm: () => void;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent data-surface="app" data-testid="delete-dialog" style={PANEL}>
+        <AlertDialogHeader style={HEAD}>
+          <AlertDialogTitle style={TITLE}>Delete lot</AlertDialogTitle>
+          <AlertDialogDescription
+            style={{
+              ...sans,
+              fontSize: "var(--fs-caption)",
+              color: "var(--ink-muted)",
+              marginTop: 4,
+            }}
+          >
+            {coffee?.name} and its movement history go with it. This can&apos;t be
+            undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter style={FOOT}>
+          <AlertDialogCancel disabled={isDeleting} asChild>
+            <Button variant="secondary" size="sm">
+              Cancel
+            </Button>
+          </AlertDialogCancel>
+          <AlertDialogAction disabled={isDeleting} onClick={onConfirm} asChild>
+            <Button variant="destructive" size="sm">
+              {isDeleting ? "Deleting…" : "Delete lot"}
+            </Button>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
