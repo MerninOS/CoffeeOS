@@ -200,17 +200,22 @@ function StatCard({
   label,
   value,
   sub,
+  testId,
 }: {
   label: string;
   value: string;
   sub?: string;
+  testId?: string;
 }) {
   return (
     <div className="bg-chalk border-[3px] border-espresso rounded-[14px] shadow-flat-sm px-5 py-4 flex flex-col gap-1">
       <div className="text-[11px] font-extrabold uppercase tracking-[.1em] text-espresso/60">
         {label}
       </div>
-      <div className="text-[26px] font-extrabold text-espresso leading-none">
+      <div
+        data-testid={testId}
+        className="text-[26px] font-extrabold text-espresso leading-none"
+      >
         {value}
       </div>
       {sub && (
@@ -432,7 +437,7 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
             </Btn>
           </DialogTrigger>
 
-          <DialogContent className="max-w-2xl p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
+          <DialogContent data-testid="lot-form-dialog" className="max-w-2xl p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
             {/* Dialog header */}
             <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
               <DialogHeader>
@@ -586,15 +591,18 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
           label="Total Green Stock"
           value={`${totalGreenLbs.toFixed(1)} lbs`}
           sub={`${inventory.length} coffees tracked`}
+          testId="stat-green"
         />
         <StatCard
           label="Total Roasted Stock"
           value={`${totalRoastedLbs.toFixed(1)} lbs`}
+          testId="stat-roasted"
         />
         <StatCard
           label="Total Inventory Value"
           value={`$${totalValue.toFixed(2)}`}
           sub="Green coffee at cost"
+          testId="stat-value"
         />
       </div>
 
@@ -670,6 +678,8 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
                     return (
                       <tr
                         key={coffee.id}
+                        data-testid="lot-row"
+                        data-lot-name={coffee.name}
                         className={`border-b border-dashed border-fog/70 hover:bg-cream/60 transition-colors ${
                           i === filteredInventory.length - 1
                             ? "border-b-0"
@@ -689,7 +699,10 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
                           ${coffee.price_per_lb.toFixed(2)}
                         </td>
                         <td className="px-3 py-3 text-right">
-                          <span className="font-bold text-espresso">
+                          <span
+                            data-testid="lot-green"
+                            className="font-bold text-espresso"
+                          >
                             {greenLbs.toFixed(1)} lbs
                           </span>
                           {isLow && (
@@ -698,10 +711,16 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-3 text-right font-bold text-espresso">
+                        <td
+                          data-testid="lot-roasted"
+                          className="px-3 py-3 text-right font-bold text-espresso"
+                        >
                           {roastedLbs.toFixed(1)} lbs
                         </td>
-                        <td className="px-3 py-3 text-right font-bold text-espresso">
+                        <td
+                          data-testid="lot-value"
+                          className="px-3 py-3 text-right font-bold text-espresso"
+                        >
                           ${totalCoffeeValue.toFixed(2)}
                         </td>
                         <td className="px-3 py-3">
@@ -740,13 +759,22 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
                     >
                       Totals
                     </td>
-                    <td className="px-3 py-3 text-right font-extrabold text-espresso">
+                    <td
+                      data-testid="total-green"
+                      className="px-3 py-3 text-right font-extrabold text-espresso"
+                    >
                       {totalGreenLbs.toFixed(1)} lbs
                     </td>
-                    <td className="px-3 py-3 text-right font-extrabold text-espresso">
+                    <td
+                      data-testid="total-roasted"
+                      className="px-3 py-3 text-right font-extrabold text-espresso"
+                    >
                       {totalRoastedLbs.toFixed(1)} lbs
                     </td>
-                    <td className="px-3 py-3 text-right font-extrabold text-espresso">
+                    <td
+                      data-testid="total-value"
+                      className="px-3 py-3 text-right font-extrabold text-espresso"
+                    >
                       ${totalValue.toFixed(2)}
                     </td>
                     <td />
@@ -889,7 +917,7 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
 
       {/* Adjust Quantity Dialog */}
       <Dialog open={isAdjustDialogOpen} onOpenChange={setIsAdjustDialogOpen}>
-        <DialogContent className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
+        <DialogContent data-testid="adjust-dialog" className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
           <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
             <DialogHeader>
               <DialogTitle className="font-extrabold text-[15px] uppercase tracking-[.08em] text-espresso">
