@@ -4,7 +4,9 @@ import React, { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { updateProfile } from "./actions";
 import { shopifyErrorMessage } from "@/lib/settings/errors";
+import { isBillingActive as isBillingActiveFor, isConnected } from "@/lib/settings/status";
 import { WorkspaceHero } from "./components/WorkspaceHero";
+import type { ShopifySettings } from "./components/types";
 import { ProfileSection } from "./components/ProfileSection";
 import { ShopifySection } from "./components/ShopifySection";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
@@ -19,18 +21,7 @@ interface SettingsClientProps {
   isOwner: boolean;
   memberCount: number;
   invitedCount: number;
-  shopifySettings: {
-    store_domain: string;
-    shop_name?: string;
-    connected_via_oauth?: boolean;
-    oauth_scope?: string;
-    has_storefront_token?: boolean;
-    has_admin_credentials?: boolean;
-    billing_status?: string | null;
-    billing_plan_name?: string | null;
-    billing_current_period_end?: string | null;
-    billing_test?: boolean | null;
-  } | null;
+  shopifySettings: ShopifySettings | null;
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -46,11 +37,13 @@ export function SettingsClient({ user, userRole, isOwner, shopifySettings, membe
   const hasAutoCheckedBillingRef = useRef(false);
 
   const searchParams = useSearchParams();
-  const isShopifyConnected = !!(shopifySettings?.connected_via_oauth && shopifySettings?.has_admin_credentials);
-  const isBillingActive = shopifySettings?.billing_status === "ACTIVE";
-  const billingReturnDate = shopifySettings?.billing_current_period_end
-    ? new Date(shopifySettings.billing_current_period_end).toLocaleDateString()
-    : null;
+  /* Both come from lib/settings/status.ts rather than being re-derived here.
+     tests/unit/settings-tokens.spec.ts bans the three underlying column names
+     from this whole directory, so there is exactly one definition of "connected"
+     and one of "billed" — the split-brain CoffeeOS#100 closed on /orders was a
+     second copy of a rule, not a wrong one. */
+  const isShopifyConnected = isConnected(shopifySettings);
+  const isBillingActive = isBillingActiveFor(shopifySettings);
 
   useEffect(() => {
     const shopifyStatus = searchParams.get("shopify");
@@ -169,9 +162,6 @@ export function SettingsClient({ user, userRole, isOwner, shopifySettings, membe
         {canManageShopify && (
           <ShopifySection
             shopifySettings={shopifySettings}
-            isShopifyConnected={isShopifyConnected}
-            isBillingActive={isBillingActive}
-            billingReturnDate={billingReturnDate}
             storeDomain={storeDomain}
             setStoreDomain={setStoreDomain}
             isConnecting={isConnecting}

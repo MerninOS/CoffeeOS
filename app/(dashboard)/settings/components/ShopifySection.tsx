@@ -1,32 +1,39 @@
 "use client";
 
 import React from "react";
-import { ExternalLink, Loader2, Store } from "lucide-react";
+import { Badge, Button, Input } from "@merninos/ui/instrument";
+import { CreditCard, ExternalLink, Loader2, Store } from "lucide-react";
+import { isBillingActive, isConnected } from "@/lib/settings/status";
 import { DisconnectStoreDialog } from "./SettingsDialogs";
-import { Btn, FieldLabel, InfoNote, MerninInput, PanelHeader, SectionPanel, StatusPill } from "./LoudPrimitives";
+import { Row } from "./Row";
+import { Section } from "./Section";
+import { mono, sans } from "./tokens";
 import type { ShopifySettings } from "./types";
 
 /**
- * The Shopify connection panel. Moved out of settings-client.tsx verbatim
- * (CoffeeOS#74 Stage A) — byte-identical markup, so the baselines can prove the
- * extraction changed nothing.
+ * The Shopify connection, as worksheet rows.
+ *
+ * WHAT WENT AWAY. The loud version nested three deep — a bordered SectionPanel,
+ * a bordered store-info box inside it, and three bordered InfoNotes inside that
+ * — which is the pattern the Instrument layout rule forbids outright. The notes
+ * are gone rather than restyled: two were permanent documentation competing with
+ * live state. The connected-via-app note became the section meta, the billing
+ * note became the Billing row, and the protected-customer-data caveat became
+ * help text under the scopes it is actually about.
+ *
+ * WHAT MOVED. There is no trailing "Actions" row. Disconnect sits on the Store
+ * row and the billing button on the Billing row, because those are the rows
+ * whose state they change — the same principle /orders/[id] used when it stopped
+ * putting the answer 500px below the question. "Refresh billing status" is not
+ * here at all: it belongs to the hero's own failure, and repeating it would put
+ * the same button on screen twice.
  *
  * WHAT DELIBERATELY DID NOT MOVE: the auto-billing-check effect and its
- * `hasAutoCheckedBillingRef`. That guard is per-mount, and this component
- * remounts whenever `canManageShopify` flips or the connection state changes —
- * which would re-arm it and fire `location.href` again. It stays in
- * settings-client.tsx, which mounts once. tests/e2e/settings-capabilities.spec.ts
- * asserts the behaviour it drives ("billing_not_active re-checks billing instead
- * of rendering a message"), so moving it here fails the suite rather than
- * shipping a redirect loop.
- *
- * Every handler is a prop for the same reason: this component owns no state.
+ * hasAutoCheckedBillingRef. That guard is per-mount and this component remounts;
+ * it stays in settings-client.tsx.
  */
 export function ShopifySection({
   shopifySettings,
-  isShopifyConnected,
-  isBillingActive,
-  billingReturnDate,
   storeDomain,
   setStoreDomain,
   isConnecting,
@@ -35,9 +42,6 @@ export function ShopifySection({
   onDisconnect,
 }: {
   shopifySettings: ShopifySettings | null;
-  isShopifyConnected: boolean;
-  isBillingActive: boolean;
-  billingReturnDate: string | null;
   storeDomain: string;
   setStoreDomain: (v: string) => void;
   isConnecting: boolean;
@@ -45,145 +49,153 @@ export function ShopifySection({
   onConnect: () => void;
   onDisconnect: () => void;
 }) {
+  const connected = isConnected(shopifySettings);
+  const billed = isBillingActive(shopifySettings);
+
+  /* The real granted scopes. page.tsx has always passed oauth_scope and the loud
+     page threw it away, rendering a hardcoded ["Products API", "Orders API"]
+     that claimed the same two for every store regardless of what it granted. */
+  const scopes = (shopifySettings?.oauth_scope ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (!connected) {
+    return (
+      <Section title="Shopify" meta="Not connected">
+        <Row
+          label="Store domain"
+          help="Your store name (mernin-roasting) or the full myshopify.com domain."
+        >
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <Input
+              mono
+              placeholder="your-store.myshopify.com"
+              value={storeDomain}
+              onChange={(e) => setStoreDomain(e.target.value)}
+              style={{ flex: "1 1 260px", maxWidth: 340 }}
+            />
+            <Button
+              iconLeft={isConnecting ? <Loader2 /> : <Store />}
+              disabled={isConnecting || !storeDomain.trim()}
+              onClick={onConnect}
+            >
+              Connect store
+            </Button>
+          </div>
+        </Row>
+        <Row label="What happens">
+          <span style={{ ...sans, color: "var(--ink-muted)", lineHeight: "var(--lh-body)" }}>
+            You&apos;ll be sent to Shopify to authorize CoffeeOS, then returned here. Approving the
+            app plan is part of the same flow.
+          </span>
+        </Row>
+      </Section>
+    );
+  }
+
   return (
-    <SectionPanel>
-      <PanelHeader
-        icon={<Store className="h-5 w-5" />}
-        title="Shopify Store"
-        subtitle="Connect your Shopify store to sync products and orders"
-        right={
-          isShopifyConnected ? (
-            <>
-              <StatusPill active={true} label="Connected" />
-              <StatusPill active={isBillingActive} label={isBillingActive ? "Billing Active" : "Billing Required"} />
-            </>
-          ) : undefined
-        }
-      />
-      <div className="px-5 py-5 space-y-4">
-        {isShopifyConnected ? (
-          <>
-            {/* Store info */}
-            <div className="bg-cream border-[2.5px] border-espresso rounded-[16px] shadow-[3px_3px_0_#1C0F05] p-4">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1.5">
-                  <p className="font-body font-extrabold text-sm text-espresso">
-                    {shopifySettings?.shop_name || shopifySettings?.store_domain}
-                  </p>
-                  <p className="text-xs text-espresso/50 font-body">{shopifySettings?.store_domain}</p>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {["Products API", "Orders API"].map((tag) => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.6rem] font-extrabold uppercase tracking-widest border-[2px] font-body bg-fog/40 text-espresso border-fog"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <a
-                  href={`https://${shopifySettings?.store_domain}/admin`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-espresso/40 hover:text-espresso transition-colors"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              </div>
+    <Section title="Shopify" meta="Connected via OAuth">
+      <Row label="Store">
+        <div
+          style={{
+            display: "flex",
+            gap: 16,
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...sans, fontWeight: "var(--fw-medium)" }}>
+              {shopifySettings?.shop_name || shopifySettings?.store_domain}
             </div>
-
-            <InfoNote variant="warn">
-              <strong>Connected via Shopify App.</strong> Your store is connected through the official Shopify OAuth flow.
-              You can manage this app&apos;s access from your{" "}
-              <a
-                href={`https://${shopifySettings?.store_domain}/admin/settings/apps`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-bold underline"
-              >
-                Shopify Admin
-              </a>
-              .
-            </InfoNote>
-
-            <InfoNote variant="note">
-              <strong>Billing:</strong>{" "}
-              {isBillingActive
-                ? `Active${shopifySettings?.billing_plan_name ? ` (${shopifySettings.billing_plan_name})` : ""}`
-                : "Not active"}
-              {isBillingActive && billingReturnDate ? ` · Renews ${billingReturnDate}` : ""}
-              {shopifySettings?.billing_test ? " · Test mode" : ""}
-            </InfoNote>
-
-            <InfoNote variant="info">
-              <strong>Note about Order Sync:</strong> To sync orders, your Shopify app must be approved for protected customer data access.
-              If you see an error, request access in your{" "}
-              <a
-                href="https://partners.shopify.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-bold underline"
-              >
-                Shopify Partner Dashboard
-              </a>
-              {" "}under App Setup &gt; Protected customer data access.
-            </InfoNote>
-          </>
-        ) : (
-          <>
-            <InfoNote variant="info">
-              <strong className="block mb-0.5">Connect Your Shopify Store</strong>
-              CoffeeOS needs access to your Shopify store to sync products and orders. Enter your store domain below and click connect to authorize the app.
-            </InfoNote>
-            <div>
-              <FieldLabel htmlFor="storeDomain">Store Domain</FieldLabel>
-              <MerninInput
-                id="storeDomain"
-                placeholder="your-store or your-store.myshopify.com"
-                value={storeDomain}
-                onChange={(e) => setStoreDomain(e.target.value)}
-              />
-              <p className="mt-1 text-xs text-espresso/40 font-body">
-                Enter your store name (e.g. &quot;my-coffee-shop&quot;) or full domain
-              </p>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Footer actions */}
-      <div className="bg-cream border-t-2 border-espresso px-5 py-4 flex flex-wrap gap-2 justify-end">
-        {isShopifyConnected ? (
-          <>
-            {!isBillingActive && (
-              <Btn
-                variant="outline"
-                onClick={() => {
-                  const url = `/api/shopify/billing/ensure?shop=${encodeURIComponent(shopifySettings?.store_domain || "")}`;
-                  (window.top || window).location.href = url;
-                }}
-              >
-                Refresh Billing Status
-              </Btn>
-            )}
-            <Btn
-              variant="outline"
-              href={`https://${shopifySettings?.store_domain}/admin/settings/apps`}
+            <a
+              href={`https://${shopifySettings?.store_domain}/admin`}
               target="_blank"
               rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                minWidth: 0,
+                color: "var(--ink-muted)",
+                textDecoration: "none",
+              }}
             >
-              Manage Billing in Shopify
-            </Btn>
-            <DisconnectStoreDialog isDisconnecting={isDisconnecting} onDisconnect={onDisconnect} />
-          </>
+              <span style={{ ...mono, fontSize: "var(--fs-data)", overflowWrap: "anywhere" }}>
+                {shopifySettings?.store_domain}
+              </span>
+              <ExternalLink width={14} height={14} style={{ flex: "none" }} />
+            </a>
+          </div>
+          <DisconnectStoreDialog isDisconnecting={isDisconnecting} onDisconnect={onDisconnect} />
+        </div>
+      </Row>
+
+      <Row
+        label="Granted scopes"
+        help="Read from oauth_scope. Order sync additionally needs protected customer data access, approved in your Shopify Partner dashboard."
+      >
+        {scopes.length > 0 ? (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {scopes.map((scope) => (
+              <Badge key={scope} mono size="sm" tone="neutral" variant="outline">
+                {scope}
+              </Badge>
+            ))}
+          </div>
         ) : (
-          <Btn onClick={onConnect} disabled={isConnecting || !storeDomain.trim()}>
-            {isConnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Store className="h-3.5 w-3.5" />}
-            Connect to Shopify
-          </Btn>
+          /* An older row can carry a null oauth_scope. An empty chip strip would
+             read as "no access granted", which is a different and wrong claim. */
+          <span style={{ ...sans, color: "var(--ink-subtle)" }}>
+            Not reported by Shopify for this connection.
+          </span>
         )}
-      </div>
-    </SectionPanel>
+      </Row>
+
+      <Row
+        label="Billing"
+        help={shopifySettings?.billing_test ? "Test mode — no real charges are being made." : undefined}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {billed ? (
+            <Badge tone="success">Active</Badge>
+          ) : (
+            <Badge tone="brand" dot>
+              Required
+            </Badge>
+          )}
+          <span style={{ ...sans, color: "var(--ink-muted)" }}>
+            {billed
+              ? [
+                  shopifySettings?.billing_plan_name,
+                  shopifySettings?.billing_current_period_end
+                    ? `renews ${new Date(shopifySettings.billing_current_period_end).toLocaleDateString()}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : "CoffeeOS is read-only until the plan is approved in Shopify."}
+          </span>
+        </div>
+        <div>
+          <Button
+            size="sm"
+            variant="secondary"
+            iconLeft={<CreditCard />}
+            onClick={() =>
+              window.open(
+                `https://${shopifySettings?.store_domain}/admin/settings/apps`,
+                "_blank",
+                "noopener,noreferrer",
+              )
+            }
+          >
+            Manage plan in Shopify
+          </Button>
+        </div>
+      </Row>
+    </Section>
   );
 }

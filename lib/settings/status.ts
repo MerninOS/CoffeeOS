@@ -55,3 +55,33 @@ export function workspaceStatus(s: ShopifySettings | null): WorkspaceStatus {
   if (!isBillingActive(s)) return { tone: "blocked", label: "Blocked" };
   return { tone: "live", label: "Live" };
 }
+
+/**
+ * Project a `shopify_settings` row into the shape the page consumes.
+ *
+ * Lives here, beside the rules, because this is the only other place the raw
+ * column names legitimately appear — and keeping it here is what lets
+ * tests/unit/settings-tokens.spec.ts ban those names from the route outright,
+ * with no exemption for "the file that happens to do the mapping". A guard with
+ * an exemption is a guard someone will widen.
+ *
+ * `has_admin_credentials` is deliberately a BOOLEAN derived from the token, not
+ * the token: the page needs to know whether admin access exists, and shipping
+ * the credential itself to the client to answer that would be a leak.
+ */
+export function toShopifySettings(
+  row: Record<string, unknown> | null | undefined,
+): ShopifySettings | null {
+  if (!row) return null;
+  return {
+    store_domain: row.store_domain as string,
+    shop_name: row.shop_name as string | undefined,
+    connected_via_oauth: row.connected_via_oauth as boolean | undefined,
+    oauth_scope: row.oauth_scope as string | undefined,
+    has_admin_credentials: !!row.admin_access_token,
+    billing_status: row.billing_status as string | null | undefined,
+    billing_plan_name: row.billing_plan_name as string | null | undefined,
+    billing_current_period_end: row.billing_current_period_end as string | null | undefined,
+    billing_test: row.billing_test as boolean | null | undefined,
+  };
+}

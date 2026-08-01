@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { toShopifySettings } from "@/lib/settings/status";
 import { SettingsClient } from "./settings-client";
 import { TeamManagement } from "./team-management";
 import { InvitationBanner } from "./invitation-banner";
@@ -38,17 +39,7 @@ export default async function SettingsPage() {
       .select("*")
       .eq("user_id", ownerId)
       .maybeSingle();
-    shopifySettings = data ? {
-      store_domain: data.store_domain,
-      shop_name: data.shop_name,
-      connected_via_oauth: data.connected_via_oauth,
-      oauth_scope: data.oauth_scope,
-      has_admin_credentials: !!data.admin_access_token,
-      billing_status: data.billing_status,
-      billing_plan_name: data.billing_plan_name,
-      billing_current_period_end: data.billing_current_period_end,
-      billing_test: data.billing_test,
-    } : null;
+    shopifySettings = toShopifySettings(data);
   }
 
   /* Team counts for the workspace hero, resolved on the SERVER.
