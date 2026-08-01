@@ -26,7 +26,6 @@ import {
   Edit,
   Trash2,
   AlertTriangle,
-  Clock,
   CheckCircle2,
   XCircle,
   Coffee,
@@ -38,6 +37,8 @@ import {
 } from "./actions";
 import type { RoastRequest, CoffeeInventory } from "./components/requests/types";
 import { Btn, FieldLabel, MerninInput, MerninTextarea } from "./components/requests/primitives";
+import { PriorityPill, StatusPill } from "./components/requests/Pills";
+import { ProgressMeter } from "./components/requests/ProgressMeter";
 
 interface RoastRequestsClientProps {
   requests: RoastRequest[];
@@ -46,43 +47,6 @@ interface RoastRequestsClientProps {
 
 const LBS_TO_GRAMS = 453.592;
 const gramsToLbs = (g: number) => (g / LBS_TO_GRAMS).toFixed(2);
-
-const priorityConfig = {
-  low: { label: "Low", className: "bg-fog/60 text-espresso border-fog" },
-  normal: { label: "Normal", className: "bg-sky/20 text-espresso border-sky/40" },
-  high: { label: "High", className: "bg-sun/30 text-espresso border-sun/60" },
-  urgent: { label: "Urgent", className: "bg-tomato text-cream border-espresso" },
-};
-
-const statusConfig = {
-  pending: { label: "Pending", Icon: Clock, className: "bg-fog/60 text-espresso border-fog" },
-  in_progress: { label: "In Progress", Icon: Coffee, className: "bg-honey/20 text-espresso border-honey/40" },
-  fulfilled: { label: "Fulfilled", Icon: CheckCircle2, className: "bg-matcha/20 text-matcha border-matcha/40" },
-  cancelled: { label: "Cancelled", Icon: XCircle, className: "bg-espresso/10 text-espresso/60 border-fog" },
-};
-
-function PriorityPill({ priority }: { priority: keyof typeof priorityConfig }) {
-  const cfg = priorityConfig[priority];
-  return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-full border-[1.5px] text-[10px] font-extrabold uppercase tracking-[.06em] ${cfg.className}`}
-    >
-      {cfg.label}
-    </span>
-  );
-}
-
-function StatusPill({ status }: { status: keyof typeof statusConfig }) {
-  const cfg = statusConfig[status];
-  return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border-[1.5px] text-[10px] font-extrabold uppercase tracking-[.06em] ${cfg.className}`}
-    >
-      <cfg.Icon size={10} strokeWidth={2.2} />
-      {cfg.label}
-    </span>
-  );
-}
 
 export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequestsClientProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -215,7 +179,6 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
             </div>
             <div className="divide-y-[1.5px] divide-dashed divide-fog">
               {pendingRequests.map((request) => {
-                const progressPercent = (request.fulfilled_roasted_g / request.requested_roasted_g) * 100;
                 const isOverdue = request.due_date && new Date(request.due_date) < new Date() && request.status !== "fulfilled";
                 return (
                   <div key={request.id} className="grid grid-cols-[1fr_100px_160px_90px_100px_100px_48px] px-5 py-3 items-center">
@@ -232,17 +195,10 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
                     <div className="text-[13px] font-bold text-espresso">
                       {request.requested_roasted_g.toLocaleString()}g
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-20 h-2 bg-fog rounded-full overflow-hidden border border-espresso/20">
-                        <div
-                          className="h-full bg-honey rounded-full"
-                          style={{ width: `${Math.min(progressPercent, 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-[10px] text-espresso/50 font-medium whitespace-nowrap">
-                        {request.fulfilled_roasted_g.toLocaleString()} / {request.requested_roasted_g.toLocaleString()}g
-                      </span>
-                    </div>
+                    <ProgressMeter
+                      fulfilled={request.fulfilled_roasted_g}
+                      requested={request.requested_roasted_g}
+                    />
                     <div>
                       <PriorityPill priority={request.priority} />
                     </div>
