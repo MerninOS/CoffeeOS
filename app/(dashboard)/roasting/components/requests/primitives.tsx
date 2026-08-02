@@ -1,9 +1,31 @@
 "use client";
 
 import type React from "react";
+import { Button, Input, Textarea } from "@merninos/ui/instrument";
+import { overline } from "@/lib/instrument/tokens";
 
+/**
+ * Retokenized onto instrument (CoffeeOS#71). Same external contract as before
+ * — data-testid, variant names, value/onChange shapes — because
+ * roast-requests-client.tsx and RequestDialog.tsx call these without change.
+ *
+ * Btn is a thin variant-mapping wrapper around instrument's own `Button`
+ * rather than a hand-rolled style object: there is nothing left to retokenize
+ * once the mapping is in place, and a second copy of instrument's button
+ * geometry here would be exactly the near-duplicate CoffeeOS#110 warns about
+ * for tokens.ts.
+ */
 export type BtnVariant = "primary" | "outline" | "ghost" | "danger";
+
+const VARIANT_MAP: Record<BtnVariant, "primary" | "secondary" | "tertiary" | "destructive"> = {
+  primary: "primary",
+  outline: "secondary",
+  ghost: "tertiary",
+  danger: "destructive",
+};
+
 export function Btn({
+  "data-testid": testId,
   variant = "primary",
   children,
   onClick,
@@ -11,6 +33,7 @@ export function Btn({
   className = "",
   type = "button",
 }: {
+  "data-testid"?: string;
   variant?: BtnVariant;
   children: React.ReactNode;
   onClick?: () => void;
@@ -18,33 +41,24 @@ export function Btn({
   className?: string;
   type?: "button" | "submit";
 }) {
-  const base =
-    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border-[2.5px] font-extrabold text-[11px] uppercase tracking-[.08em] transition-all duration-[120ms] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
-  const variants: Record<BtnVariant, string> = {
-    primary:
-      "bg-tomato text-cream border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-px hover:-translate-y-px hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
-    outline:
-      "bg-transparent text-espresso border-espresso hover:bg-fog/40",
-    ghost:
-      "bg-transparent text-espresso border-transparent hover:bg-fog/30",
-    danger:
-      "bg-transparent text-tomato border-transparent hover:bg-tomato/10",
-  };
   return (
-    <button
+    <Button
+      data-testid={testId}
       type={type}
+      variant={VARIANT_MAP[variant]}
+      size="sm"
       onClick={onClick}
       disabled={disabled}
-      className={`${base} ${variants[variant]} ${className}`}
+      className={className}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
 export function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[11px] font-extrabold uppercase tracking-[.08em] text-espresso mb-1.5">
+    <p style={{ ...overline, color: "var(--ink-muted)", marginBottom: 6 }}>
       {children}
     </p>
   );
@@ -70,7 +84,7 @@ export function MerninInput({
   min?: string;
 }) {
   return (
-    <input
+    <Input
       data-testid={testId}
       id={id}
       type={type}
@@ -79,7 +93,6 @@ export function MerninInput({
       placeholder={placeholder}
       step={step}
       min={min}
-      className="w-full px-3 py-2 rounded-[8px] border-[2.5px] border-espresso bg-cream text-[13px] font-medium text-espresso placeholder:text-espresso/30 shadow-[2px_2px_0_#1C0F05] focus:outline-none focus:shadow-[2px_2px_0_#E8442A] focus:border-tomato"
     />
   );
 }
@@ -98,13 +111,12 @@ export function MerninTextarea({
   rows?: number;
 }) {
   return (
-    <textarea
+    <Textarea
       data-testid={testId}
       value={value}
       onChange={onChange}
       placeholder={placeholder}
       rows={rows}
-      className="w-full px-3 py-2 rounded-[8px] border-[2.5px] border-espresso bg-cream text-[13px] font-medium text-espresso placeholder:text-espresso/30 shadow-[2px_2px_0_#1C0F05] focus:outline-none focus:shadow-[2px_2px_0_#E8442A] focus:border-tomato resize-none"
     />
   );
 }

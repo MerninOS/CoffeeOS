@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEffectiveOwnerId } from "@/lib/team";
 import { RoastingPageClient } from "./roasting-page-client";
+import { rollUpSessions } from "./rollup";
 
 export default async function RoastingSessionsPage() {
   const supabase = await createClient();
@@ -131,9 +132,21 @@ export default async function RoastingSessionsPage() {
     };
   });
 
+  /**
+   * Rolled up here rather than in the client because page.tsx already owns the
+   * per-session cost arithmetic above — the totals belong next to the maths that
+   * produced them, and RoastingPageClient stays presentational.
+   */
+  const rollup = rollUpSessions(sessionsWithStats);
+  const openRequestCount = (roastRequests || []).filter(
+    (r) => r.status === "pending" || r.status === "in_progress"
+  ).length;
+
   return (
     <RoastingPageClient
       initialSessions={sessionsWithStats}
+      rollup={rollup}
+      openRequestCount={openRequestCount}
       roastRequests={roastRequests || []}
       coffeeInventory={coffeeWithGreenStock}
       roastedCoffeeStock={roastedCoffeeStock}

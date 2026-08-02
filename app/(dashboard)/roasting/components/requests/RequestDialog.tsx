@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,84 @@ import {
 } from "@/components/ui/select";
 import type { RoastRequest, CoffeeInventory, RoastPriority } from "./types";
 import { Btn, FieldLabel, MerninInput, MerninTextarea } from "./primitives";
+import { lbs } from "../../units";
+
+/**
+ * Retokenized onto instrument (CoffeeOS#71), same fields/handlers as before.
+ *
+ * Radix Dialog and Select are KEPT rather than swapped for instrument's own
+ * `Modal`/`Select`: instrument's Modal renders no `role="dialog"`, and its
+ * Select is a native `<select>` — both would change what the capability spec
+ * (`field-coffee`, `field-priority`, `request-dialog`) can drive.
+ *
+ * `data-surface="app"` on DialogContent and every SelectContent is
+ * load-bearing, not defensive: Radix portals both to <body>, outside the
+ * AppShell subtree the instrument token layer is scoped to, so without it
+ * every `var(--token)` here resolves to nothing (see ProductDialogs.tsx).
+ */
+
+const PANEL: CSSProperties = {
+  background: "var(--surface)",
+  border: "1px solid var(--hairline)",
+  borderRadius: "var(--r-lg)",
+  boxShadow: "var(--shadow-modal)",
+  padding: 0,
+  overflow: "hidden",
+  gap: 0,
+};
+
+const HEAD: CSSProperties = {
+  padding: "var(--space-5) var(--space-6)",
+  borderBottom: "1px solid var(--hairline)",
+  background: "var(--surface-sunken)",
+};
+
+const FOOT: CSSProperties = {
+  padding: "var(--space-4) var(--space-6)",
+  borderTop: "1px solid var(--hairline)",
+  background: "var(--surface-sunken)",
+  display: "flex",
+  gap: 8,
+  justifyContent: "flex-end",
+};
+
+const TITLE: CSSProperties = {
+  fontFamily: "var(--font-display)",
+  fontVariationSettings: "var(--display-settings)",
+  fontWeight: "var(--display-weight)" as unknown as number,
+  letterSpacing: "var(--display-tracking)",
+  fontSize: "var(--fs-title)",
+  textTransform: "uppercase",
+  color: "var(--ink)",
+};
+
+const SELECT_TRIGGER: CSSProperties = {
+  width: "100%",
+  height: 36,
+  padding: "0 10px",
+  background: "var(--surface)",
+  border: "1px solid var(--hairline-strong)",
+  borderRadius: "var(--r-sm)",
+  boxShadow: "none",
+  fontFamily: "var(--font-sans)",
+  fontSize: "var(--fs-body)",
+  color: "var(--ink)",
+};
+
+const SELECT_CONTENT: CSSProperties = {
+  background: "var(--surface)",
+  border: "1px solid var(--hairline-strong)",
+  borderRadius: "var(--r-md)",
+  boxShadow: "var(--shadow-pop)",
+  color: "var(--ink)",
+};
+
+const SELECT_ITEM: CSSProperties = {
+  fontFamily: "var(--font-sans)",
+  fontSize: "var(--fs-body)",
+  color: "var(--ink)",
+  borderRadius: "var(--r-sm)",
+};
 
 interface RequestDialogFormData {
   greenCoffeeId: string;
@@ -47,15 +126,18 @@ export function RequestDialog({
 }: RequestDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="request-dialog" className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
-        <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
+      <DialogContent data-surface="app" data-testid="request-dialog" className="max-w-md" style={PANEL}>
+        <div style={HEAD}>
           <DialogHeader>
-            <DialogTitle className="font-extrabold text-[15px] uppercase tracking-[.08em] text-espresso">
+            <DialogTitle style={TITLE}>
               {editingRequest ? "Edit Roast Request" : "New Roast Request"}
             </DialogTitle>
           </DialogHeader>
         </div>
-        <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div
+          className="max-h-[70vh] overflow-y-auto"
+          style={{ padding: "var(--space-5) var(--space-6)", display: "flex", flexDirection: "column", gap: "var(--gap-stack)" }}
+        >
           <div>
             <FieldLabel>Coffee</FieldLabel>
             <Select
@@ -63,16 +145,16 @@ export function RequestDialog({
               onValueChange={(value) => setFormData({ ...formData, greenCoffeeId: value })}
               disabled={!!editingRequest}
             >
-              <SelectTrigger data-testid="field-coffee" className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
+              <SelectTrigger data-testid="field-coffee" style={SELECT_TRIGGER}>
                 <SelectValue placeholder="Select coffee" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent data-surface="app" style={SELECT_CONTENT}>
                 {coffeeInventory.map((coffee) => (
-                  <SelectItem key={coffee.id} value={coffee.id}>
+                  <SelectItem key={coffee.id} value={coffee.id} style={SELECT_ITEM}>
                     <div className="flex items-center justify-between gap-4">
                       <span>{coffee.name}</span>
-                      <span className="text-muted-foreground text-xs">
-                        {coffee.current_green_quantity_g.toLocaleString()}g available
+                      <span style={{ color: "var(--ink-subtle)", fontSize: "var(--fs-caption)" }}>
+                        {lbs(coffee.current_green_quantity_g)} available
                       </span>
                     </div>
                   </SelectItem>
@@ -101,14 +183,14 @@ export function RequestDialog({
                 setFormData({ ...formData, priority: value })
               }
             >
-              <SelectTrigger data-testid="field-priority" className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
+              <SelectTrigger data-testid="field-priority" style={SELECT_TRIGGER}>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="urgent">Urgent</SelectItem>
+              <SelectContent data-surface="app" style={SELECT_CONTENT}>
+                <SelectItem value="low" style={SELECT_ITEM}>Low</SelectItem>
+                <SelectItem value="normal" style={SELECT_ITEM}>Normal</SelectItem>
+                <SelectItem value="high" style={SELECT_ITEM}>High</SelectItem>
+                <SelectItem value="urgent" style={SELECT_ITEM}>Urgent</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -132,9 +214,10 @@ export function RequestDialog({
             />
           </div>
         </div>
-        <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
+        <div style={FOOT}>
           <Btn variant="outline" onClick={() => onOpenChange(false)}>Cancel</Btn>
           <Btn
+            data-testid="dialog-submit"
             onClick={onSubmit}
             disabled={isSubmitting || !formData.greenCoffeeId || !formData.quantityG}
           >

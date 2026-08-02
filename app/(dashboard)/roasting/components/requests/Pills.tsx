@@ -1,41 +1,54 @@
 "use client";
 
+import { Badge } from "@merninos/ui/instrument";
 import { Clock, Coffee, CheckCircle2, XCircle } from "lucide-react";
 import type { RoastPriority, RoastStatus } from "./types";
 
-const priorityConfig = {
-  low: { label: "Low", className: "bg-fog/60 text-espresso border-fog" },
-  normal: { label: "Normal", className: "bg-sky/20 text-espresso border-sky/40" },
-  high: { label: "High", className: "bg-sun/30 text-espresso border-sun/60" },
-  urgent: { label: "Urgent", className: "bg-tomato text-cream border-espresso" },
+/**
+ * Retokenized onto instrument's `Badge` (CoffeeOS#71). No `dot`, no `pulse` —
+ * per the approved proposal, urgency/status here is a snapshot re-read from
+ * server props on every reload, never a live signal, so a pulsing dot would
+ * claim something untrue about the data (see design-rulings.spec.ts).
+ *
+ * Priority: urgent -> danger, high -> warning, normal/low -> neutral.
+ * Status: pending -> neutral, in_progress -> info, fulfilled -> success,
+ * cancelled -> neutral.
+ */
+const priorityConfig: Record<RoastPriority, { label: string; tone: "danger" | "warning" | "neutral" }> = {
+  low: { label: "Low", tone: "neutral" },
+  normal: { label: "Normal", tone: "neutral" },
+  high: { label: "High", tone: "warning" },
+  urgent: { label: "Urgent", tone: "danger" },
 };
 
-const statusConfig = {
-  pending: { label: "Pending", Icon: Clock, className: "bg-fog/60 text-espresso border-fog" },
-  in_progress: { label: "In Progress", Icon: Coffee, className: "bg-honey/20 text-espresso border-honey/40" },
-  fulfilled: { label: "Fulfilled", Icon: CheckCircle2, className: "bg-matcha/20 text-matcha border-matcha/40" },
-  cancelled: { label: "Cancelled", Icon: XCircle, className: "bg-espresso/10 text-espresso/60 border-fog" },
+const statusConfig: Record<
+  RoastStatus,
+  { label: string; Icon: typeof Clock; tone: "neutral" | "info" | "success" }
+> = {
+  pending: { label: "Pending", Icon: Clock, tone: "neutral" },
+  in_progress: { label: "In Progress", Icon: Coffee, tone: "info" },
+  fulfilled: { label: "Fulfilled", Icon: CheckCircle2, tone: "success" },
+  cancelled: { label: "Cancelled", Icon: XCircle, tone: "neutral" },
 };
 
 export function PriorityPill({ priority }: { priority: RoastPriority }) {
   const cfg = priorityConfig[priority];
   return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-full border-[1.5px] text-[10px] font-extrabold uppercase tracking-[.06em] ${cfg.className}`}
-    >
+    <Badge tone={cfg.tone} variant="soft" size="sm">
       {cfg.label}
-    </span>
+    </Badge>
   );
 }
 
 export function StatusPill({ status }: { status: RoastStatus }) {
   const cfg = statusConfig[status];
+  const Icon = cfg.Icon;
   return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border-[1.5px] text-[10px] font-extrabold uppercase tracking-[.06em] ${cfg.className}`}
-    >
-      <cfg.Icon size={10} strokeWidth={2.2} />
-      {cfg.label}
-    </span>
+    <Badge tone={cfg.tone} variant="soft" size="sm">
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+        <Icon size={10} strokeWidth={2.2} />
+        {cfg.label}
+      </span>
+    </Badge>
   );
 }

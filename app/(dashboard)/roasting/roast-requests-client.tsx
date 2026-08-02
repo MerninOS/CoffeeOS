@@ -7,6 +7,7 @@ import {
   updateRoastRequest,
   deleteRoastRequest,
 } from "./actions";
+import { overline, sans } from "@/lib/instrument/tokens";
 import type { RoastRequest, CoffeeInventory } from "./components/requests/types";
 import { Btn } from "./components/requests/primitives";
 import { RequestsTable } from "./components/requests/RequestsTable";
@@ -121,26 +122,29 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
   const completedRequests = sortedRequests.filter((r) => r.status === "fulfilled" || r.status === "cancelled");
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="font-extrabold text-[17px] uppercase tracking-[.04em] text-espresso">
+          <h2 style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-title-sm)", fontWeight: "var(--fw-semibold)" as unknown as number, color: "var(--ink)" }}>
             Roast Requests
           </h2>
-          <p className="text-[12px] text-espresso/50 font-medium mt-0.5">
+          <p style={{ ...sans, fontSize: "var(--fs-caption)", color: "var(--ink-muted)", marginTop: 2 }}>
             Track and manage roasting requests from orders
           </p>
         </div>
-        <Btn onClick={openCreateDialog}>
+        <Btn data-testid="new-request" onClick={openCreateDialog}>
           <Plus size={12} strokeWidth={2.5} />
           New Request
         </Btn>
       </div>
 
-      {/* Active Requests */}
+      {/* Active Requests — worksheet, not a card: hairline border on --surface, no offset shadow. */}
       {pendingRequests.length > 0 && (
-        <div data-testid="requests-active" className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden">
+        <div
+          data-testid="requests-active"
+          style={{ border: "1px solid var(--hairline)", borderRadius: "var(--r-md)", overflow: "hidden", background: "var(--surface)" }}
+        >
           {/* Desktop table */}
           <RequestsTable
             requests={pendingRequests}
@@ -151,16 +155,17 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
           />
 
           {/* Mobile cards */}
-          <div className="md:hidden divide-y-[1.5px] divide-dashed divide-fog">
-            {pendingRequests.map((request) => (
-              <RequestCard
-                key={request.id}
-                request={request}
-                variant="active"
-                onEdit={openEditDialog}
-                onDelete={handleDelete}
-                onStatusChange={handleStatusChange}
-              />
+          <div className="md:hidden">
+            {pendingRequests.map((request, i) => (
+              <div key={request.id} style={i > 0 ? { borderTop: "1px solid var(--hairline)" } : undefined}>
+                <RequestCard
+                  request={request}
+                  variant="active"
+                  onEdit={openEditDialog}
+                  onDelete={handleDelete}
+                  onStatusChange={handleStatusChange}
+                />
+              </div>
             ))}
           </div>
         </div>
@@ -168,12 +173,15 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
 
       {/* Empty State */}
       {pendingRequests.length === 0 && (
-        <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md flex flex-col items-center justify-center py-12 text-center px-6">
-          <Coffee size={32} strokeWidth={1.5} className="text-espresso/20 mb-3" />
-          <h3 className="font-extrabold text-[15px] uppercase tracking-[.04em] text-espresso mb-1">
+        <div
+          className="flex flex-col items-center justify-center py-12 text-center px-6"
+          style={{ border: "1px solid var(--hairline)", borderRadius: "var(--r-md)", background: "var(--surface)" }}
+        >
+          <Coffee size={32} strokeWidth={1.5} style={{ color: "var(--ink-subtle)", marginBottom: 12 }} />
+          <h3 style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-body-lg)", fontWeight: "var(--fw-semibold)" as unknown as number, color: "var(--ink)", marginBottom: 4 }}>
             No Active Requests
           </h3>
-          <p className="text-[12px] text-espresso/50 font-medium mb-4">
+          <p style={{ ...sans, fontSize: "var(--fs-caption)", color: "var(--ink-muted)", marginBottom: 16 }}>
             Create a roast request manually or from an order to get started.
           </p>
           <Btn onClick={openCreateDialog}>
@@ -183,13 +191,19 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
         </div>
       )}
 
-      {/* Completed Requests */}
+      {/* Completed Requests — visually quieter than the active queue, per the design proposal. */}
       {completedRequests.length > 0 && (
-        <div data-testid="requests-completed" className="space-y-3">
-          <h3 className="font-extrabold text-[11px] uppercase tracking-[.1em] text-espresso/50">
-            Fulfilled &amp; Cancelled
-          </h3>
-          <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden opacity-75">
+        <div data-testid="requests-completed" className="flex flex-col gap-3">
+          <h3 style={{ ...overline, color: "var(--ink-subtle)" }}>Fulfilled &amp; Cancelled</h3>
+          <div
+            style={{
+              border: "1px solid var(--hairline)",
+              borderRadius: "var(--r-md)",
+              overflow: "hidden",
+              background: "var(--surface)",
+              opacity: 0.85,
+            }}
+          >
             {/* Desktop */}
             <RequestsTable
               requests={completedRequests.slice(0, 5)}
@@ -199,16 +213,17 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
               onStatusChange={handleStatusChange}
             />
             {/* Mobile */}
-            <div className="md:hidden divide-y-[1.5px] divide-dashed divide-fog">
-              {completedRequests.slice(0, 5).map((request) => (
-                <RequestCard
-                  key={request.id}
-                  request={request}
-                  variant="completed"
-                  onEdit={openEditDialog}
-                  onDelete={handleDelete}
-                  onStatusChange={handleStatusChange}
-                />
+            <div className="md:hidden">
+              {completedRequests.slice(0, 5).map((request, i) => (
+                <div key={request.id} style={i > 0 ? { borderTop: "1px solid var(--hairline)" } : undefined}>
+                  <RequestCard
+                    request={request}
+                    variant="completed"
+                    onEdit={openEditDialog}
+                    onDelete={handleDelete}
+                    onStatusChange={handleStatusChange}
+                  />
+                </div>
               ))}
             </div>
           </div>
