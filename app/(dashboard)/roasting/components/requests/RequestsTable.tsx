@@ -91,7 +91,13 @@ const menuTriggerStyle: CSSProperties = {
 };
 
 const COMPLETED_GRID = "minmax(0,1fr) 100px 100px 100px 44px";
-const ACTIVE_GRID = "minmax(0,1fr) 100px 160px 90px 100px 100px 44px";
+/**
+ * The progress column is 210px, not 160px. At 160 the meter plus
+ * "4.4 / 11.0 lb" overflowed by 41px into the priority column — the same way
+ * /orders shipped an overlapping figure, and invisible to a screenshot at 1%
+ * tolerance. tests/e2e/roasting-layout.spec.ts measures it now.
+ */
+const ACTIVE_GRID = "minmax(0,1fr) 100px 210px 90px 100px 100px 44px";
 
 interface RequestsTableProps {
   requests: RoastRequest[];

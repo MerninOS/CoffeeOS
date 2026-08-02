@@ -21,7 +21,7 @@ export function ProgressMeter({ fulfilled, requested }: { fulfilled: number; req
     <div className="flex items-center gap-2">
       <div
         style={{
-          width: 80,
+          width: 64,
           height: 6,
           background: "var(--surface-sunken)",
           borderRadius: "var(--r-pill)",
