@@ -307,6 +307,40 @@ async function seedDemoData(admin, ownerId) {
         cost_per_unit: 22,
       },
       {
+        // VARIANT-RECIPE ONLY — deliberately in no product_components row.
+        //
+        // Deleting a component blocks on anything the operator can detach
+        // first, which now includes variant recipes (CoffeeOS#73 Stage C). The
+        // guard used to check product_components ALONE, so a component in this
+        // exact position deleted cleanly and its recipe row vanished by
+        // cascade. tests/e2e/components-delete-guard.spec.ts needs a component
+        // here to prove the extension; every other seeded component sits in a
+        // product recipe too and would be blocked either way.
+        user_id: ownerId,
+        name: "5lb Bulk Bag",
+        type: "packaging",
+        unit: "each",
+        cost_per_unit: 1.15,
+        notes: "Wholesale 5lb bag. Used by the 2lb/bulk variant only.",
+      },
+      {
+        // ORDER HISTORY ONLY — in no recipe, but attached to shipped orders.
+        //
+        // Per-order packaging is genuinely shaped this way: it is not part of
+        // any product, it is added to the order. Deleting it cascades those
+        // order_components rows away, and lib/orders/cogs.ts computes order
+        // COGS live from that join, so the recorded margin on orders that
+        // already shipped silently improves. That is a WARNING, not a block —
+        // a shipped order cannot be edited, so blocking would make this
+        // permanently undeletable.
+        user_id: ownerId,
+        name: "Shipping Box",
+        type: "packaging",
+        unit: "each",
+        cost_per_unit: 1.18,
+        notes: "Outer carton, added per order rather than per product.",
+      },
+      {
         // UNCOSTED ON PURPOSE — do not price this one.
         //
         // cost_per_unit is `numeric NOT NULL DEFAULT 0`, so 0 is the only
@@ -328,7 +362,7 @@ async function seedDemoData(admin, ownerId) {
       },
     ])
     .select("id,name");
-  if (componentsError || !components || components.length < 5) {
+  if (componentsError || !components || components.length < 7) {
     throw new Error(`Failed to insert components: ${componentsError?.message || "unknown error"}`);
   }
 
@@ -336,6 +370,8 @@ async function seedDemoData(admin, ownerId) {
   const bagComponent = components.find((c) => c.name === "12oz Valve Bag");
   const labelComponent = components.find((c) => c.name === "Label + Sticker Set");
   const laborComponent = components.find((c) => c.name === "Roastery Labor");
+  const bulkBagComponent = components.find((c) => c.name === "5lb Bulk Bag");
+  const shippingBoxComponent = components.find((c) => c.name === "Shipping Box");
 
   if (!roastedCoffeeComponent || !bagComponent || !labelComponent || !laborComponent) {
     throw new Error("Missing one or more inserted components.");
@@ -558,6 +594,8 @@ async function seedDemoData(admin, ownerId) {
       { product_variant_id: needVariant("SUM-MAND-12"), component_id: bagComponent.id, quantity: 1 },
       { product_variant_id: needVariant("SUM-MAND-2LB"), component_id: roastedCoffeeComponent.id, quantity: 900 },
       { product_variant_id: needVariant("SUM-MAND-2LB"), component_id: bagComponent.id, quantity: 2 },
+      // The 5lb bulk bag exists ONLY here — no product-level recipe uses it.
+      { product_variant_id: needVariant("SUM-MAND-2LB"), component_id: bulkBagComponent.id, quantity: 1 },
 
       // Costa Rica — only the 12oz is costed. CRI-TARRAZU-4OZ gets nothing, on
       // purpose: one empty variant makes the whole product unknowable.
@@ -873,6 +911,29 @@ async function seedDemoData(admin, ownerId) {
 
   const order1001 = orders.find((o) => o.order_name === "#1001") || orders[0];
   const order1002 = orders.find((o) => o.order_name === "#1002") || orders[1];
+
+  /**
+   * Per-order packaging, attached to two shipped orders and to no recipe.
+   *
+   * This is the only seeded `order_components` data, and it exists so the
+   * delete-guard behaviour is reachable: deleting "Shipping Box" cascades these
+   * rows away, and lib/orders/cogs.ts sums order COGS live from this join, so
+   * the recorded margin on both orders would silently improve. The confirm
+   * dialog warns with the count and the dollar figure instead of blocking,
+   * because a shipped order cannot be edited.
+   *
+   * Two DIFFERENT orders on purpose: "2 past orders" has to mean two orders,
+   * not two rows, and a single-order fixture could not tell those apart.
+   */
+  const { error: orderComponentsError } = await admin
+    .from("order_components")
+    .insert([
+      { order_id: order1001.id, component_id: shippingBoxComponent.id, quantity: 1 },
+      { order_id: order1002.id, component_id: shippingBoxComponent.id, quantity: 2 },
+    ]);
+  if (orderComponentsError) {
+    throw new Error(`Failed to insert order components: ${orderComponentsError.message}`);
+  }
   const order1006 = orders.find((o) => o.order_name === "#1006");
   const order1007 = orders.find((o) => o.order_name === "#1007");
   if (!order1006 || !order1007) {

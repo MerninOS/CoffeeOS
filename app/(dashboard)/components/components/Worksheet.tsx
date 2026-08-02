@@ -158,7 +158,7 @@ function Row({
 }: {
   component: Component;
   onEdit: (component: Component) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => void | Promise<void>;
 }) {
   const [active, setActive] = React.useState(false);
   const reveal = {
@@ -243,7 +243,7 @@ export function Worksheet({
 }: {
   components: Component[];
   onEdit: (component: Component) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => void | Promise<void>;
 }) {
   const groups = TYPE_ORDER.map(
     (type) => [type, components.filter((c) => c.type === type)] as const

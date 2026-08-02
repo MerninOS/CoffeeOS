@@ -104,6 +104,85 @@ export async function updateComponent(
   return { success: true };
 }
 
+/**
+ * What a component is wired into, scoped to the acting owner.
+ *
+ * NONE of the three join tables carries a `user_id` of its own, so each has to
+ * be scoped through its parent — `products`, `product_variants`, `orders` — the
+ * same `!inner(user_id)` idiom orders/actions.ts uses. The check this replaces
+ * filtered on `component_id` alone, so another tenant's recipe could block your
+ * delete and leak its count.
+ *
+ * The three numbers are NOT the same kind of fact, which is why they are
+ * reported separately rather than summed:
+ *
+ *   recipes / variantRecipes  FORWARD-looking. Those products get cheaper from
+ *                             now on, and the operator can detach the component
+ *                             first, so these BLOCK the delete.
+ *   orders / orderCost        RETROACTIVE. lib/orders/cogs.ts computes order
+ *                             COGS live from the join — nothing is snapshotted
+ *                             at fulfilment — so deleting the component removes
+ *                             those cost lines and the margin on already-shipped
+ *                             orders silently improves. Nobody can "detach" a
+ *                             shipped order, so this WARNS instead of blocking.
+ */
+export type ComponentUsage = {
+  recipes: number;
+  variantRecipes: number;
+  orders: number;
+  orderCost: number;
+};
+
+export async function getComponentUsage(
+  id: string
+): Promise<{ usage?: ComponentUsage; error?: string }> {
+  const supabase = await createClient();
+  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
+
+  if (ownerError || !ownerId) {
+    return { error: ownerError || "Unauthorized" };
+  }
+
+  const [{ data: recipes }, { data: variantRecipes }, { data: orderRows }, { data: component }] =
+    await Promise.all([
+      supabase
+        .from("product_components")
+        .select("id, products!inner(user_id)")
+        .eq("component_id", id)
+        .eq("products.user_id", ownerId),
+      supabase
+        .from("product_variant_components")
+        .select("id, product_variants!inner(user_id)")
+        .eq("component_id", id)
+        .eq("product_variants.user_id", ownerId),
+      supabase
+        .from("order_components")
+        .select("order_id, quantity, orders!inner(user_id)")
+        .eq("component_id", id)
+        .eq("orders.user_id", ownerId),
+      supabase
+        .from("components")
+        .select("cost_per_unit")
+        .eq("id", id)
+        .eq("user_id", ownerId)
+        .maybeSingle(),
+    ]);
+
+  const rows = orderRows ?? [];
+  const costPerUnit = component?.cost_per_unit ?? 0;
+
+  return {
+    usage: {
+      recipes: recipes?.length ?? 0,
+      variantRecipes: variantRecipes?.length ?? 0,
+      // DISTINCT orders — one order can carry several rows for the same
+      // component, and "9 past orders" must mean nine orders.
+      orders: new Set(rows.map((r) => r.order_id)).size,
+      orderCost: rows.reduce((sum, r) => sum + Number(r.quantity) * Number(costPerUnit), 0),
+    },
+  };
+}
+
 export async function deleteComponent(id: string) {
   const supabase = await createClient();
   const { ownerId, error: ownerError } = await getEffectiveOwnerId();
@@ -112,15 +191,35 @@ export async function deleteComponent(id: string) {
     return { error: ownerError || "Unauthorized" };
   }
 
-  // Check if component is used in any products
-  const { data: usedInProducts } = await supabase
-    .from("product_components")
-    .select("product_id")
-    .eq("component_id", id);
+  /**
+   * Block on anything the operator can actually detach first.
+   *
+   * Previously this checked `product_components` only, so a component used
+   * solely in a VARIANT recipe deleted cleanly and the row vanished by cascade
+   * — every FK into `components` is ON DELETE CASCADE (roasting_batches is SET
+   * NULL). The seed's own data contains such a component.
+   *
+   * Past orders are deliberately NOT blocking: a shipped order cannot be
+   * edited, so blocking would make the component permanently undeletable. The
+   * confirm dialog warns with the count and the cost instead.
+   */
+  const { usage, error: usageError } = await getComponentUsage(id);
+  if (usageError || !usage) {
+    return { error: usageError || "Could not check what this component is used in" };
+  }
 
-  if (usedInProducts && usedInProducts.length > 0) {
+  if (usage.recipes > 0 || usage.variantRecipes > 0) {
+    const parts: string[] = [];
+    if (usage.recipes > 0) {
+      parts.push(`${usage.recipes} product recipe${usage.recipes === 1 ? "" : "s"}`);
+    }
+    if (usage.variantRecipes > 0) {
+      parts.push(
+        `${usage.variantRecipes} variant recipe${usage.variantRecipes === 1 ? "" : "s"}`
+      );
+    }
     return {
-      error: `This component is used in ${usedInProducts.length} product(s). Remove it from products before deleting.`,
+      error: `This component is used in ${parts.join(" and ")}. Remove it there before deleting.`,
     };
   }
 
