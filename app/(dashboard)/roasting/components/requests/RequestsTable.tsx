@@ -40,10 +40,10 @@ export function RequestsTable({ requests, variant, onEdit, onDelete, onStatusCha
         <div className="divide-y-[1.5px] divide-dashed divide-fog">
           {requests.map((request) => (
             <div key={request.id} data-testid="request-row" className="grid grid-cols-[1fr_100px_100px_100px_48px] px-5 py-3 items-center">
-              <p className="text-[13px] font-bold text-espresso truncate">
+              <p data-testid="row-coffee" className="text-[13px] font-bold text-espresso truncate">
                 {request.green_coffee_inventory?.name || "Unknown"}
               </p>
-              <div className="text-[13px] font-bold text-espresso">
+              <div data-testid="row-quantity" className="text-[13px] font-bold text-espresso">
                 {request.requested_roasted_g.toLocaleString()}g
               </div>
               <div>
@@ -90,7 +90,7 @@ export function RequestsTable({ requests, variant, onEdit, onDelete, onStatusCha
                   </p>
                 )}
               </div>
-              <div className="text-[13px] font-bold text-espresso">
+              <div data-testid="row-quantity" className="text-[13px] font-bold text-espresso">
                 {request.requested_roasted_g.toLocaleString()}g
               </div>
               <ProgressMeter

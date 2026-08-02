@@ -28,18 +28,19 @@ interface RequestCardProps {
 export function RequestCard({ request, variant, onEdit, onDelete, onStatusChange }: RequestCardProps) {
   if (variant === "completed") {
     return (
-      <div className="flex items-center justify-between p-4">
+      <div data-testid="request-card" className="flex items-center justify-between p-4">
         <div>
-          <p className="text-[13px] font-bold text-espresso">
+          <p data-testid="row-coffee" className="text-[13px] font-bold text-espresso">
             {request.green_coffee_inventory?.name || "Unknown"}
           </p>
-          <p className="text-[11px] text-espresso/50 font-medium">
+          <p data-testid="row-quantity" className="text-[11px] text-espresso/50 font-medium">
             {request.requested_roasted_g.toLocaleString()}g
           </p>
         </div>
         <div className="flex items-center gap-2">
           <StatusPill status={request.status} />
           <button
+            data-testid="request-delete"
             onClick={() => onDelete(request.id)}
             className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-transparent text-espresso/30 hover:border-tomato/30 hover:text-tomato hover:bg-tomato/10 transition-all"
           >
@@ -69,21 +70,22 @@ export function RequestCard({ request, variant, onEdit, onDelete, onStatusChange
           <PriorityPill priority={request.priority} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-fog text-espresso/50 hover:text-espresso hover:bg-fog/30 transition-all cursor-pointer">
+              <button data-testid="request-menu" className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-fog text-espresso/50 hover:text-espresso hover:bg-fog/30 transition-all cursor-pointer">
                 <MoreHorizontal size={14} strokeWidth={2} />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit(request)}>
+              <DropdownMenuItem data-testid="menu-edit" onClick={() => onEdit(request)}>
                 <Edit className="mr-2 h-4 w-4" />Edit
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onStatusChange(request.id, "fulfilled")}>
+              <DropdownMenuItem data-testid="menu-fulfill" onClick={() => onStatusChange(request.id, "fulfilled")}>
                 <CheckCircle2 className="mr-2 h-4 w-4" />Mark Fulfilled
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onStatusChange(request.id, "cancelled")}>
+              <DropdownMenuItem data-testid="menu-cancel" onClick={() => onStatusChange(request.id, "cancelled")}>
                 <XCircle className="mr-2 h-4 w-4" />Cancel
               </DropdownMenuItem>
               <DropdownMenuItem
+                data-testid="menu-delete"
                 onClick={() => onDelete(request.id)}
                 className="text-destructive focus:text-destructive"
               >
