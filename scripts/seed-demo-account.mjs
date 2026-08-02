@@ -16,6 +16,27 @@ import { createClient } from "@supabase/supabase-js";
 const demoEmail = () => process.env.DEMO_EMAIL ?? "demo@coffeeos.io";
 const demoPassword = () => process.env.DEMO_PASSWORD ?? "DemoCoffeeOS!2026";
 
+// A second seeded account, under the SAME owner, whose only job is to be a role
+// that cannot manage anything. Without it every e2e baseline is an owner's view
+// and a regression in role gating ships invisibly (CoffeeOS#74 criterion 18).
+//
+// Deliberately under the demo owner rather than in its own workspace: a roaster
+// with no workspace renders "Not connected" and proves nothing about how a LIVE
+// workspace is gated.
+//
+// Derived from THIS worktree's demo address by sub-addressing, so it inherits
+// the per-worktree isolation rather than reintroducing the shared account that
+// isolation exists to remove — demo+roaster@… follows demo@…, and a worktree
+// that sets its own DEMO_EMAIL gets its own roaster for free.
+//
+// Lazy for the same reason the demo accessors are: a module-level const is
+// evaluated at import time, before loadEnv() has read .env.local, and would
+// silently resolve against the shared default.
+const roasterEmail = () =>
+  process.env.DEMO_ROASTER_EMAIL ??
+  demoEmail().replace(/^([^@]+)@/, "$1+roaster@");
+const roasterPassword = () => process.env.DEMO_ROASTER_PASSWORD ?? demoPassword();
+
 function loadEnvFromFile(envPath) {
   if (!fs.existsSync(envPath)) return;
   const raw = fs.readFileSync(envPath, "utf8");
@@ -100,6 +121,94 @@ async function getOrCreateDemoUser(admin) {
   });
   if (updateError) {
     throw new Error(`Failed to update demo auth user: ${updateError.message}`);
+  }
+
+  return userId;
+}
+
+/**
+ * Create (or refresh) the roaster and attach it to `ownerId`.
+ *
+ * ADDITIVE ONLY — this touches the auth user and one profile row and nothing
+ * else. It is reachable on its own via `--roaster-only` precisely so it can be
+ * run without `clearDemoData`: a full re-seed rebuilds every order from
+ * today-relative dates, which knocks the uncosted order off the first page and
+ * fails 12 /orders specs (CoffeeOS#88, still open).
+ */
+async function getOrCreateRoaster(admin, ownerId) {
+  let userId = null;
+
+  let page = 1;
+  const perPage = 200;
+  for (;;) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) {
+      throw new Error(`Failed to list users: ${error.message}`);
+    }
+
+    const found = (data?.users || []).find(
+      (user) => user.email?.toLowerCase() === roasterEmail().toLowerCase()
+    );
+    if (found) {
+      userId = found.id;
+      break;
+    }
+
+    if (!data?.nextPage) break;
+    page = data.nextPage;
+  }
+
+  const metadata = {
+    first_name: "Marcus",
+    last_name: "Oyelaran",
+    role: "roaster",
+  };
+
+  if (!userId) {
+    const { data, error } = await admin.auth.admin.createUser({
+      email: roasterEmail(),
+      password: roasterPassword(),
+      email_confirm: true,
+      user_metadata: metadata,
+      app_metadata: { provider: "email" },
+    });
+    if (error) {
+      throw new Error(`Failed to create roaster auth user: ${error.message}`);
+    }
+    userId = data.user?.id || null;
+  } else {
+    const { error } = await admin.auth.admin.updateUserById(userId, {
+      email: roasterEmail(),
+      password: roasterPassword(),
+      email_confirm: true,
+      user_metadata: metadata,
+    });
+    if (error) {
+      throw new Error(`Failed to update roaster auth user: ${error.message}`);
+    }
+  }
+
+  if (!userId) {
+    throw new Error("Roaster user id could not be resolved.");
+  }
+
+  // The profiles row is what the app reads for role and tenancy — user_metadata
+  // is only the fallback in page.tsx.
+  const { error: profileError } = await admin.from("profiles").upsert(
+    {
+      id: userId,
+      email: roasterEmail(),
+      role: "roaster",
+      first_name: "Marcus",
+      last_name: "Oyelaran",
+      owner_id: ownerId,
+      full_name: "Marcus Oyelaran",
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" }
+  );
+  if (profileError) {
+    throw new Error(`Failed to upsert roaster profile: ${profileError.message}`);
   }
 
   return userId;
@@ -1080,15 +1189,34 @@ async function main() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
+  // `--roaster-only` skips clearDemoData/seedDemoData entirely. A full re-seed
+  // rebuilds orders from today-relative dates and fails 12 /orders specs
+  // (CoffeeOS#88), so adding the role-gating fixture must not require one.
+  const roasterOnly = process.argv.includes("--roaster-only");
+
+  if (roasterOnly) {
+    console.log("Seeding the roaster only (no demo data will be cleared)...");
+    const demoUserId = await getOrCreateDemoUser(admin);
+    await getOrCreateRoaster(admin, demoUserId);
+
+    console.log("Roaster is ready.");
+    console.log(`Email: ${roasterEmail()}`);
+    console.log(`Password: ${roasterPassword()}`);
+    return;
+  }
+
   console.log("Seeding demo account...");
   const demoUserId = await getOrCreateDemoUser(admin);
   await clearDemoData(admin, demoUserId);
   await seedDemoData(admin, demoUserId);
+  await getOrCreateRoaster(admin, demoUserId);
   await writeOrderIdFixture(admin, demoUserId);
 
   console.log("Demo account is ready.");
   console.log(`Email: ${demoEmail()}`);
   console.log(`Password: ${demoPassword()}`);
+  console.log(`Roaster: ${roasterEmail()}`);
+  console.log(`Roaster password: ${roasterPassword()}`);
 }
 
 /**

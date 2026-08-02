@@ -662,3 +662,27 @@
   .cw-rowactions { opacity: 0; transition: opacity 140ms var(--ease); }
   .cw-rowactions[data-active="true"] { opacity: 1; }
 }
+
+/* /settings worksheet rows — a labelled row on a hairline rule, which is what
+   replaces the nested bordered cards the loud design used.
+
+   Sited here rather than inside a component for the same reason .ws-* is: the
+   breakpoint is the thing tests/e2e/settings-layout.spec.ts asserts, and it
+   should be readable without opening a component. #71, #72 and #73 convert the
+   three remaining operator surfaces and can reuse these instead of authoring
+   the same two-track grid three more times.
+
+   LAYOUT ONLY. Every colour, border and type value stays inline as
+   var(--token) — a Tailwind colour utility in this repo resolves to the LOUD
+   palette, and tests/unit/settings-tokens.spec.ts fails the build if one
+   appears under app/(dashboard)/settings/. */
+
+.set-sect           { padding-top: 34px; }
+.set-head           { display: flex; align-items: baseline; justify-content: space-between;
+                      gap: 16px; padding-bottom: 10px; }
+.set-row            { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 13px 0; }
+
+@media (min-width: 760px) {
+  .set-row          { grid-template-columns: 170px minmax(0, 1fr); gap: 24px;
+                      align-items: start; padding: 14px 0; }
+}
