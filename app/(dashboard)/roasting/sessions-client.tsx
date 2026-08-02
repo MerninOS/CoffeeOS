@@ -44,6 +44,11 @@ export interface Session {
   allocation_mode: string;
   billable_minutes: number | null;
   session_toll_cost: number | null;
+  /** The arithmetic behind session_toll_cost, e.g. "1.3 h × $85.00". Computed
+   *  with the cost in session-cost.ts so the two cannot disagree. */
+  cost_basis: string;
+  /** Short label for the billing mode, e.g. "Toll · per hour". */
+  cost_mode_label: string;
   notes: string | null;
   created_at: string;
   batch_count: number;
