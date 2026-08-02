@@ -1,6 +1,7 @@
 "use client";
 
 import { mono } from "@/lib/instrument/tokens";
+import { lb } from "../../units";
 
 /**
  * Retokenized onto instrument (CoffeeOS#71). Rail is `--surface-sunken`, fill
@@ -9,14 +10,10 @@ import { mono } from "@/lib/instrument/tokens";
  * which has nothing to do with roast level (design-rulings.spec.ts bans
  * `--roast-*` outright, for exactly this reason).
  *
- * NOTE ON UNITS: the design proposal calls for this text to go through
- * `lbs()`. It deliberately still reads grams here — the frozen capability
- * spec (`tests/e2e/roasting-requests-capabilities.spec.ts`, written against
- * the pre-restyle markup specifically to survive this conversion) asserts the
- * literal substrings `"2,000 / 5,000g"` and `` `0 / ${qtyComma}g` `` against
- * this exact node. Converting to pounds changes the number itself, not just
- * its formatting, and breaks the "10/10 before and after" gate. Flagged as a
- * concern in the restyle report rather than silently resolved either way.
+ * Units are pounds, via the shared `units.ts` formatter. The capability spec
+ * asserted the old gram strings against this node on purpose — so that
+ * changing them is a visible, reviewable edit to that spec rather than a
+ * silent reformat. That edit is part of this change.
  */
 export function ProgressMeter({ fulfilled, requested }: { fulfilled: number; requested: number }) {
   const progressPercent = (fulfilled / requested) * 100;
@@ -49,7 +46,7 @@ export function ProgressMeter({ fulfilled, requested }: { fulfilled: number; req
           whiteSpace: "nowrap",
         }}
       >
-        {fulfilled.toLocaleString()} / {requested.toLocaleString()}g
+        {lb(fulfilled)} / {lb(requested)} lb
       </span>
     </div>
   );

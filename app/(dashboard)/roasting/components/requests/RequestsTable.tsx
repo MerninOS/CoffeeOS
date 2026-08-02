@@ -19,6 +19,7 @@ import { IconButton } from "@merninos/ui/instrument";
 import { mono, overline, sans } from "@/lib/instrument/tokens";
 import type { RoastRequest, RoastStatus } from "./types";
 import { PriorityPill, StatusPill } from "./Pills";
+import { lbs } from "../../units";
 import { ProgressMeter } from "./ProgressMeter";
 
 /**
@@ -123,7 +124,7 @@ export function RequestsTable({ requests, variant, onEdit, onDelete, onStatusCha
                 {request.green_coffee_inventory?.name || "Unknown"}
               </div>
               <div data-testid="row-quantity" style={{ ...CELL, ...mono }}>
-                {request.requested_roasted_g.toLocaleString()}g
+                {lbs(request.requested_roasted_g)}
               </div>
               <div style={CELL}>
                 <StatusPill status={request.status} />
@@ -177,7 +178,7 @@ export function RequestsTable({ requests, variant, onEdit, onDelete, onStatusCha
                 )}
               </div>
               <div data-testid="row-quantity" style={{ ...CELL, ...mono }}>
-                {request.requested_roasted_g.toLocaleString()}g
+                {lbs(request.requested_roasted_g)}
               </div>
               <div style={CELL}>
                 <ProgressMeter

@@ -68,7 +68,18 @@ const PROBE_QTY_G: Record<string, string> = {
 }
 const probeQtyG = (testInfo: { project: { name: string } }) =>
   PROBE_QTY_G[testInfo.project.name] ?? '9999'
-const toDisplayQty = (raw: string) => Number(raw).toLocaleString()
+/**
+ * The rendered form of a quantity, in POUNDS.
+ *
+ * These CHANGED at Stage B, from grams (`4,321g`) to pounds (`9.5 lb`), and
+ * that is the guard working as designed: the assertions were written as literal
+ * strings precisely so a unit change would have to be made here, deliberately
+ * and in review, rather than absorbed silently by a computed formatter. Storage
+ * is still grams; only the display converts. The dialog's quantity FIELD also
+ * stays in grams — it is precise data entry, and it is labelled as such.
+ */
+const G_PER_LB = 453.592
+const toDisplayQty = (raw: string) => (Number(raw) / G_PER_LB).toFixed(1)
 const probeQtyComma = (testInfo: { project: { name: string } }) => toDisplayQty(probeQtyG(testInfo))
 
 /**
@@ -240,14 +251,13 @@ test.describe('roast requests queue capabilities', () => {
   test('observe: an active request shows its fulfilled/requested progress', async ({ page }) => {
     await openQueue(page)
 
-    // Seeded fixture: Guatemala Huehuetenango is `in_progress`, 2000g fulfilled
-    // of 5000g requested. `ProgressMeter` (desktop) and the inline progress
-    // block (mobile card) both render the identical
-    // `${fulfilled.toLocaleString()} / ${requested.toLocaleString()}g` string,
-    // so one assertion covers both projects.
+    // Seeded fixture: Guatemala Huehuetenango is `in_progress`, 2000g of 5000g.
+    // Displayed in POUNDS as of Stage B — 4.4 of 11.0 — while storage stays in
+    // grams. `ProgressMeter` (desktop) and the mobile card's progress block
+    // render the identical string, so one assertion covers both projects.
     const guatemala = activeRows(page).filter({ hasText: 'Guatemala Huehuetenango' })
     await expect(guatemala, 'seeded active request is missing').toHaveCount(1)
-    await expect(guatemala).toContainText('2,000 / 5,000g')
+    await expect(guatemala).toContainText('4.4 / 11.0 lb')
   })
 
   // ── 2. create ──────────────────────────────────────────────────────────
@@ -272,7 +282,7 @@ test.describe('roast requests queue capabilities', () => {
     const probeRow = activeRows(page).filter({ hasText: qtyComma })
     await expect(probeRow).toHaveCount(1)
     await expect(probeRow).toContainText(PROBE_COFFEE)
-    await expect(probeRow).toContainText(`0 / ${qtyComma}g`)
+    await expect(probeRow).toContainText(`0.0 / ${qtyComma} lb`)
 
     // Survives a reload — this page has no client-side request list at all
     // (unlike /components' `handleSubmit`, which appends to local state on
@@ -302,7 +312,9 @@ test.describe('roast requests queue capabilities', () => {
 
     // Pre-filled from the row being edited — if this is empty the dialog is
     // not reading the request, and saving would silently blank the quantity.
-    await expect(page.locator('[data-testid="field-quantity"]')).toHaveValue(qtyComma.replace(/,/g, ''))
+    // The FIELD is still grams — only displays convert to pounds. Asserting the
+    // raw gram value here is what proves the dialog round-trips storage units.
+    await expect(page.locator('[data-testid="field-quantity"]')).toHaveValue(probeQtyG(testInfo))
 
     await pickOption(page, 'field-priority', 'Urgent')
     await clickAndAwaitReload(page, page.locator('[data-testid="dialog-submit"]'))

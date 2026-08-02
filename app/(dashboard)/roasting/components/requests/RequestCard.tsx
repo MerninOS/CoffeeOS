@@ -19,6 +19,7 @@ import { IconButton } from "@merninos/ui/instrument";
 import { mono, overline, sans } from "@/lib/instrument/tokens";
 import type { RoastRequest, RoastStatus } from "./types";
 import { PriorityPill, StatusPill } from "./Pills";
+import { lb, lbs } from "../../units";
 
 /**
  * The mobile (`md:hidden`) half of the queue, retokenized onto instrument
@@ -76,7 +77,7 @@ export function RequestCard({ request, variant, onEdit, onDelete, onStatusChange
             {request.green_coffee_inventory?.name || "Unknown"}
           </p>
           <p data-testid="row-quantity" style={{ ...mono, fontSize: "var(--fs-caption)", color: "var(--ink-muted)" }}>
-            {request.requested_roasted_g.toLocaleString()}g
+            {lbs(request.requested_roasted_g)}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -151,7 +152,7 @@ export function RequestCard({ request, variant, onEdit, onDelete, onStatusChange
         <div className="flex items-center justify-between" style={{ fontSize: "var(--fs-caption)" }}>
           <span style={{ color: "var(--ink-muted)" }}>Progress</span>
           <span style={{ ...mono, color: "var(--ink)" }}>
-            {request.fulfilled_roasted_g.toLocaleString()} / {request.requested_roasted_g.toLocaleString()}g
+            {lb(request.fulfilled_roasted_g)} / {lbs(request.requested_roasted_g)}
           </span>
         </div>
         <div

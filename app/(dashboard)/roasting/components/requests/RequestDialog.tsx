@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import type { RoastRequest, CoffeeInventory, RoastPriority } from "./types";
 import { Btn, FieldLabel, MerninInput, MerninTextarea } from "./primitives";
+import { lbs } from "../../units";
 
 /**
  * Retokenized onto instrument (CoffeeOS#71), same fields/handlers as before.
@@ -153,7 +154,7 @@ export function RequestDialog({
                     <div className="flex items-center justify-between gap-4">
                       <span>{coffee.name}</span>
                       <span style={{ color: "var(--ink-subtle)", fontSize: "var(--fs-caption)" }}>
-                        {coffee.current_green_quantity_g.toLocaleString()}g available
+                        {lbs(coffee.current_green_quantity_g)} available
                       </span>
                     </div>
                   </SelectItem>
