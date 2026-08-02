@@ -99,10 +99,16 @@ test.describe('/inventory renders on instrument only', () => {
   test('the conversion constant and the low rule are not re-derived', () => {
     const src = sourceFiles(ROUTE).map((f) => [f, readFileSync(f, 'utf8')] as const)
 
-    // Criterion 20: one conversion constant, in lib/inventory/units.ts.
-    expect(
-      src.filter(([, t]) => t.includes('453.592')).map(([f]) => path.basename(f)),
-    ).toEqual([])
+    // Criterion 20: one conversion constant, in lib/inventory/units.ts. The
+    // lib/ modules are scanned too — the first draft of movements.ts declared
+    // its own divisor, which is precisely the drift the extraction closed and
+    // which a route-only scan would have missed.
+    const libFiles = sourceFiles(path.join(__dirname, '..', '..', 'lib', 'inventory'))
+    const withConstant = [...src.map(([f, t]) => [f, t] as const),
+      ...libFiles.map((f) => [f, readFileSync(f, 'utf8')] as const)]
+      .filter(([f, t]) => t.includes('453.592') && !f.endsWith('units.ts'))
+      .map(([f]) => path.basename(f))
+    expect(withConstant, 'import from lib/inventory/units.ts').toEqual([])
 
     // Criterion 11: the low-stock threshold is an imported binding, never a
     // bare comparison. Matches `< 5`, `<5`, `<= 5` against a lbs-ish name.
