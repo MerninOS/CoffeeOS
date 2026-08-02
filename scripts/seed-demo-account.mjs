@@ -373,14 +373,116 @@ async function seedDemoData(admin, ownerId) {
         purchase_date: day(-16),
         notes: "Chocolate-forward component for espresso blend.",
       },
+      /**
+       * Two lots that exist ONLY to make the stock states reachable (CoffeeOS#72).
+       *
+       * The low/out rule is `green < 5 lb` (2267.96 g), and before these the seed
+       * held two healthy lots only — so the `Low` and `Out` filters, the badges,
+       * and the "Low or out" strip figure had no data to render and their tests
+       * would have passed vacuously on an empty table.
+       *
+       * Kenya sits at 1814.4 g = exactly 4.0 lb: low, and far enough from the
+       * 5 lb boundary that a rounding change cannot silently reclassify it.
+       * Sumatra is at 0 g with roasted stock remaining, which is the real-world
+       * shape of a lot that has been fully roasted off — and it is the case that
+       * makes `$0.00` value correct rather than missing.
+       */
+      {
+        user_id: ownerId,
+        name: "Kenya Nyeri AA",
+        origin: "Kenya",
+        lot_code: "KEN-NYE-2026-03",
+        price_per_lb: 8.9,
+        initial_quantity_g: 11339.8,
+        current_green_quantity_g: 1814.4,
+        roasted_stock_g: 900,
+        supplier: "Ally Coffee",
+        purchase_date: day(-45),
+        notes: "Blackcurrant and tomato. Reorder if the seasonal holds.",
+      },
+      {
+        user_id: ownerId,
+        name: "Sumatra Mandheling",
+        origin: "Indonesia",
+        lot_code: "SUM-MAN-2026-04",
+        price_per_lb: 5.75,
+        initial_quantity_g: 27215.5,
+        current_green_quantity_g: 0,
+        roasted_stock_g: 1200,
+        supplier: "Ally Coffee",
+        purchase_date: day(-60),
+        notes: null,
+      },
     ])
     .select("id,name");
-  if (coffeeError || !coffees || coffees.length < 2) {
+  if (coffeeError || !coffees || coffees.length < 4) {
     throw new Error(`Failed to insert green coffee inventory: ${coffeeError?.message || "unknown error"}`);
   }
 
   const ethCoffee = coffees.find((c) => c.name.includes("Ethiopia")) || coffees[0];
   const guaCoffee = coffees.find((c) => c.name.includes("Guatemala")) || coffees[1];
+
+  /**
+   * A movement history for ONE lot (CoffeeOS#72).
+   *
+   * `coffee_inventory_changes` is written by the app on every create, manual
+   * adjustment and roast batch — but this seed inserts inventory and batches
+   * directly through the admin client, bypassing those actions, so the table was
+   * empty and `/inventory`'s movement panel had nothing to render.
+   *
+   * The deltas are chosen to RECONCILE: 22679.6 − 3628.7 − 498.9 − 2677.0 =
+   * 15875.0, which is exactly Ethiopia's `current_green_quantity_g`. A history
+   * that does not sum to the current figure is worse than no history, because
+   * the panel's whole claim is that it explains where the coffee went.
+   *
+   * `reference_type: 'roasting_batch'` with a null `reference_id` is deliberate
+   * and not laziness: `roasting_batches` carries no batch number (id, coffee_name,
+   * lot_code, batch_date only), so the UI renders "Roast batch" with no code. This
+   * seeds the exact path that rule runs on.
+   */
+  const { error: coffeeChangesError } = await admin.from("coffee_inventory_changes").insert([
+    {
+      coffee_id: ethCoffee.id,
+      user_id: ownerId,
+      changed_by_user_id: ownerId,
+      change_type: "initial",
+      green_quantity_change_g: 22679.6,
+      reference_type: "manual",
+      notes: "Initial inventory",
+      created_at: day(-21),
+    },
+    {
+      coffee_id: ethCoffee.id,
+      user_id: ownerId,
+      changed_by_user_id: ownerId,
+      change_type: "roast_deduct",
+      green_quantity_change_g: -3628.7,
+      reference_type: "roasting_batch",
+      created_at: day(-14),
+    },
+    {
+      coffee_id: ethCoffee.id,
+      user_id: ownerId,
+      changed_by_user_id: ownerId,
+      change_type: "manual_green_adjust",
+      green_quantity_change_g: -498.9,
+      reference_type: "manual",
+      notes: "Moisture loss on the pallet — reconciled to scale.",
+      created_at: day(-9),
+    },
+    {
+      coffee_id: ethCoffee.id,
+      user_id: ownerId,
+      changed_by_user_id: ownerId,
+      change_type: "roast_deduct",
+      green_quantity_change_g: -2677.0,
+      reference_type: "roasting_batch",
+      created_at: day(-3),
+    },
+  ]);
+  if (coffeeChangesError) {
+    throw new Error(`Failed to insert coffee inventory changes: ${coffeeChangesError.message}`);
+  }
 
   const { data: components, error: componentsError } = await admin
     .from("components")
