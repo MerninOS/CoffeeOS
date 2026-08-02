@@ -1,235 +1,137 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
+  Button,
+  EmptyState,
+  HeroMetric,
+  Input,
+  SegmentedControl,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  StatStrip,
+} from "@merninos/ui/instrument";
+import { Plus, Search, Warehouse } from "lucide-react";
+import { overline, money } from "@/lib/instrument/tokens";
+import { gramsToLbs } from "@/lib/inventory/units";
+import { stockState, totals } from "@/lib/inventory/valuation";
+import { InventoryWorksheetTable } from "./components/InventoryWorksheetTable";
+import { LOW_RULE } from "./components/Depletion";
 import {
-  Plus,
-  TrendingDown,
-  Edit,
-  Trash2,
-  Search,
-  Scale,
-  Warehouse,
-} from "lucide-react";
+  AdjustStockDialog,
+  DeleteLotDialog,
+  LotFormDialog,
+} from "./components/InventoryDialogs";
+import type { CoffeeInventory } from "./components/types";
+import type { Movement } from "@/lib/inventory/movements";
 import {
   createCoffeeInventory,
+  getLotMovements,
   updateCoffeeInventory,
   adjustInventoryQuantity,
   deleteCoffeeInventory,
 } from "./actions";
 
-interface CoffeeInventory {
-  id: string;
-  name: string;
-  origin: string;
-  lot_code: string | null;
-  supplier: string | null;
-  price_per_lb: number;
-  initial_quantity_g: number;
-  current_green_quantity_g: number;
-  roasted_stock_g: number;
-  purchase_date: string | null;
-  notes: string | null;
-  is_active: boolean;
-  created_at: string;
-}
-
-const LBS_TO_GRAMS = 453.592;
 
 interface InventoryClientProps {
   initialInventory: CoffeeInventory[];
 }
 
-// ── Primitives ──────────────────────────────────────────────────────────────
-
-function Btn({
-  children,
-  onClick,
-  disabled,
-  variant = "primary",
-  size = "md",
-  type = "button",
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  variant?: "primary" | "outline" | "ghost" | "danger";
-  size?: "sm" | "md";
-  type?: "button" | "submit";
-}) {
-  const base =
-    "inline-flex items-center justify-center font-extrabold uppercase tracking-[.08em] transition-all duration-[120ms] border-[2.5px] cursor-pointer disabled:opacity-50 disabled:pointer-events-none";
-  const sizes = {
-    sm: "text-[11px] px-3 py-1.5 rounded-[8px]",
-    md: "text-[12px] px-4 py-2 rounded-[10px]",
-  };
-  const variants = {
-    primary:
-      "bg-tomato text-cream border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[3px] active:translate-y-[3px] active:shadow-none",
-    outline:
-      "bg-transparent text-espresso border-espresso hover:bg-espresso hover:text-cream",
-    ghost:
-      "bg-transparent text-espresso border-transparent hover:bg-fog/50 shadow-none",
-    danger:
-      "bg-transparent text-tomato border-tomato hover:bg-tomato hover:text-cream",
-  };
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      className={`${base} ${sizes[size]} ${variants[variant]}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Panel({
-  title,
-  subtitle,
-  action,
-  children,
-  className = "",
-}: {
-  title?: string;
-  subtitle?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden ${className}`}
-    >
-      {title && (
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b-2 border-espresso bg-cream">
-          <div>
-            <div className="font-extrabold text-sm uppercase tracking-[.08em] text-espresso">
-              {title}
-            </div>
-            {subtitle && (
-              <div className="text-[11px] text-muted-foreground mt-0.5">
-                {subtitle}
-              </div>
-            )}
-          </div>
-          {action && <div className="shrink-0">{action}</div>}
-        </div>
-      )}
-      <div className="p-5">{children}</div>
-    </div>
-  );
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-[11px] font-extrabold uppercase tracking-[.08em] text-espresso mb-1">
-      {children}
-    </div>
-  );
-}
-
-function MerninInput({
-  id,
-  type = "text",
-  value,
-  onChange,
-  placeholder,
-  step,
-}: {
-  id?: string;
-  type?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  placeholder?: string;
-  step?: string;
-}) {
-  return (
-    <input
-      id={id}
-      type={type}
-      step={step}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className="w-full bg-cream border-[2.5px] border-espresso rounded-[10px] px-3 py-2 text-[13px] font-medium text-espresso placeholder:text-espresso/40 shadow-[3px_3px_0_#1C0F05] focus:outline-none focus:border-tomato focus:shadow-[3px_3px_0_#E8442A] focus:-translate-x-px focus:-translate-y-px transition-all duration-[120ms]"
-    />
-  );
-}
-
-function MerninTextarea({
-  id,
-  value,
-  onChange,
-  placeholder,
-  rows = 3,
-}: {
-  id?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-  placeholder?: string;
-  rows?: number;
-}) {
-  return (
-    <textarea
-      id={id}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      rows={rows}
-      className="w-full bg-cream border-[2.5px] border-espresso rounded-[10px] px-3 py-2 text-[13px] font-medium text-espresso placeholder:text-espresso/40 shadow-[3px_3px_0_#1C0F05] focus:outline-none focus:border-tomato focus:shadow-[3px_3px_0_#E8442A] focus:-translate-x-px focus:-translate-y-px transition-all duration-[120ms] resize-none"
-    />
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-}) {
-  return (
-    <div className="bg-chalk border-[3px] border-espresso rounded-[14px] shadow-flat-sm px-5 py-4 flex flex-col gap-1">
-      <div className="text-[11px] font-extrabold uppercase tracking-[.1em] text-espresso/60">
-        {label}
-      </div>
-      <div className="text-[26px] font-extrabold text-espresso leading-none">
-        {value}
-      </div>
-      {sub && (
-        <div className="text-[11px] font-bold text-espresso/50">{sub}</div>
-      )}
-    </div>
-  );
-}
-
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export function InventoryClient({ initialInventory }: InventoryClientProps) {
-  const [inventory, setInventory] = useState(initialInventory);
+  const router = useRouter();
+
+  /**
+   * Read straight from props — NOT useState(initialInventory).
+   *
+   * The mutation handlers now call router.refresh() instead of
+   * window.location.reload(). A refresh re-renders the server component and
+   * hands down new props, but a useState initialiser runs once, so state would
+   * pin the list at its first value and every figure on the page would go stale
+   * after the first edit. The full reload was hiding that.
+   */
+  const inventory = initialInventory;
   const [searchQuery, setSearchQuery] = useState("");
+  const [stockFilter, setStockFilter] = useState("all");
+  const [supplierFilter, setSupplierFilter] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isAdjustDialogOpen, setIsAdjustDialogOpen] = useState(false);
   const [editingCoffee, setEditingCoffee] = useState<CoffeeInventory | null>(null);
   const [adjustingCoffee, setAdjustingCoffee] = useState<CoffeeInventory | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [adjustError, setAdjustError] = useState<string | null>(null);
+  const [deletingCoffee, setDeletingCoffee] = useState<CoffeeInventory | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  /**
+   * Movement state for the ONE open lot. Not a cache keyed by lot: only one row
+   * is expanded at a time, and a keyed cache would have to be invalidated per
+   * lot on every mutation — more machinery than the screen earns.
+   */
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [movements, setMovements] = useState<Movement[] | null>(null);
+  const [movementsHasMore, setMovementsHasMore] = useState(false);
+  const [movementsLoading, setMovementsLoading] = useState(false);
+  const [movementsError, setMovementsError] = useState<string | null>(null);
+
+  const loadMovements = useCallback(async (coffeeId: string) => {
+    setMovementsLoading(true);
+    setMovementsError(null);
+    const result = await getLotMovements(coffeeId);
+    if (result.error) {
+      setMovementsError(result.error);
+      setMovements([]);
+      setMovementsHasMore(false);
+    } else {
+      setMovements(result.movements ?? []);
+      setMovementsHasMore(!!result.hasMore);
+    }
+    setMovementsLoading(false);
+  }, []);
+
+  /**
+   * Expanding fetches; collapsing clears, so a stale list cannot be re-shown.
+   *
+   * Reads `expandedId` directly rather than through a setState updater. An
+   * updater runs DURING RENDER, so kicking off the fetch inside one made React
+   * warn "Cannot update a component while rendering a different component" and
+   * the panel never populated — a real correctness bug, caught by the console
+   * rather than by looking at the page.
+   */
+  const toggleExpand = useCallback(
+    (coffeeId: string) => {
+      if (expandedId === coffeeId) {
+        setExpandedId(null);
+        setMovements(null);
+        setMovementsError(null);
+        setMovementsHasMore(false);
+        return;
+      }
+      setExpandedId(coffeeId);
+      setMovements(null);
+      setMovementsHasMore(false);
+      void loadMovements(coffeeId);
+    },
+    [expandedId, loadMovements],
+  );
+
+  /**
+   * Criterion 17a. `router.refresh()` re-renders the SERVER component; it does
+   * not re-run a client-invoked server action, so the movement list would keep
+   * showing the state before the adjustment — on the one panel whose entire job
+   * is explaining where the coffee went. The mutation handlers call this so the
+   * open lot, and only the open lot, refetches.
+   */
+  const refreshOpenLot = useCallback(
+    (mutatedId?: string) => {
+      if (!expandedId) return;
+      if (mutatedId && mutatedId !== expandedId) return;
+      void loadMovements(expandedId);
+    },
+    [expandedId, loadMovements],
+  );
 
   const [formData, setFormData] = useState({
     name: "",
@@ -251,30 +153,40 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
     notes: "",
   });
 
-  const gramsToLbs = (g: number) => g / LBS_TO_GRAMS;
+  const suppliers = Array.from(
+    new Set(inventory.map((c) => c.supplier).filter(Boolean) as string[]),
+  ).sort();
 
-  const filteredInventory = inventory.filter(
-    (coffee) =>
-      coffee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      coffee.origin.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (coffee.supplier?.toLowerCase().includes(searchQuery.toLowerCase()) ??
-        false)
-  );
+  const filteredInventory = inventory
+    .filter((coffee) => {
+      if (stockFilter === "all") return true;
+      return stockState(gramsToLbs(coffee.current_green_quantity_g)) ===
+        (stockFilter === "in" ? "ok" : stockFilter);
+    })
+    .filter((coffee) => !supplierFilter || coffee.supplier === supplierFilter)
+    .filter((coffee) =>
+      [coffee.name, coffee.origin, coffee.supplier, coffee.lot_code].some((v) =>
+        (v ?? "").toLowerCase().includes(searchQuery.toLowerCase()),
+      ),
+    );
 
-  const totalGreenLbs = inventory.reduce(
-    (sum, c) => sum + gramsToLbs(c.current_green_quantity_g),
-    0
-  );
-  const totalRoastedLbs = inventory.reduce(
-    (sum, c) => sum + gramsToLbs(c.roasted_stock_g || 0),
-    0
-  );
-  const totalValue = inventory.reduce(
-    (sum, c) => sum + gramsToLbs(c.current_green_quantity_g) * c.price_per_lb,
-    0
-  );
+  /**
+   * TWO SCOPES, deliberately. The strip describes the whole catalogue; the
+   * worksheet footer totals only the rows on screen.
+   *
+   * Before this, both read the catalogue and the footer rendered inside the
+   * filtered table, so any search left the footer totalling lots it was not
+   * showing (spec Criterion 12). Passing the list in makes the scope a call
+   * site's choice rather than a hidden coupling.
+   */
+  const catalogue = totals(inventory);
+  const visible = totals(filteredInventory);
+  const needsAttention = inventory.filter(
+    (c) => stockState(gramsToLbs(c.current_green_quantity_g)) !== "ok",
+  ).length;
 
   const resetForm = () => {
+    setFormError(null);
     setFormData({
       name: "",
       origin: "",
@@ -301,11 +213,13 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
           notes: formData.notes || undefined,
         });
         if (result.error) {
-          alert(result.error);
+          setFormError(result.error);
         } else {
           setIsAddDialogOpen(false);
+          const mutatedId = editingCoffee.id;
           resetForm();
-          window.location.reload();
+          router.refresh();
+          refreshOpenLot(mutatedId);
         }
       } else {
         const result = await createCoffeeInventory({
@@ -319,11 +233,11 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
           notes: formData.notes || undefined,
         });
         if (result.error) {
-          alert(result.error);
+          setFormError(result.error);
         } else {
           setIsAddDialogOpen(false);
           resetForm();
-          window.location.reload();
+          router.refresh();
         }
       }
     } finally {
@@ -349,34 +263,45 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
       );
 
       if (result.error) {
-        alert(result.error);
+        setAdjustError(result.error);
       } else {
         setIsAdjustDialogOpen(false);
+        const mutatedId = adjustingCoffee.id;
         setAdjustingCoffee(null);
         setAdjustmentData({
           change_type: "manual_green_adjust",
           quantity: "",
           notes: "",
         });
-        window.location.reload();
+        router.refresh();
+        refreshOpenLot(mutatedId);
       }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (
-      !confirm(
-        "Are you sure you want to delete this coffee? This cannot be undone."
-      )
-    )
-      return;
-    const result = await deleteCoffeeInventory(id);
-    if (result.error) {
-      alert(result.error);
-    } else {
-      window.location.reload();
+  /** Opens the confirmation dialog; the delete itself happens on confirm. */
+  const handleDelete = (id: string) => {
+    setDeletingCoffee(inventory.find((c) => c.id === id) ?? null);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingCoffee) return;
+    setIsDeleting(true);
+    try {
+      const result = await deleteCoffeeInventory(deletingCoffee.id);
+      if (result.error) {
+        // No dialog of its own: the row is still there and the operator can
+        // retry. Surfacing it in the confirm dialog would fight the close.
+        setFormError(result.error);
+      }
+      // A deleted lot cannot stay expanded over a row that no longer exists.
+      if (expandedId === deletingCoffee.id) setExpandedId(null);
+      setDeletingCoffee(null);
+      router.refresh();
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -388,7 +313,7 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
       lot_code: coffee.lot_code || "",
       supplier: coffee.supplier || "",
       price_per_lb: coffee.price_per_lb.toString(),
-      quantity_lbs: (coffee.initial_quantity_g / LBS_TO_GRAMS).toFixed(2),
+      quantity_lbs: gramsToLbs(coffee.initial_quantity_g).toFixed(2),
       purchase_date: coffee.purchase_date || "",
       notes: coffee.notes || "",
     });
@@ -396,6 +321,7 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
   };
 
   const openAdjustDialog = (coffee: CoffeeInventory) => {
+    setAdjustError(null);
     setAdjustingCoffee(coffee);
     setAdjustmentData({
       change_type: "manual_green_adjust",
@@ -406,604 +332,238 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Page header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="p-6" style={{ maxWidth: "var(--content-max)", margin: "0 auto" }}>
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
         <div>
-          <h1 className="text-[28px] md:text-[36px] font-extrabold uppercase tracking-tight leading-none text-espresso">
-            Coffee Inventory
+          <h1
+            style={{
+              fontFamily: "var(--font-display)",
+              fontVariationSettings: "var(--display-settings)",
+              fontWeight: "var(--display-weight)" as unknown as number,
+              letterSpacing: "var(--display-tracking)",
+              fontSize: "var(--fs-display)",
+              textTransform: "uppercase",
+              color: "var(--ink)",
+              margin: 0,
+            }}
+          >
+            Green inventory
           </h1>
-          <p className="text-[13px] text-espresso/60 font-medium mt-1">
-            Manage your green and roasted coffee stock
+          <p
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "var(--fs-body)",
+              color: "var(--ink-muted)",
+              marginTop: 6,
+            }}
+          >
+            Every lot in the warehouse, what it cost, and where it went.
           </p>
         </div>
-
-        <Dialog
+        <LotFormDialog
           open={isAddDialogOpen}
           onOpenChange={(open) => {
             setIsAddDialogOpen(open);
             if (!open) resetForm();
           }}
-        >
-          <DialogTrigger asChild>
-            <Btn>
-              <Plus size={14} strokeWidth={2.5} className="mr-1.5" />
-              Add Coffee
-            </Btn>
-          </DialogTrigger>
-
-          <DialogContent className="max-w-2xl p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
-            {/* Dialog header */}
-            <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
-              <DialogHeader>
-                <DialogTitle className="font-extrabold text-[15px] uppercase tracking-[.08em] text-espresso">
-                  {editingCoffee ? "Edit Coffee" : "Add New Coffee"}
-                </DialogTitle>
-              </DialogHeader>
-            </div>
-
-            {/* Dialog body */}
-            <div className="px-6 py-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <FieldLabel>Name *</FieldLabel>
-                  <MerninInput
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    placeholder="Ethiopia Yirgacheffe"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Origin *</FieldLabel>
-                  <MerninInput
-                    id="origin"
-                    value={formData.origin}
-                    onChange={(e) =>
-                      setFormData({ ...formData, origin: e.target.value })
-                    }
-                    placeholder="Ethiopia"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <FieldLabel>Lot Code</FieldLabel>
-                  <MerninInput
-                    id="lot_code"
-                    value={formData.lot_code}
-                    onChange={(e) =>
-                      setFormData({ ...formData, lot_code: e.target.value })
-                    }
-                    placeholder="12345"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Supplier</FieldLabel>
-                  <MerninInput
-                    id="supplier"
-                    value={formData.supplier}
-                    onChange={(e) =>
-                      setFormData({ ...formData, supplier: e.target.value })
-                    }
-                    placeholder="Supplier Name"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <FieldLabel>Price per lb ($) *</FieldLabel>
-                  <MerninInput
-                    id="price_per_lb"
-                    type="number"
-                    step="0.01"
-                    value={formData.price_per_lb}
-                    onChange={(e) =>
-                      setFormData({ ...formData, price_per_lb: e.target.value })
-                    }
-                    placeholder="6.50"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Initial Qty (lbs) *</FieldLabel>
-                  <MerninInput
-                    id="quantity_lbs"
-                    type="number"
-                    step="0.01"
-                    value={formData.quantity_lbs}
-                    onChange={(e) =>
-                      setFormData({ ...formData, quantity_lbs: e.target.value })
-                    }
-                    placeholder="50"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Purchase Date</FieldLabel>
-                  <MerninInput
-                    id="purchase_date"
-                    type="date"
-                    value={formData.purchase_date}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        purchase_date: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-              <div>
-                <FieldLabel>Notes</FieldLabel>
-                <MerninTextarea
-                  id="notes"
-                  value={formData.notes}
-                  onChange={(e) =>
-                    setFormData({ ...formData, notes: e.target.value })
-                  }
-                  placeholder="Tasting notes, supplier info, etc."
-                  rows={3}
-                />
-              </div>
-            </div>
-
-            {/* Dialog footer */}
-            <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
-              <Btn
-                variant="outline"
-                onClick={() => {
-                  setIsAddDialogOpen(false);
-                  resetForm();
-                }}
-              >
-                Cancel
-              </Btn>
-              <Btn
-                onClick={handleAddOrEdit}
-                disabled={
-                  isSubmitting ||
-                  !formData.name ||
-                  !formData.origin ||
-                  !formData.price_per_lb ||
-                  (!editingCoffee && !formData.quantity_lbs)
-                }
-              >
-                {isSubmitting
-                  ? "Saving..."
-                  : editingCoffee
-                  ? "Save Changes"
-                  : "Add Coffee"}
-              </Btn>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard
-          label="Total Green Stock"
-          value={`${totalGreenLbs.toFixed(1)} lbs`}
-          sub={`${inventory.length} coffees tracked`}
-        />
-        <StatCard
-          label="Total Roasted Stock"
-          value={`${totalRoastedLbs.toFixed(1)} lbs`}
-        />
-        <StatCard
-          label="Total Inventory Value"
-          value={`$${totalValue.toFixed(2)}`}
-          sub="Green coffee at cost"
+          editingCoffee={editingCoffee}
+          values={formData}
+          onChange={setFormData}
+          error={formError}
+          isSubmitting={isSubmitting}
+          onSubmit={handleAddOrEdit}
         />
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search
-          size={15}
-          strokeWidth={2.2}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-espresso/40"
-        />
-        <input
-          type="text"
-          placeholder="Search by name, origin, or supplier..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-cream border-[2.5px] border-espresso rounded-[10px] pl-9 pr-3 py-2 text-[13px] font-medium text-espresso placeholder:text-espresso/40 shadow-[3px_3px_0_#1C0F05] focus:outline-none focus:border-tomato focus:shadow-[3px_3px_0_#E8442A] transition-all duration-[120ms]"
-        />
-      </div>
+      {/*
+        ONE hero figure over a ruled strip, not a row of equal cards. Inventory
+        value carries the page because it is the figure that ties this screen to
+        cost; green, roasted, lot count and the attention count are supporting.
 
-      {/* Inventory table */}
-      <Panel title="Green Coffee" subtitle={`${filteredInventory.length} coffees`}>
-        {/* Desktop */}
-        <div className="hidden md:block -mx-5 -mb-5">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="border-b-[2px] border-dashed border-fog">
-                <th className="text-left px-5 py-2.5 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60">
-                  Coffee
-                </th>
-                <th className="text-left px-3 py-2.5 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60">
-                  Origin
-                </th>
-                <th className="text-left px-3 py-2.5 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60">
-                  Supplier
-                </th>
-                <th className="text-right px-3 py-2.5 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60">
-                  $/lb
-                </th>
-                <th className="text-right px-3 py-2.5 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60">
-                  Green
-                </th>
-                <th className="text-right px-3 py-2.5 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60">
-                  Roasted
-                </th>
-                <th className="text-right px-3 py-2.5 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60">
-                  Value
-                </th>
-                <th className="w-[100px]" />
-              </tr>
-            </thead>
-            <tbody>
-              {filteredInventory.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-5 py-10 text-center text-espresso/50 font-medium"
+        The figure TEXT is unchanged from the loud version ("35.0 lbs",
+        "$979.44") so the Stage 1 capability tests still assert the same strings
+        — hence `value` carries the unit rather than StatStrip's `unit` prop, and
+        the hero does not use toLocaleString (which would insert a comma).
+
+        The test ids ride on nested spans because neither component forwards
+        unknown props.
+      */}
+      <div className="flex flex-wrap gap-6 items-end mb-6">
+        <div style={{ flex: "0 0 260px" }}>
+          <HeroMetric
+            label="Inventory value"
+            value={<span data-testid="stat-value">{money(catalogue.value)}</span>}
+            note="green coffee at cost"
+          />
+        </div>
+        <div style={{ flex: "1 1 480px", minWidth: 0 }}>
+          <StatStrip
+            stats={[
+              {
+                label: "Green stock",
+                value: (
+                  <span data-testid="stat-green">
+                    {catalogue.greenLbs.toFixed(1)} lbs
+                  </span>
+                ),
+              },
+              {
+                label: "Roasted stock",
+                value: (
+                  <span data-testid="stat-roasted">
+                    {catalogue.roastedLbs.toFixed(1)} lbs
+                  </span>
+                ),
+              },
+              { label: "Lots tracked", value: String(inventory.length) },
+              {
+                /*
+                  Coloured directly rather than through StatStrip's `tone` prop,
+                  whose only red is the live-register variant — banned in
+                  CoffeeOS because no realtime layer exists for it to mean
+                  anything, and enforced by design-rulings.spec.ts. `--danger`
+                  carries body-size red; `--brand` is the live register.
+
+                  The literal attribute is deliberately not written out here:
+                  that guard raw-text scans, so naming the banned token even to
+                  explain it trips the rule.
+                */
+                label: "Low or out",
+                value: (
+                  <span
+                    data-testid="stat-attention"
+                    style={{ color: needsAttention > 0 ? "var(--danger)" : undefined }}
                   >
-                    <div className="flex flex-col items-center gap-2">
-                      <Warehouse size={28} strokeWidth={1.5} className="text-espresso/30" />
-                      {searchQuery
-                        ? "No coffees match your search."
-                        : "Nothing here yet. Add your first coffee to get started."}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                <>
-                  {filteredInventory.map((coffee, i) => {
-                    const greenLbs = gramsToLbs(coffee.current_green_quantity_g);
-                    const roastedLbs = gramsToLbs(coffee.roasted_stock_g || 0);
-                    const totalCoffeeValue = greenLbs * coffee.price_per_lb;
-                    const isLow = greenLbs < 5 && greenLbs > 0;
-                    return (
-                      <tr
-                        key={coffee.id}
-                        className={`border-b border-dashed border-fog/70 hover:bg-cream/60 transition-colors ${
-                          i === filteredInventory.length - 1
-                            ? "border-b-0"
-                            : ""
-                        }`}
-                      >
-                        <td className="px-5 py-3 font-bold text-espresso">
-                          {coffee.name}
-                        </td>
-                        <td className="px-3 py-3 text-espresso/70">
-                          {coffee.origin}
-                        </td>
-                        <td className="px-3 py-3 text-espresso/50">
-                          {coffee.supplier || "—"}
-                        </td>
-                        <td className="px-3 py-3 text-right font-bold text-espresso">
-                          ${coffee.price_per_lb.toFixed(2)}
-                        </td>
-                        <td className="px-3 py-3 text-right">
-                          <span className="font-bold text-espresso">
-                            {greenLbs.toFixed(1)} lbs
-                          </span>
-                          {isLow && (
-                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full border-[2px] border-espresso bg-sun text-espresso text-[10px] font-extrabold uppercase tracking-[.06em]">
-                              Low
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-3 text-right font-bold text-espresso">
-                          {roastedLbs.toFixed(1)} lbs
-                        </td>
-                        <td className="px-3 py-3 text-right font-bold text-espresso">
-                          ${totalCoffeeValue.toFixed(2)}
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => openAdjustDialog(coffee)}
-                              title="Adjust quantity"
-                              className="p-1.5 rounded-[8px] text-espresso/60 hover:text-espresso hover:bg-fog/50 transition-colors"
-                            >
-                              <Scale size={15} strokeWidth={2.2} />
-                            </button>
-                            <button
-                              onClick={() => openEditDialog(coffee)}
-                              title="Edit"
-                              className="p-1.5 rounded-[8px] text-espresso/60 hover:text-espresso hover:bg-fog/50 transition-colors"
-                            >
-                              <Edit size={15} strokeWidth={2.2} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(coffee.id)}
-                              title="Delete"
-                              className="p-1.5 rounded-[8px] text-espresso/60 hover:text-tomato hover:bg-tomato/10 transition-colors"
-                            >
-                              <Trash2 size={15} strokeWidth={2.2} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {/* Totals row */}
-                  <tr className="bg-cream border-t-[2px] border-espresso">
-                    <td
-                      colSpan={4}
-                      className="px-5 py-3 font-extrabold text-[11px] uppercase tracking-[.08em] text-espresso/60 text-right"
-                    >
-                      Totals
-                    </td>
-                    <td className="px-3 py-3 text-right font-extrabold text-espresso">
-                      {totalGreenLbs.toFixed(1)} lbs
-                    </td>
-                    <td className="px-3 py-3 text-right font-extrabold text-espresso">
-                      {totalRoastedLbs.toFixed(1)} lbs
-                    </td>
-                    <td className="px-3 py-3 text-right font-extrabold text-espresso">
-                      ${totalValue.toFixed(2)}
-                    </td>
-                    <td />
-                  </tr>
-                </>
-              )}
-            </tbody>
-          </table>
+                    {needsAttention}
+                  </span>
+                ),
+              },
+            ]}
+          />
         </div>
+      </div>
 
-        {/* Mobile card layout */}
-        <div className="md:hidden -mx-5 -mb-5 divide-y-[2px] divide-dashed divide-fog">
-          {filteredInventory.length === 0 ? (
-            <div className="px-5 py-10 text-center text-espresso/50 font-medium flex flex-col items-center gap-2">
-              <Warehouse size={28} strokeWidth={1.5} className="text-espresso/30" />
-              {searchQuery
-                ? "No coffees match your search."
-                : "Nothing here yet. Add your first coffee."}
-            </div>
-          ) : (
-            <>
-              {filteredInventory.map((coffee) => {
-                const greenLbs = gramsToLbs(coffee.current_green_quantity_g);
-                const roastedLbs = gramsToLbs(coffee.roasted_stock_g || 0);
-                const totalCoffeeValue = greenLbs * coffee.price_per_lb;
-                const isLow = greenLbs < 5 && greenLbs > 0;
-                return (
-                  <div key={coffee.id} className="px-5 py-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="font-bold text-espresso">
-                          {coffee.name}
-                        </div>
-                        <div className="text-[12px] text-espresso/60 font-medium">
-                          {coffee.origin}
-                          {coffee.supplier ? ` · ${coffee.supplier}` : ""}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => openAdjustDialog(coffee)}
-                          className="p-1.5 rounded-[8px] text-espresso/60 hover:text-espresso hover:bg-fog/50 transition-colors"
-                        >
-                          <Scale size={15} strokeWidth={2.2} />
-                        </button>
-                        <button
-                          onClick={() => openEditDialog(coffee)}
-                          className="p-1.5 rounded-[8px] text-espresso/60 hover:text-espresso hover:bg-fog/50 transition-colors"
-                        >
-                          <Edit size={15} strokeWidth={2.2} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(coffee.id)}
-                          className="p-1.5 rounded-[8px] text-espresso/60 hover:text-tomato hover:bg-tomato/10 transition-colors"
-                        >
-                          <Trash2 size={15} strokeWidth={2.2} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <div className="text-[10px] font-extrabold uppercase tracking-[.08em] text-espresso/50 mb-0.5">
-                          Price/lb
-                        </div>
-                        <div className="font-bold text-espresso text-[13px]">
-                          ${coffee.price_per_lb.toFixed(2)}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] font-extrabold uppercase tracking-[.08em] text-espresso/50 mb-0.5">
-                          Value
-                        </div>
-                        <div className="font-bold text-espresso text-[13px]">
-                          ${totalCoffeeValue.toFixed(2)}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] font-extrabold uppercase tracking-[.08em] text-espresso/50 mb-0.5">
-                          Green Stock
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-espresso text-[13px]">
-                            {greenLbs.toFixed(1)} lbs
-                          </span>
-                          {isLow && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full border-[2px] border-espresso bg-sun text-espresso text-[9px] font-extrabold uppercase">
-                              Low
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] font-extrabold uppercase tracking-[.08em] text-espresso/50 mb-0.5">
-                          Roasted Stock
-                        </div>
-                        <div className="font-bold text-espresso text-[13px]">
-                          {roastedLbs.toFixed(1)} lbs
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              {/* Mobile totals */}
-              <div className="px-5 py-4 bg-cream border-t-[2px] border-espresso">
-                <div className="text-[10px] font-extrabold uppercase tracking-[.08em] text-espresso/50 mb-2">
-                  Totals
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <div className="text-[10px] font-extrabold uppercase tracking-[.08em] text-espresso/40 mb-0.5">
-                      Green
-                    </div>
-                    <div className="font-extrabold text-espresso text-[13px]">
-                      {totalGreenLbs.toFixed(1)} lbs
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-extrabold uppercase tracking-[.08em] text-espresso/40 mb-0.5">
-                      Roasted
-                    </div>
-                    <div className="font-extrabold text-espresso text-[13px]">
-                      {totalRoastedLbs.toFixed(1)} lbs
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-extrabold uppercase tracking-[.08em] text-espresso/40 mb-0.5">
-                      Value
-                    </div>
-                    <div className="font-extrabold text-espresso text-[13px]">
-                      ${totalValue.toFixed(2)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
+      {/* Filter bar — a genuinely modular bordered container, one of the few
+          places the design system allows one. */}
+      <div
+        className="flex items-center gap-3 flex-wrap mb-4"
+        style={{
+          padding: 10,
+          background: "var(--surface-sunken)",
+          border: "1px solid var(--hairline)",
+          borderRadius: "var(--r-md)",
+        }}
+      >
+        <div style={{ flex: "1 1 220px", minWidth: 180, maxWidth: 300 }}>
+          <Input
+            size="sm"
+            mono
+            leading={<Search size={14} strokeWidth={1.5} />}
+            placeholder="Name, origin, supplier, lot"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
-      </Panel>
+        <SegmentedControl
+          size="sm"
+          value={stockFilter}
+          onChange={setStockFilter}
+          options={[
+            { value: "all", label: "All" },
+            { value: "in", label: "In stock" },
+            { value: "low", label: "Low" },
+            { value: "out", label: "Out" },
+          ]}
+        />
+        <div style={{ width: 170 }}>
+          <Select
+            size="sm"
+            value={supplierFilter}
+            onChange={(e) => setSupplierFilter(e.target.value)}
+          >
+            <option value="">Any supplier</option>
+            {suppliers.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </Select>
+        </div>
+        {/* The rule stated next to the filter that applies it. It was a bare
+            `5` inline in the row renderer with nothing on screen saying so. */}
+        <span style={overline} className="ml-auto">
+          {LOW_RULE}
+        </span>
+      </div>
 
-      {/* Adjust Quantity Dialog */}
-      <Dialog open={isAdjustDialogOpen} onOpenChange={setIsAdjustDialogOpen}>
-        <DialogContent className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
-          <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
-            <DialogHeader>
-              <DialogTitle className="font-extrabold text-[15px] uppercase tracking-[.08em] text-espresso">
-                Adjust: {adjustingCoffee?.name}
-              </DialogTitle>
-            </DialogHeader>
-          </div>
-
-          <div className="px-6 py-5 space-y-4">
-            <div>
-              <FieldLabel>Adjustment Type</FieldLabel>
-              <Select
-                value={adjustmentData.change_type}
-                onValueChange={(value) =>
-                  setAdjustmentData({
-                    ...adjustmentData,
-                    change_type: value as typeof adjustmentData.change_type,
-                  })
-                }
-              >
-                <SelectTrigger className="border-[2.5px] border-espresso bg-cream rounded-[10px] shadow-[3px_3px_0_#1C0F05] focus:ring-0 focus:border-tomato">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manual_green_adjust">
-                    <div className="flex items-center gap-2">
-                      <Scale size={14} strokeWidth={2.2} className="text-espresso/60" />
-                      Manual Adjustment (+/-)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="roast_deduct">
-                    <div className="flex items-center gap-2">
-                      <TrendingDown size={14} strokeWidth={2.2} className="text-honey" />
-                      Roast (Deduct Stock)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="sale_deduct">
-                    <div className="flex items-center gap-2">
-                      <TrendingDown size={14} strokeWidth={2.2} className="text-tomato" />
-                      Sale (Deduct Stock)
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <FieldLabel>Quantity (lbs)</FieldLabel>
-              <MerninInput
-                id="adjust_quantity"
-                type="number"
-                step="0.01"
-                value={adjustmentData.quantity}
-                onChange={(e) =>
-                  setAdjustmentData({ ...adjustmentData, quantity: e.target.value })
-                }
-                placeholder="Enter amount"
-              />
-              {adjustmentData.quantity && (
-                <p className="mt-1.5 text-[11px] font-medium text-espresso/60">
-                  Current:{" "}
-                  {gramsToLbs(
-                    adjustingCoffee?.current_green_quantity_g || 0
-                  ).toFixed(1)}{" "}
-                  lbs →{" "}
-                  <span className="font-extrabold text-espresso">
-                    {adjustmentData.change_type === "manual_green_adjust"
-                      ? (
-                          gramsToLbs(
-                            adjustingCoffee?.current_green_quantity_g || 0
-                          ) + (parseFloat(adjustmentData.quantity) || 0)
-                        ).toFixed(1)
-                      : (
-                          gramsToLbs(
-                            adjustingCoffee?.current_green_quantity_g || 0
-                          ) - Math.abs(parseFloat(adjustmentData.quantity) || 0)
-                        ).toFixed(1)}{" "}
-                    lbs
-                  </span>{" "}
-                  after adjustment
-                </p>
-              )}
-            </div>
-
-            <div>
-              <FieldLabel>Notes (optional)</FieldLabel>
-              <MerninTextarea
-                id="adjust_notes"
-                value={adjustmentData.notes}
-                onChange={(e) =>
-                  setAdjustmentData({ ...adjustmentData, notes: e.target.value })
-                }
-                placeholder="Reason for adjustment..."
-                rows={2}
-              />
-            </div>
-          </div>
-
-          <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
-            <Btn
-              variant="outline"
-              onClick={() => setIsAdjustDialogOpen(false)}
+      {/* Worksheet */}
+      {filteredInventory.length === 0 ? (
+        <EmptyState
+          icon={<Warehouse size={28} strokeWidth={1.5} />}
+          title="No lots match"
+          description="Try clearing the search or switching the stock filter."
+          action={
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setSearchQuery("");
+                setStockFilter("all");
+                setSupplierFilter("");
+              }}
             >
-              Cancel
-            </Btn>
-            <Btn
-              onClick={handleAdjustQuantity}
-              disabled={isSubmitting || !adjustmentData.quantity}
-            >
-              {isSubmitting ? "Saving..." : "Apply Adjustment"}
-            </Btn>
-          </div>
-        </DialogContent>
-      </Dialog>
+              Clear filters
+            </Button>
+          }
+        />
+      ) : (
+        <InventoryWorksheetTable
+          rows={filteredInventory}
+          totalGreenLbs={visible.greenLbs}
+          totalRoastedLbs={visible.roastedLbs}
+          totalValue={visible.value}
+          onAdjust={openAdjustDialog}
+          onEdit={openEditDialog}
+          onDelete={handleDelete}
+          expandedId={expandedId}
+          onToggleExpand={toggleExpand}
+          movements={movements}
+          movementsHasMore={movementsHasMore}
+          movementsLoading={movementsLoading}
+          movementsError={movementsError}
+        />
+      )}
+
+      <div className="flex items-center justify-between mt-4">
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--fs-caption)",
+            color: "var(--ink-muted)",
+          }}
+        >
+          {filteredInventory.length} of {inventory.length} lots
+        </span>
+      </div>
+
+      <AdjustStockDialog
+        open={isAdjustDialogOpen}
+        onOpenChange={setIsAdjustDialogOpen}
+        coffee={adjustingCoffee}
+        values={adjustmentData}
+        onChange={setAdjustmentData}
+        error={adjustError}
+        isSubmitting={isSubmitting}
+        onSubmit={handleAdjustQuantity}
+      />
+
+      <DeleteLotDialog
+        open={!!deletingCoffee}
+        onOpenChange={(open) => !open && setDeletingCoffee(null)}
+        coffee={deletingCoffee}
+        isDeleting={isDeleting}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

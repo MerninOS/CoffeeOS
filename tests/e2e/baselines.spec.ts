@@ -294,3 +294,47 @@ test.describe('public baselines (logged out)', () => {
     })
   }
 })
+
+/**
+ * /settings as a ROASTER — the role that can manage nothing.
+ *
+ * Every other authenticated baseline in this file is an owner's view, so a
+ * regression in role gating would ship invisibly. /settings gates three of its
+ * four jobs on owner-or-admin, which makes it the route where that matters most.
+ *
+ * The assertions are DOM ABSENCE, not visibility. An element that is present but
+ * CSS-hidden still ships its content in the HTML, and a member count is exactly
+ * the sort of thing that should not reach a role with no team section — that was
+ * a real leak in the design review, where the stat strip showed team figures to
+ * a roaster who had no team list to go with them.
+ */
+test.describe('/settings as a roaster', () => {
+  test.use({ storageState: 'tests/e2e/.auth/storageState.roaster.json' })
+
+  test('baseline /settings (roaster)', async ({ page }) => {
+    const errors = collectErrors(page)
+
+    await page.goto('/settings')
+    await expect(page).not.toHaveURL(/\/auth\//)
+    await page.waitForLoadState('networkidle')
+
+    // Nothing that manages the workspace.
+    await expect(page.getByRole('button', { name: /send invite|^invite$/i })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /disconnect/i })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /connect store/i })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /refresh billing status/i })).toHaveCount(0)
+    await expect(page.getByTestId('member-row')).toHaveCount(0)
+    await expect(page.getByTestId('invitation-row')).toHaveCount(0)
+
+    // And no team figures in the markup at all, hidden or otherwise.
+    const html = await page.content()
+    expect(html, 'the stat strip leaked team counts to a roaster').not.toMatch(/>\s*Members\s*</i)
+    expect(html, 'the role legend came back').not.toMatch(/Role Permissions/i)
+
+    await expect(page).toHaveScreenshot('_settings_roaster.png', {
+      fullPage: true,
+      mask: [page.locator('[data-testid="identity-chrome"]')],
+    })
+    expect(errors, 'console errors on /settings as a roaster').toEqual([])
+  })
+})

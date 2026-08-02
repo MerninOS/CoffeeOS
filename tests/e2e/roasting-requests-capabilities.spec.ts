@@ -83,17 +83,24 @@ const toDisplayQty = (raw: string) => (Number(raw) / G_PER_LB).toFixed(1)
 const probeQtyComma = (testInfo: { project: { name: string } }) => toDisplayQty(probeQtyG(testInfo))
 
 /**
- * `createRoastRequest` merges into any EXISTING pending/in_progress request
- * for the same coffee instead of inserting a new row (actions.ts, "Add to
- * existing request"). The probe therefore targets Ethiopia Yirgacheffe, whose
- * only seeded request is `fulfilled` — excluded from that merge check — so a
- * fresh create is guaranteed to insert rather than silently accumulate into
- * a leftover. (Guatemala Huehuetenango, the other seeded coffee, has an
- * active request and would merge instead of creating a new row — confirmed by
- * running the flow against it during authoring: the resulting request grew
- * cumulatively across runs instead of producing a distinct probe row.)
+ * The probe targets a coffee with NO roast requests of its own.
+ *
+ * Two reasons, both learned the hard way:
+ *   1. `createRoastRequest` MERGES into an existing pending/in_progress request
+ *      for the same coffee rather than inserting. Probing a coffee that already
+ *      has an active request silently exercises the merge path and never adds a
+ *      row.
+ *   2. Cleanup has to be able to say "this row is mine" without ambiguity. When
+ *      the probe shared a coffee with a seeded request, cleanup protected the
+ *      seeded one by QUANTITY — and that broke twice: once when a merge changed
+ *      the probe's quantity, and again when Stage B changed the displayed unit
+ *      from grams to pounds so the guard string stopped matching anything.
+ *
+ * Kenya Nyeri AA has green stock (so it is selectable) and no requests at all,
+ * seeded by CoffeeOS#72. So ANY Kenya request is a probe, in either section, and
+ * cleanup needs no quantity guard.
  */
-const PROBE_COFFEE = 'Ethiopia Yirgacheffe'
+const PROBE_COFFEE = 'Kenya Nyeri AA'
 
 /**
  * Two overlays that sit over the bottom of the list and intercept clicks at
@@ -194,8 +201,6 @@ async function pickOption(page: Page, testId: string, optionName: string | RegEx
  * any ACTIVE Ethiopia row is therefore a probe by definition. In the completed
  * section the seeded row IS Ethiopia, so that one is protected by quantity.
  */
-const SEEDED_ETHIOPIA_QTY = '3,200g'
-
 async function removeProbeIfPresent(browser: Browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
   page.on('dialog', (dialog) => dialog.accept())
@@ -218,7 +223,6 @@ async function removeProbeIfPresent(browser: Browser) {
     page
       .locator('[data-testid="requests-completed"] [data-testid="request-row"]')
       .filter({ has: page.locator(`[data-testid="row-coffee"]:text-is("${PROBE_COFFEE}")`) })
-      .filter({ hasNot: page.locator(`[data-testid="row-quantity"]:text-is("${SEEDED_ETHIOPIA_QTY}")`) })
 
   for (let i = 0; i < 6; i++) {
     if ((await completedProbe().count()) === 0) break

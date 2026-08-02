@@ -16,6 +16,27 @@ import { createClient } from "@supabase/supabase-js";
 const demoEmail = () => process.env.DEMO_EMAIL ?? "demo@coffeeos.io";
 const demoPassword = () => process.env.DEMO_PASSWORD ?? "DemoCoffeeOS!2026";
 
+// A second seeded account, under the SAME owner, whose only job is to be a role
+// that cannot manage anything. Without it every e2e baseline is an owner's view
+// and a regression in role gating ships invisibly (CoffeeOS#74 criterion 18).
+//
+// Deliberately under the demo owner rather than in its own workspace: a roaster
+// with no workspace renders "Not connected" and proves nothing about how a LIVE
+// workspace is gated.
+//
+// Derived from THIS worktree's demo address by sub-addressing, so it inherits
+// the per-worktree isolation rather than reintroducing the shared account that
+// isolation exists to remove — demo+roaster@… follows demo@…, and a worktree
+// that sets its own DEMO_EMAIL gets its own roaster for free.
+//
+// Lazy for the same reason the demo accessors are: a module-level const is
+// evaluated at import time, before loadEnv() has read .env.local, and would
+// silently resolve against the shared default.
+const roasterEmail = () =>
+  process.env.DEMO_ROASTER_EMAIL ??
+  demoEmail().replace(/^([^@]+)@/, "$1+roaster@");
+const roasterPassword = () => process.env.DEMO_ROASTER_PASSWORD ?? demoPassword();
+
 function loadEnvFromFile(envPath) {
   if (!fs.existsSync(envPath)) return;
   const raw = fs.readFileSync(envPath, "utf8");
@@ -100,6 +121,94 @@ async function getOrCreateDemoUser(admin) {
   });
   if (updateError) {
     throw new Error(`Failed to update demo auth user: ${updateError.message}`);
+  }
+
+  return userId;
+}
+
+/**
+ * Create (or refresh) the roaster and attach it to `ownerId`.
+ *
+ * ADDITIVE ONLY — this touches the auth user and one profile row and nothing
+ * else. It is reachable on its own via `--roaster-only` precisely so it can be
+ * run without `clearDemoData`: a full re-seed rebuilds every order from
+ * today-relative dates, which knocks the uncosted order off the first page and
+ * fails 12 /orders specs (CoffeeOS#88, still open).
+ */
+async function getOrCreateRoaster(admin, ownerId) {
+  let userId = null;
+
+  let page = 1;
+  const perPage = 200;
+  for (;;) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) {
+      throw new Error(`Failed to list users: ${error.message}`);
+    }
+
+    const found = (data?.users || []).find(
+      (user) => user.email?.toLowerCase() === roasterEmail().toLowerCase()
+    );
+    if (found) {
+      userId = found.id;
+      break;
+    }
+
+    if (!data?.nextPage) break;
+    page = data.nextPage;
+  }
+
+  const metadata = {
+    first_name: "Marcus",
+    last_name: "Oyelaran",
+    role: "roaster",
+  };
+
+  if (!userId) {
+    const { data, error } = await admin.auth.admin.createUser({
+      email: roasterEmail(),
+      password: roasterPassword(),
+      email_confirm: true,
+      user_metadata: metadata,
+      app_metadata: { provider: "email" },
+    });
+    if (error) {
+      throw new Error(`Failed to create roaster auth user: ${error.message}`);
+    }
+    userId = data.user?.id || null;
+  } else {
+    const { error } = await admin.auth.admin.updateUserById(userId, {
+      email: roasterEmail(),
+      password: roasterPassword(),
+      email_confirm: true,
+      user_metadata: metadata,
+    });
+    if (error) {
+      throw new Error(`Failed to update roaster auth user: ${error.message}`);
+    }
+  }
+
+  if (!userId) {
+    throw new Error("Roaster user id could not be resolved.");
+  }
+
+  // The profiles row is what the app reads for role and tenancy — user_metadata
+  // is only the fallback in page.tsx.
+  const { error: profileError } = await admin.from("profiles").upsert(
+    {
+      id: userId,
+      email: roasterEmail(),
+      role: "roaster",
+      first_name: "Marcus",
+      last_name: "Oyelaran",
+      owner_id: ownerId,
+      full_name: "Marcus Oyelaran",
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" }
+  );
+  if (profileError) {
+    throw new Error(`Failed to upsert roaster profile: ${profileError.message}`);
   }
 
   return userId;
@@ -264,14 +373,116 @@ async function seedDemoData(admin, ownerId) {
         purchase_date: day(-16),
         notes: "Chocolate-forward component for espresso blend.",
       },
+      /**
+       * Two lots that exist ONLY to make the stock states reachable (CoffeeOS#72).
+       *
+       * The low/out rule is `green < 5 lb` (2267.96 g), and before these the seed
+       * held two healthy lots only — so the `Low` and `Out` filters, the badges,
+       * and the "Low or out" strip figure had no data to render and their tests
+       * would have passed vacuously on an empty table.
+       *
+       * Kenya sits at 1814.4 g = exactly 4.0 lb: low, and far enough from the
+       * 5 lb boundary that a rounding change cannot silently reclassify it.
+       * Sumatra is at 0 g with roasted stock remaining, which is the real-world
+       * shape of a lot that has been fully roasted off — and it is the case that
+       * makes `$0.00` value correct rather than missing.
+       */
+      {
+        user_id: ownerId,
+        name: "Kenya Nyeri AA",
+        origin: "Kenya",
+        lot_code: "KEN-NYE-2026-03",
+        price_per_lb: 8.9,
+        initial_quantity_g: 11339.8,
+        current_green_quantity_g: 1814.4,
+        roasted_stock_g: 900,
+        supplier: "Ally Coffee",
+        purchase_date: day(-45),
+        notes: "Blackcurrant and tomato. Reorder if the seasonal holds.",
+      },
+      {
+        user_id: ownerId,
+        name: "Sumatra Mandheling",
+        origin: "Indonesia",
+        lot_code: "SUM-MAN-2026-04",
+        price_per_lb: 5.75,
+        initial_quantity_g: 27215.5,
+        current_green_quantity_g: 0,
+        roasted_stock_g: 1200,
+        supplier: "Ally Coffee",
+        purchase_date: day(-60),
+        notes: null,
+      },
     ])
     .select("id,name");
-  if (coffeeError || !coffees || coffees.length < 2) {
+  if (coffeeError || !coffees || coffees.length < 4) {
     throw new Error(`Failed to insert green coffee inventory: ${coffeeError?.message || "unknown error"}`);
   }
 
   const ethCoffee = coffees.find((c) => c.name.includes("Ethiopia")) || coffees[0];
   const guaCoffee = coffees.find((c) => c.name.includes("Guatemala")) || coffees[1];
+
+  /**
+   * A movement history for ONE lot (CoffeeOS#72).
+   *
+   * `coffee_inventory_changes` is written by the app on every create, manual
+   * adjustment and roast batch — but this seed inserts inventory and batches
+   * directly through the admin client, bypassing those actions, so the table was
+   * empty and `/inventory`'s movement panel had nothing to render.
+   *
+   * The deltas are chosen to RECONCILE: 22679.6 − 3628.7 − 498.9 − 2677.0 =
+   * 15875.0, which is exactly Ethiopia's `current_green_quantity_g`. A history
+   * that does not sum to the current figure is worse than no history, because
+   * the panel's whole claim is that it explains where the coffee went.
+   *
+   * `reference_type: 'roasting_batch'` with a null `reference_id` is deliberate
+   * and not laziness: `roasting_batches` carries no batch number (id, coffee_name,
+   * lot_code, batch_date only), so the UI renders "Roast batch" with no code. This
+   * seeds the exact path that rule runs on.
+   */
+  const { error: coffeeChangesError } = await admin.from("coffee_inventory_changes").insert([
+    {
+      coffee_id: ethCoffee.id,
+      user_id: ownerId,
+      changed_by_user_id: ownerId,
+      change_type: "initial",
+      green_quantity_change_g: 22679.6,
+      reference_type: "manual",
+      notes: "Initial inventory",
+      created_at: day(-21),
+    },
+    {
+      coffee_id: ethCoffee.id,
+      user_id: ownerId,
+      changed_by_user_id: ownerId,
+      change_type: "roast_deduct",
+      green_quantity_change_g: -3628.7,
+      reference_type: "roasting_batch",
+      created_at: day(-14),
+    },
+    {
+      coffee_id: ethCoffee.id,
+      user_id: ownerId,
+      changed_by_user_id: ownerId,
+      change_type: "manual_green_adjust",
+      green_quantity_change_g: -498.9,
+      reference_type: "manual",
+      notes: "Moisture loss on the pallet — reconciled to scale.",
+      created_at: day(-9),
+    },
+    {
+      coffee_id: ethCoffee.id,
+      user_id: ownerId,
+      changed_by_user_id: ownerId,
+      change_type: "roast_deduct",
+      green_quantity_change_g: -2677.0,
+      reference_type: "roasting_batch",
+      created_at: day(-3),
+    },
+  ]);
+  if (coffeeChangesError) {
+    throw new Error(`Failed to insert coffee inventory changes: ${coffeeChangesError.message}`);
+  }
 
   const { data: components, error: componentsError } = await admin
     .from("components")
@@ -1080,15 +1291,34 @@ async function main() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
+  // `--roaster-only` skips clearDemoData/seedDemoData entirely. A full re-seed
+  // rebuilds orders from today-relative dates and fails 12 /orders specs
+  // (CoffeeOS#88), so adding the role-gating fixture must not require one.
+  const roasterOnly = process.argv.includes("--roaster-only");
+
+  if (roasterOnly) {
+    console.log("Seeding the roaster only (no demo data will be cleared)...");
+    const demoUserId = await getOrCreateDemoUser(admin);
+    await getOrCreateRoaster(admin, demoUserId);
+
+    console.log("Roaster is ready.");
+    console.log(`Email: ${roasterEmail()}`);
+    console.log(`Password: ${roasterPassword()}`);
+    return;
+  }
+
   console.log("Seeding demo account...");
   const demoUserId = await getOrCreateDemoUser(admin);
   await clearDemoData(admin, demoUserId);
   await seedDemoData(admin, demoUserId);
+  await getOrCreateRoaster(admin, demoUserId);
   await writeOrderIdFixture(admin, demoUserId);
 
   console.log("Demo account is ready.");
   console.log(`Email: ${demoEmail()}`);
   console.log(`Password: ${demoPassword()}`);
+  console.log(`Roaster: ${roasterEmail()}`);
+  console.log(`Roaster password: ${roasterPassword()}`);
 }
 
 /**

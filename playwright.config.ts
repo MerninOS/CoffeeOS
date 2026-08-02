@@ -92,6 +92,26 @@ export default defineConfig({
       //   lsof -ti:3000 | xargs kill -9 2>/dev/null; pnpm test:e2e
       // This is the same trap ORDERS_PAGE_LIMIT hit in CoffeeOS#88.
       SHOPIFY_FIXTURE_MODE: '1',
+
+      // Lets a SECOND test account through the billing gate.
+      //
+      // lib/supabase/proxy.ts redirects any user whose workspace lacks active
+      // billing to /settings?error=billing_not_active&action=activate_billing.
+      // The demo workspace has billing_status null, so the only reason the suite
+      // works at all is `isDemoUserEmail()` in lib/shopify-billing.ts — a
+      // hardcoded match on the single literal "demo@coffeeos.io".
+      //
+      // That makes the suite's access model unextendable: the seeded roaster
+      // (CoffeeOS#74 criterion 18) is gated, bounced through the settings
+      // auto-activate effect, and ends up back on /auth/login — which surfaces
+      // as a 30s waitForURL timeout in global setup, nothing like its cause.
+      //
+      // This flips the bypass that lib/shopify-billing.ts already exposes, for
+      // the test server only. It is NOT a code change and NOT a data change:
+      // .env.local ships `false`, and process env wins over the env files Next
+      // loads. The gate is all this affects — /settings still reads
+      // billing_status itself, so the page still renders its blocked state.
+      SHOPIFY_BILLING_TEST: '1',
     },
   },
 })
