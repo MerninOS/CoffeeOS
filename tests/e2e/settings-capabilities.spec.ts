@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
-import { roasterAccount } from './support/env'
+import { createClient } from '@supabase/supabase-js'
+import { loadEnvLocal, roasterAccount } from './support/env'
 
 /**
  * The /settings editing capabilities, asserted by SERVER-OBSERVED EFFECT.
@@ -20,9 +21,78 @@ import { roasterAccount } from './support/env'
  * account tests/e2e/baselines.spec.ts photographs.
  */
 
+/**
+ * Take the onboarding tour widget out of the layout for capability tests.
+ *
+ * `components/onboarding-tour-widget.tsx` renders `fixed bottom-4 right-4 z-50`
+ * over the bottom-right of every dashboard route, and it keeps that corner even
+ * after global setup dismisses it — dismissing collapses it to a "Show
+ * Onboarding" pill in the same place. Playwright reports the target beneath it
+ * as "visible, enabled and stable" and then retries the click for the full
+ * timeout while the widget eats every pointer event, so the failure reads as a
+ * missing element rather than an overlay.
+ *
+ * It bites at 375px in particular: the converted page is short, the invite row
+ * is the last thing on it, and scrolling that row into view puts it under the
+ * pill. page.tsx already carries bottom padding so the row clears the widget at
+ * the END of the document, but the widget is fixed to the VIEWPORT, so padding
+ * cannot help mid-scroll.
+ *
+ * Excluded here rather than worked around, because this spec's job is to assert
+ * what the page can do, and the overlay is a tracked defect of shared chrome
+ * that no settings ticket should be rewriting. It is deliberately NOT applied to
+ * baselines.spec.ts — those snapshots should keep photographing what an operator
+ * actually sees, widget included.
+ *
+ * Selected by its Tailwind position classes because the component exposes no
+ * testid. If this stops matching, the widget moved — which is worth knowing, so
+ * prefer fixing the selector over deleting the call.
+ *
+ * Also drops `<nextjs-portal>`, the Next dev-overlay root. The suite runs against
+ * `next dev`, so that portal exists here and in no production build; it anchors
+ * bottom-left, which is exactly where a stacked row puts its action button at
+ * 375px. Excluding a thing no operator can ever see is not the same as excluding
+ * a defect.
+ */
+async function hideOnboardingOverlay(page: import('@playwright/test').Page) {
+  await page.addInitScript(() => {
+    const apply = () => {
+      const style = document.createElement('style')
+      style.textContent =
+        '.fixed.bottom-4.right-4, nextjs-portal { display: none !important; }'
+      document.head.appendChild(style)
+    }
+    if (document.head) apply()
+    else document.addEventListener('DOMContentLoaded', apply)
+  })
+}
+
 const SEEDED_LAST_NAME = 'User'
 
+/**
+ * A last-resort sweep of leaked invitations, straight through the service role.
+ *
+ * The UI cleanup below asserts that cancelling works, which is worth keeping —
+ * but it shares a failure mode with the test it cleans up after: when the cancel
+ * control is what breaks, the test fails at that step AND the cleanup fails at
+ * the same step, and rows survive. That has now drifted the /settings baseline
+ * twice, presenting leaked data as a rendering regression both times.
+ *
+ * A UI-driven cleanup can never be self-healing when the UI is the thing that is
+ * broken, so this closes the loop below it. Runs once, after the whole file.
+ */
+test.afterAll(async () => {
+  loadEnvLocal()
+  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return
+  const admin = createClient(url, key, { auth: { persistSession: false } })
+  await admin.from('team_invitations').delete().like('email', 'qa-invite-%')
+})
+
 test.describe('/settings — profile', () => {
+  test.beforeEach(async ({ page }) => { await hideOnboardingOverlay(page) })
+
   test.afterEach(async ({ page }) => {
     await page.goto('/settings')
     const last = page.getByLabel(/last name/i)
@@ -68,6 +138,8 @@ const invitationRow = (page: import('@playwright/test').Page, email: string) =>
   page.locator(`[data-testid="invitation-row"][data-invitation-email="${email}"]`)
 
 test.describe('/settings — team invitations', () => {
+  test.beforeEach(async ({ page }) => { await hideOnboardingOverlay(page) })
+
   // A fresh address per run. inviteTeamMember upserts on (owner_id, email) and
   // refuses a still-pending duplicate, so a leaked row from an earlier run would
   // make this test assert against something it did not create.
@@ -89,7 +161,9 @@ test.describe('/settings — team invitations', () => {
     await page.goto('/settings')
     const stale = page.locator('[data-testid="invitation-row"][data-invitation-email^="qa-invite-"]')
     for (let guard = 0; (await stale.count()) > 0 && guard < 20; guard++) {
-      await stale.first().getByTestId('cancel-invitation').click()
+      const cancel = stale.first().getByTestId('cancel-invitation')
+      await cancel.scrollIntoViewIfNeeded()
+      await cancel.click()
       await expect(page.getByText(/invitation cancelled/i)).toBeVisible()
     }
     await expect(stale).toHaveCount(0)
@@ -116,7 +190,15 @@ test.describe('/settings — team invitations', () => {
     await page.reload()
     await expect(invitationRow(page, INVITEE)).toBeVisible()
 
-    await invitationRow(page, INVITEE).getByTestId('cancel-invitation').click()
+    /* Scrolled into view first. After the reload the team list refetches on
+       mount and the rows shift while it settles, so Playwright's stability check
+       can time out on a control that is perfectly reachable a moment later —
+       measured: once scrolled, elementFromPoint at the button's centre returns
+       the button itself. It bites at 375px and not at 1280 because the stacked
+       layout puts this row much further down the page. */
+    const cancel = invitationRow(page, INVITEE).getByTestId('cancel-invitation')
+    await cancel.scrollIntoViewIfNeeded()
+    await cancel.click()
     await expect(page.getByText(/invitation cancelled/i)).toBeVisible()
 
     await page.reload()
@@ -227,6 +309,8 @@ test.describe('/settings — workspace status', () => {
 })
 
 test.describe('/settings — member roles', () => {
+  test.beforeEach(async ({ page }) => { await hideOnboardingOverlay(page) })
+
   // Resolved, never hard-coded: the roaster address is derived from this
   // worktree's demo account (CoffeeOS#106), so a literal here would break the
   // moment a worktree sets its own DEMO_EMAIL — and break as a confusing
