@@ -419,10 +419,15 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
               { label: "Lots tracked", value: String(inventory.length) },
               {
                 /*
-                  Coloured directly rather than via StatStrip's `tone`, whose only
-                  red is `tone="live"` — banned in CoffeeOS, because there is no
-                  realtime layer for it to mean anything. `--danger` carries
-                  body-size red; `--brand` is the live register.
+                  Coloured directly rather than through StatStrip's `tone` prop,
+                  whose only red is the live-register variant — banned in
+                  CoffeeOS because no realtime layer exists for it to mean
+                  anything, and enforced by design-rulings.spec.ts. `--danger`
+                  carries body-size red; `--brand` is the live register.
+
+                  The literal attribute is deliberately not written out here:
+                  that guard raw-text scans, so naming the banned token even to
+                  explain it trips the rule.
                 */
                 label: "Low or out",
                 value: (
