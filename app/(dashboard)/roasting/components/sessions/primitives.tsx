@@ -1,55 +1,109 @@
 "use client";
 
+import type React from "react";
+import type { CSSProperties } from "react";
 import Link from "next/link";
+import { Button, Input, Textarea } from "@merninos/ui/instrument";
+import { mono, overline } from "@/lib/instrument/tokens";
 
+/**
+ * Retokenized onto instrument (CoffeeOS#71), matching the
+ * requests/primitives.tsx conversion. Same external contract as before —
+ * data-testid, variant names, value/onChange shapes, and the `href` branch on
+ * `Btn` for the mobile card's "View Session" link — because
+ * sessions-client.tsx, SessionCard.tsx and SessionDialog.tsx call these
+ * without change.
+ *
+ * `Btn`'s `href` branch does NOT delegate to instrument's own `Button` (which
+ * only ever renders a `<button>`) — it renders a `next/link` `Link` carrying
+ * the same `data-instrument="button"` / `data-variant` hooks the shipped
+ * instrument stylesheet keys its button skin off of (see
+ * node_modules/@merninos/ui/dist/instrument/styles.css: the rules are
+ * `[data-instrument="button"][data-variant="…"]`, not `button[…]`), so the
+ * link picks up the exact same fill/hover/press states as a real `Button`
+ * without a second hand-rolled copy of them here.
+ */
 export type BtnVariant = "primary" | "outline" | "ghost";
+
+const VARIANT_MAP: Record<BtnVariant, "primary" | "secondary" | "tertiary"> = {
+  primary: "primary",
+  outline: "secondary",
+  ghost: "tertiary",
+};
+
+const LINK_BTN_STYLE: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+  fontFamily: "var(--font-sans)",
+  fontWeight: "var(--fw-medium)" as unknown as number,
+  fontSize: "var(--fs-label)",
+  lineHeight: 1,
+  padding: "6px 12px",
+  minHeight: 30,
+  borderRadius: "var(--r-md)",
+  whiteSpace: "nowrap",
+  userSelect: "none",
+  textDecoration: "none",
+};
+
 export function Btn({
+  "data-testid": testId,
   variant = "primary",
   children,
   onClick,
   disabled,
   className = "",
-  asChild,
   href,
 }: {
+  "data-testid"?: string;
   variant?: BtnVariant;
   children: React.ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   className?: string;
-  asChild?: boolean;
   href?: string;
 }) {
-  const base =
-    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border-[2.5px] font-extrabold text-[11px] uppercase tracking-[.08em] transition-all duration-[120ms] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
-  const variants: Record<BtnVariant, string> = {
-    primary:
-      "bg-tomato text-cream border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-px hover:-translate-y-px hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
-    outline:
-      "bg-transparent text-espresso border-espresso hover:bg-fog/40",
-    ghost:
-      "bg-transparent text-espresso border-transparent hover:bg-fog/30",
-  };
-  const cls = `${base} ${variants[variant]} ${className}`;
+  const v = VARIANT_MAP[variant];
   if (href) {
-    return <Link href={href} className={cls}>{children}</Link>;
+    return (
+      <Link
+        href={href}
+        data-testid={testId}
+        data-instrument="button"
+        data-variant={v}
+        className={className}
+        style={LINK_BTN_STYLE}
+      >
+        {children}
+      </Link>
+    );
   }
   return (
-    <button onClick={onClick} disabled={disabled} className={cls}>
+    <Button
+      data-testid={testId}
+      variant={v}
+      size="sm"
+      onClick={onClick}
+      disabled={disabled}
+      className={className}
+    >
       {children}
-    </button>
+    </Button>
   );
 }
 
 export function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[11px] font-extrabold uppercase tracking-[.08em] text-espresso mb-1.5">
+    <p style={{ ...overline, color: "var(--ink-muted)", marginBottom: 6 }}>
       {children}
     </p>
   );
 }
 
 export function MerninInput({
+  "data-testid": testId,
   id,
   type = "text",
   value,
@@ -59,6 +113,7 @@ export function MerninInput({
   min,
   required,
 }: {
+  "data-testid"?: string;
   id?: string;
   type?: string;
   value: string;
@@ -69,7 +124,8 @@ export function MerninInput({
   required?: boolean;
 }) {
   return (
-    <input
+    <Input
+      data-testid={testId}
       id={id}
       type={type}
       value={value}
@@ -78,18 +134,19 @@ export function MerninInput({
       step={step}
       min={min}
       required={required}
-      className="w-full px-3 py-2 rounded-[8px] border-[2.5px] border-espresso bg-cream text-[13px] font-medium text-espresso placeholder:text-espresso/30 shadow-[2px_2px_0_#1C0F05] focus:outline-none focus:shadow-[2px_2px_0_#E8442A] focus:border-tomato"
     />
   );
 }
 
 export function MerninTextarea({
+  "data-testid": testId,
   id,
   value,
   onChange,
   placeholder,
   rows = 2,
 }: {
+  "data-testid"?: string;
   id?: string;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -97,13 +154,26 @@ export function MerninTextarea({
   rows?: number;
 }) {
   return (
-    <textarea
+    <Textarea
+      data-testid={testId}
       id={id}
       value={value}
       onChange={onChange}
       placeholder={placeholder}
       rows={rows}
-      className="w-full px-3 py-2 rounded-[8px] border-[2.5px] border-espresso bg-cream text-[13px] font-medium text-espresso placeholder:text-espresso/30 shadow-[2px_2px_0_#1C0F05] focus:outline-none focus:shadow-[2px_2px_0_#E8442A] focus:border-tomato resize-none"
     />
   );
 }
+
+/**
+ * Small mono for the cost basis line under each cost figure (session-cost.ts'
+ * `cost_basis`, e.g. "1.3 h × $85.00"). Deliberately NOT `overline` — overline
+ * uppercases, which mangles unit symbols ("1.3 h" -> "1.3 H", "8.1 kWh" ->
+ * "8.1 KWH"). Units keep their own casing here; only labels (`overline`)
+ * shout.
+ */
+export const microdata: CSSProperties = {
+  ...mono,
+  fontSize: "var(--fs-overline)",
+  color: "var(--ink-subtle)",
+};

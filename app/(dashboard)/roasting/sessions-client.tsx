@@ -4,15 +4,34 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { Plus, Flame } from "lucide-react";
+import { EmptyState } from "@merninos/ui/instrument";
+import { sans } from "@/lib/instrument/tokens";
 import { createSession, deleteSession } from "./actions";
 import { Btn } from "./components/sessions/primitives";
 import { SessionsTable } from "./components/sessions/SessionsTable";
 import { SessionCard } from "./components/sessions/SessionCard";
 import { SessionDialog, type SessionFormData } from "./components/sessions/SessionDialog";
 import { DeleteDialog } from "./components/sessions/DeleteDialog";
+import { YieldBand } from "./components/sessions/YieldBand";
 import type { Session } from "./components/sessions/types";
 
 export type { Session };
+
+/**
+ * Retokenized onto instrument (CoffeeOS#71). Three substantive changes beyond
+ * the restyle, all scoped by the approved spec:
+ *
+ *  - The three "Total Sessions / Total Batches / Total Roasted" stat cards
+ *    are gone outright, not replaced. They were exactly the "row of equal
+ *    cards" the design system forbids, AND they duplicated the shell's own
+ *    StatStrip directly above this view — which already shows roasted
+ *    weight, and disagreed with these cards on units (grams here, lb there).
+ *  - `YieldBand` is wired in above the table, giving the loss figures on
+ *    every row a visible scale to be read against.
+ *  - The desktop table and mobile cards now share ONE hairline container
+ *    (`--surface` / `--hairline` / `--r-md`), the same split RequestsTable /
+ *    RequestCard use — no nested bordered "card" boxes with offset shadows.
+ */
 
 interface SessionsClientProps {
   initialSessions: Session[];
@@ -108,22 +127,16 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
     return ((green - roasted) / green) * 100;
   };
 
-  const weightLossColor = (pct: number) =>
-    pct > 18 ? "text-tomato" : pct < 12 ? "text-honey" : "text-matcha";
-
-  const totalBatches = sessions.reduce((s, x) => s + x.batch_count, 0);
-  const totalRoasted = sessions.reduce((s, x) => s + x.total_roasted_weight_g, 0);
-
   return (
     <div className="space-y-6">
       {/* Header + New Session button */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {!hideHeader && (
           <div>
-            <h2 className="font-extrabold text-[17px] uppercase tracking-[.04em] text-espresso">
+            <h2 style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-title)", fontWeight: "var(--fw-semibold)" as unknown as number, color: "var(--ink)" }}>
               Roasting Sessions
             </h2>
-            <p className="text-[12px] text-espresso/50 font-medium mt-0.5">
+            <p style={{ ...sans, fontSize: "var(--fs-caption)", color: "var(--ink-muted)", marginTop: 2 }}>
               View and manage your roasting sessions
             </p>
           </div>
@@ -135,59 +148,45 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
       </div>
 
       {sessions.length === 0 ? (
-        <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md flex flex-col items-center justify-center py-14 text-center px-6">
-          <Flame size={36} strokeWidth={1.5} className="text-espresso/20 mb-3" />
-          <h3 className="font-extrabold text-[15px] uppercase tracking-[.04em] text-espresso mb-1">
-            No Sessions Yet
-          </h3>
-          <p className="text-[12px] text-espresso/50 font-medium mb-4">
-            Start tracking your roasting by creating your first session
-          </p>
-          <Btn onClick={() => setIsCreateOpen(true)}>
-            <Plus size={12} strokeWidth={2.5} />
-            Create First Session
-          </Btn>
+        <div style={{ border: "1px solid var(--hairline)", borderRadius: "var(--r-md)", background: "var(--surface)" }}>
+          <EmptyState
+            icon={<Flame />}
+            title="No Sessions Yet"
+            description="Start tracking your roasting by creating your first session"
+            action={
+              <Btn onClick={() => setIsCreateOpen(true)}>
+                <Plus size={12} strokeWidth={2.5} />
+                Create First Session
+              </Btn>
+            }
+          />
         </div>
       ) : (
         <>
-          {/* Stat cards — desktop only */}
-          <div className="hidden md:grid gap-4 grid-cols-3">
-            {[
-              { label: "Total Sessions", value: sessions.length.toString() },
-              { label: "Total Batches", value: totalBatches.toString() },
-              { label: "Total Roasted", value: `${totalRoasted.toFixed(0)}g` },
-            ].map((card) => (
-              <div
-                key={card.label}
-                className="bg-chalk border-[3px] border-espresso rounded-[14px] shadow-flat-sm px-5 py-4"
-              >
-                <p className="text-[10px] font-extrabold uppercase tracking-[.1em] text-espresso/50 mb-1">
-                  {card.label}
-                </p>
-                <p className="text-[26px] font-extrabold text-espresso leading-none">{card.value}</p>
-              </div>
-            ))}
-          </div>
+          <YieldBand sessions={sessions} />
 
-          {/* Desktop table */}
-          <SessionsTable
-            sessions={sessions}
-            calcWeightLoss={calcWeightLoss}
-            weightLossColor={weightLossColor}
-            onDelete={setDeleteId}
-          />
+          {/* Desktop table + mobile cards share one hairline container, not
+              a stack of individually bordered cards. */}
+          <div
+            style={{ border: "1px solid var(--hairline)", borderRadius: "var(--r-md)", overflow: "hidden", background: "var(--surface)" }}
+          >
+            <SessionsTable
+              sessions={sessions}
+              calcWeightLoss={calcWeightLoss}
+              onDelete={setDeleteId}
+            />
 
-          {/* Mobile cards */}
-          <div className="md:hidden space-y-3">
-            {sessions.map((session) => (
-              <SessionCard
-                key={session.id}
-                session={session}
-                calcWeightLoss={calcWeightLoss}
-                weightLossColor={weightLossColor}
-                onDelete={setDeleteId}
-              />
-            ))}
+            <div className="md:hidden">
+              {sessions.map((session, i) => (
+                <div key={session.id} style={i > 0 ? { borderTop: "1px solid var(--hairline)" } : undefined}>
+                  <SessionCard
+                    session={session}
+                    calcWeightLoss={calcWeightLoss}
+                    onDelete={setDeleteId}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </>
       )}
