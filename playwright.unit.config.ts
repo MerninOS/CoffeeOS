@@ -2,8 +2,9 @@ import { defineConfig } from '@playwright/test'
 
 /**
  * Node-only unit tests. Separate config rather than a project in
- * `playwright.config.ts` because `webServer` and `globalSetup` are GLOBAL there —
- * a project would boot Next and run the auth flow to execute pure functions.
+ * `playwright.config.ts` because its `webServer` is GLOBAL — a project there
+ * would boot Next just to execute pure functions, and the auth setup project is
+ * a dependency of every browser project in it.
  *
  * The main config's `testDir` is `./tests/e2e`, so it never picks these up and
  * the two suites cannot collide.
