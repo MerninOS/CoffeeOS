@@ -53,7 +53,7 @@ export function RequestCard({ request, variant, onEdit, onDelete, onStatusChange
   const progressPercent = (request.fulfilled_roasted_g / request.requested_roasted_g) * 100;
   const isOverdue = request.due_date && new Date(request.due_date) < new Date() && request.status !== "fulfilled";
   return (
-    <div className="p-4 space-y-3">
+    <div data-testid="request-card" className="p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-[13px] font-bold text-espresso">

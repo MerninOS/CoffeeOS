@@ -47,7 +47,7 @@ export function RequestDialog({
 }: RequestDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
+      <DialogContent data-testid="request-dialog" className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
         <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
           <DialogHeader>
             <DialogTitle className="font-extrabold text-[15px] uppercase tracking-[.08em] text-espresso">
@@ -63,7 +63,7 @@ export function RequestDialog({
               onValueChange={(value) => setFormData({ ...formData, greenCoffeeId: value })}
               disabled={!!editingRequest}
             >
-              <SelectTrigger className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
+              <SelectTrigger data-testid="field-coffee" className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
                 <SelectValue placeholder="Select coffee" />
               </SelectTrigger>
               <SelectContent>
@@ -88,6 +88,7 @@ export function RequestDialog({
               step="1"
               value={formData.quantityG}
               onChange={(e) => setFormData({ ...formData, quantityG: e.target.value })}
+              data-testid="field-quantity"
               placeholder="Enter quantity in grams"
             />
           </div>
@@ -100,7 +101,7 @@ export function RequestDialog({
                 setFormData({ ...formData, priority: value })
               }
             >
-              <SelectTrigger className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
+              <SelectTrigger data-testid="field-priority" className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

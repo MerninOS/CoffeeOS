@@ -51,6 +51,7 @@ export function FieldLabel({ children }: { children: React.ReactNode }) {
 }
 
 export function MerninInput({
+  "data-testid": testId,
   id,
   type = "text",
   value,
@@ -59,6 +60,7 @@ export function MerninInput({
   step,
   min,
 }: {
+  "data-testid"?: string;
   id?: string;
   type?: string;
   value: string;
@@ -69,6 +71,7 @@ export function MerninInput({
 }) {
   return (
     <input
+      data-testid={testId}
       id={id}
       type={type}
       value={value}
@@ -82,6 +85,7 @@ export function MerninInput({
 }
 
 export function MerninTextarea({
+  "data-testid": testId,
   value,
   onChange,
   placeholder,
@@ -89,11 +93,13 @@ export function MerninTextarea({
 }: {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  "data-testid"?: string;
   placeholder?: string;
   rows?: number;
 }) {
   return (
     <textarea
+      data-testid={testId}
       value={value}
       onChange={onChange}
       placeholder={placeholder}

@@ -39,7 +39,7 @@ export function RequestsTable({ requests, variant, onEdit, onDelete, onStatusCha
         </div>
         <div className="divide-y-[1.5px] divide-dashed divide-fog">
           {requests.map((request) => (
-            <div key={request.id} className="grid grid-cols-[1fr_100px_100px_100px_48px] px-5 py-3 items-center">
+            <div key={request.id} data-testid="request-row" className="grid grid-cols-[1fr_100px_100px_100px_48px] px-5 py-3 items-center">
               <p className="text-[13px] font-bold text-espresso truncate">
                 {request.green_coffee_inventory?.name || "Unknown"}
               </p>
@@ -53,6 +53,7 @@ export function RequestsTable({ requests, variant, onEdit, onDelete, onStatusCha
                 {new Date(request.created_at).toLocaleDateString()}
               </div>
               <button
+                data-testid="request-delete"
                 onClick={() => onDelete(request.id)}
                 className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-transparent text-espresso/30 hover:border-tomato/30 hover:text-tomato hover:bg-tomato/10 transition-all"
               >
@@ -78,7 +79,7 @@ export function RequestsTable({ requests, variant, onEdit, onDelete, onStatusCha
         {requests.map((request) => {
           const isOverdue = request.due_date && new Date(request.due_date) < new Date() && request.status !== "fulfilled";
           return (
-            <div key={request.id} className="grid grid-cols-[1fr_100px_160px_90px_100px_100px_48px] px-5 py-3 items-center">
+            <div key={request.id} data-testid="request-row" className="grid grid-cols-[1fr_100px_160px_90px_100px_100px_48px] px-5 py-3 items-center">
               <div className="min-w-0">
                 <p className="text-[13px] font-bold text-espresso truncate">
                   {request.green_coffee_inventory?.name || "Unknown"}
@@ -117,7 +118,7 @@ export function RequestsTable({ requests, variant, onEdit, onDelete, onStatusCha
               <div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-transparent text-espresso/50 hover:border-fog hover:text-espresso hover:bg-fog/30 transition-all cursor-pointer">
+                    <button data-testid="request-menu" className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-transparent text-espresso/50 hover:border-fog hover:text-espresso hover:bg-fog/30 transition-all cursor-pointer">
                       <MoreHorizontal size={14} strokeWidth={2} />
                     </button>
                   </DropdownMenuTrigger>

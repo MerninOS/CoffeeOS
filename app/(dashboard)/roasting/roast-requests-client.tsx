@@ -140,7 +140,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
 
       {/* Active Requests */}
       {pendingRequests.length > 0 && (
-        <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden">
+        <div data-testid="requests-active" className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden">
           {/* Desktop table */}
           <RequestsTable
             requests={pendingRequests}
@@ -185,7 +185,7 @@ export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequests
 
       {/* Completed Requests */}
       {completedRequests.length > 0 && (
-        <div className="space-y-3">
+        <div data-testid="requests-completed" className="space-y-3">
           <h3 className="font-extrabold text-[11px] uppercase tracking-[.1em] text-espresso/50">
             Fulfilled &amp; Cancelled
           </h3>
