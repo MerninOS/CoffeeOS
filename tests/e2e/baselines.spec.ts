@@ -27,6 +27,7 @@ const DASHBOARD = [
   '/components',
   '/roasting',
   '/roasting?tab=requests',
+  '/roasting?tab=sessions',
   '/roasting/batches',
   '/roasting/settings',
   '/settings',

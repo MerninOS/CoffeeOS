@@ -277,7 +277,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
             </p>
           </div>
         )}
-        <Btn onClick={() => setIsCreateOpen(true)} className={hideHeader ? "self-start" : "sm:ml-auto"}>
+        <Btn data-testid="new-session" onClick={() => setIsCreateOpen(true)} className={hideHeader ? "self-start" : "sm:ml-auto"}>
           <Plus size={12} strokeWidth={2.5} />
           New Session
         </Btn>
@@ -319,7 +319,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
           </div>
 
           {/* Desktop table */}
-          <div className="hidden md:block bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden">
+          <div data-testid="sessions-table" className="hidden md:block bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md overflow-hidden">
             <div className="grid grid-cols-[120px_1fr_70px_90px_90px_90px_90px_48px] border-b-[2px] border-espresso bg-cream px-5 py-2.5">
               {["Date", "Vendor", "Batches", "Green (g)", "Roasted (g)", "Loss", "Cost", ""].map((h) => (
                 <div key={h} className="text-[10px] font-extrabold uppercase tracking-[.1em] text-espresso/50">
@@ -333,29 +333,31 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
                 return (
                   <div
                     key={session.id}
+                    data-testid="session-row"
                     className="grid grid-cols-[120px_1fr_70px_90px_90px_90px_90px_48px] px-5 py-3 items-center"
                   >
                     <div>
                       <Link
                         href={`/roasting/sessions/${session.id}`}
+                        data-testid="row-date"
                         className="text-[13px] font-bold text-espresso hover:text-tomato transition-colors"
                       >
                         {format(new Date(session.session_date), "MMM d, yyyy")}
                       </Link>
                     </div>
-                    <div className="text-[13px] text-espresso/60 font-medium truncate pr-3">
+                    <div data-testid="row-vendor" className="text-[13px] text-espresso/60 font-medium truncate pr-3">
                       {session.vendor_name}
                     </div>
-                    <div className="text-[13px] font-bold text-espresso text-center">
+                    <div data-testid="row-batches" className="text-[13px] font-bold text-espresso text-center">
                       {session.batch_count}
                     </div>
-                    <div className="text-[13px] font-medium text-espresso text-right">
+                    <div data-testid="row-green" className="text-[13px] font-medium text-espresso text-right">
                       {session.total_green_weight_g.toFixed(0)}
                     </div>
-                    <div className="text-[13px] font-medium text-espresso text-right">
+                    <div data-testid="row-roasted" className="text-[13px] font-medium text-espresso text-right">
                       {session.total_roasted_weight_g.toFixed(0)}
                     </div>
-                    <div className="text-right">
+                    <div data-testid="row-loss" className="text-right">
                       {wl !== null ? (
                         <span className={`text-[13px] font-extrabold ${weightLossColor(wl)}`}>
                           {wl.toFixed(1)}%
@@ -364,7 +366,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
                         <span className="text-espresso/30 text-[13px]">—</span>
                       )}
                     </div>
-                    <div className="text-[13px] font-bold text-espresso text-right">
+                    <div data-testid="row-cost" className="text-[13px] font-bold text-espresso text-right">
                       {session.session_toll_cost !== null
                         ? `$${session.session_toll_cost.toFixed(2)}`
                         : <span className="text-espresso/30">—</span>}
@@ -372,17 +374,18 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
                     <div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-transparent text-espresso/50 hover:border-fog hover:text-espresso hover:bg-fog/30 transition-all">
+                          <button data-testid="session-menu" className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-transparent text-espresso/50 hover:border-fog hover:text-espresso hover:bg-fog/30 transition-all">
                             <MoreHorizontal size={14} strokeWidth={2} />
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem asChild>
+                          <DropdownMenuItem asChild data-testid="menu-open">
                             <Link href={`/roasting/sessions/${session.id}`}>
                               <Eye className="mr-2 h-4 w-4" />View Details
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem
+                            data-testid="menu-delete"
                             onClick={() => setDeleteId(session.id)}
                             className="text-destructive focus:text-destructive"
                           >
@@ -404,6 +407,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
               return (
                 <div
                   key={session.id}
+                  data-testid="session-card"
                   className="bg-chalk border-[3px] border-espresso rounded-[14px] shadow-flat-sm p-4"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -467,7 +471,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
 
       {/* Create Session Dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="max-w-lg p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg max-h-[90vh]">
+        <DialogContent data-testid="session-dialog" className="max-w-lg p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg max-h-[90vh]">
           <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
             <DialogHeader>
               <DialogTitle className="font-extrabold text-[15px] uppercase tracking-[.08em] text-espresso">
@@ -481,6 +485,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
                 <FieldLabel>Session Date</FieldLabel>
                 <MerninInput
                   id="sessionDate"
+                  data-testid="field-date"
                   type="date"
                   value={formData.sessionDate}
                   onChange={(e) => setFormData({ ...formData, sessionDate: e.target.value })}
@@ -491,6 +496,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
                 <FieldLabel>Vendor / Roastery Name</FieldLabel>
                 <MerninInput
                   id="vendorName"
+                  data-testid="field-vendor"
                   value={formData.vendorName}
                   onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })}
                   placeholder="e.g., Mill City Roasters"
@@ -529,6 +535,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
                     type="number"
                     step="0.01"
                     min="0"
+                    data-testid="field-rate"
                     value={formData.ratePerHour}
                     onChange={(e) => setFormData({ ...formData, ratePerHour: e.target.value })}
                     placeholder="e.g., 75.00"
@@ -633,7 +640,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
           </div>
           <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
             <Btn variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Btn>
-            <Btn onClick={handleCreate} disabled={isSubmitting}>
+            <Btn data-testid="dialog-submit" onClick={handleCreate} disabled={isSubmitting}>
               {isSubmitting ? "Creating..." : "Create Session"}
             </Btn>
           </div>
@@ -642,7 +649,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent className="p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg max-w-sm">
+        <AlertDialogContent data-testid="delete-dialog" className="p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg max-w-sm">
           <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
             <AlertDialogHeader>
               <AlertDialogTitle className="font-extrabold text-[15px] uppercase tracking-[.06em] text-espresso">
@@ -660,6 +667,7 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
+              data-testid="delete-confirm"
               onClick={handleDelete}
               className="inline-flex items-center px-3 py-1.5 rounded-[8px] border-[2.5px] border-espresso bg-tomato text-cream font-extrabold text-[11px] uppercase tracking-[.08em] shadow-[3px_3px_0_#1C0F05] hover:-translate-x-px hover:-translate-y-px hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"
             >
