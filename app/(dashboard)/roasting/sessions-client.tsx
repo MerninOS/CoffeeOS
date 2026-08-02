@@ -14,6 +14,7 @@ import { SessionDialog, type SessionFormData } from "./components/sessions/Sessi
 import { DeleteDialog } from "./components/sessions/DeleteDialog";
 import { YieldBand } from "./components/sessions/YieldBand";
 import type { Session } from "./components/sessions/types";
+import { sessionCost, type CostMode } from "./session-cost";
 
 export type { Session };
 
@@ -90,8 +91,37 @@ export function SessionsClient({ initialSessions, hideHeader = false }: Sessions
 
     if (result.error) { alert(result.error); return; }
     if (result.session) {
+      /**
+       * The optimistic row has to carry its cost basis too.
+       *
+       * createSession returns the raw DB row, which has no cost_basis or
+       * cost_mode_label — page.tsx derives those. Spreading it alone left a
+       * freshly created session rendering a blank line under its cost until the
+       * next full page load, which reads as a broken cell rather than a pending
+       * one. Recomputed here from the same module the server uses, with no
+       * batches, because a new session has none yet.
+       */
+      const optimistic = sessionCost({
+        cost_mode: (result.session.cost_mode || "toll_roasting") as CostMode,
+        setup_minutes: result.session.setup_minutes,
+        cleanup_minutes: result.session.cleanup_minutes,
+        billing_granularity_minutes: result.session.billing_granularity_minutes,
+        rate_per_hour: result.session.rate_per_hour,
+        rate_per_lb: result.session.rate_per_lb ?? null,
+        machine_energy_kwh_per_hour: result.session.machine_energy_kwh_per_hour ?? null,
+        kwh_rate: result.session.kwh_rate ?? null,
+        batches: [],
+      });
       setSessions([
-        { ...result.session, batch_count: 0, total_green_weight_g: 0, total_roasted_weight_g: 0 },
+        {
+          ...result.session,
+          batch_count: 0,
+          total_green_weight_g: 0,
+          total_roasted_weight_g: 0,
+          session_toll_cost: optimistic.cost,
+          cost_basis: optimistic.basis,
+          cost_mode_label: optimistic.modeLabel,
+        },
         ...sessions,
       ]);
       setIsCreateOpen(false);
