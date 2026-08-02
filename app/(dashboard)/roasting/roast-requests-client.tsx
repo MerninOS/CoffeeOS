@@ -19,8 +19,6 @@ interface RoastRequestsClientProps {
   coffeeInventory: CoffeeInventory[];
 }
 
-const LBS_TO_GRAMS = 453.592;
-const gramsToLbs = (g: number) => (g / LBS_TO_GRAMS).toFixed(2);
 
 export function RoastRequestsClient({ requests, coffeeInventory }: RoastRequestsClientProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
