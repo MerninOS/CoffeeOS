@@ -135,6 +135,7 @@ export function RequestDialog({
         <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
           <Btn variant="outline" onClick={() => onOpenChange(false)}>Cancel</Btn>
           <Btn
+            data-testid="dialog-submit"
             onClick={onSubmit}
             disabled={isSubmitting || !formData.greenCoffeeId || !formData.quantityG}
           >

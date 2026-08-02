@@ -4,6 +4,7 @@ import type React from "react";
 
 export type BtnVariant = "primary" | "outline" | "ghost" | "danger";
 export function Btn({
+  "data-testid": testId,
   variant = "primary",
   children,
   onClick,
@@ -11,6 +12,7 @@ export function Btn({
   className = "",
   type = "button",
 }: {
+  "data-testid"?: string;
   variant?: BtnVariant;
   children: React.ReactNode;
   onClick?: () => void;
@@ -32,6 +34,7 @@ export function Btn({
   };
   return (
     <button
+      data-testid={testId}
       type={type}
       onClick={onClick}
       disabled={disabled}

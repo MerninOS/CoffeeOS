@@ -81,7 +81,7 @@ export function RequestsTable({ requests, variant, onEdit, onDelete, onStatusCha
           return (
             <div key={request.id} data-testid="request-row" className="grid grid-cols-[1fr_100px_160px_90px_100px_100px_48px] px-5 py-3 items-center">
               <div className="min-w-0">
-                <p className="text-[13px] font-bold text-espresso truncate">
+                <p data-testid="row-coffee" className="text-[13px] font-bold text-espresso truncate">
                   {request.green_coffee_inventory?.name || "Unknown"}
                 </p>
                 {request.green_coffee_inventory?.origin && (
@@ -123,16 +123,17 @@ export function RequestsTable({ requests, variant, onEdit, onDelete, onStatusCha
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onEdit(request)}>
+                    <DropdownMenuItem data-testid="menu-edit" onClick={() => onEdit(request)}>
                       <Edit className="mr-2 h-4 w-4" />Edit
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onStatusChange(request.id, "fulfilled")}>
+                    <DropdownMenuItem data-testid="menu-fulfill" onClick={() => onStatusChange(request.id, "fulfilled")}>
                       <CheckCircle2 className="mr-2 h-4 w-4" />Mark Fulfilled
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onStatusChange(request.id, "cancelled")}>
+                    <DropdownMenuItem data-testid="menu-cancel" onClick={() => onStatusChange(request.id, "cancelled")}>
                       <XCircle className="mr-2 h-4 w-4" />Cancel
                     </DropdownMenuItem>
                     <DropdownMenuItem
+                      data-testid="menu-delete"
                       onClick={() => onDelete(request.id)}
                       className="text-destructive focus:text-destructive"
                     >
