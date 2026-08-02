@@ -19,8 +19,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button, Field, Input, Select, Textarea } from "@merninos/ui/instrument";
-import { sans } from "@/lib/instrument/tokens";
+import { Button, Field, InlineBanner, Input, Select, Textarea } from "@merninos/ui/instrument";
+import { money, sans } from "@/lib/instrument/tokens";
+import type { ComponentUsage } from "../actions";
 import {
   COMPONENT_TYPES,
   UNITS,
@@ -255,16 +256,31 @@ export function ComponentFormDialog({
   );
 }
 
+/**
+ * The confirm names what deleting will actually do.
+ *
+ * It used to say "This can't be undone." and nothing else, which is true but
+ * uninformative — what is irreversible is downstream. Every FK into `components`
+ * is ON DELETE CASCADE, and lib/orders/cogs.ts computes order COGS live from
+ * `order_components`, so removing a component silently RAISES the recorded
+ * margin on orders that already shipped.
+ *
+ * Past orders warn rather than block: a shipped order cannot be edited, so
+ * blocking would make the component permanently undeletable. Recipes do block,
+ * in the server action.
+ */
 export function DeleteComponentDialog({
   open,
   onOpenChange,
   isLoading,
   onConfirm,
+  usage,
 }: {
   open: boolean;
   onOpenChange: () => void;
   isLoading: boolean;
   onConfirm: () => void;
+  usage: ComponentUsage | null;
 }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -275,6 +291,33 @@ export function DeleteComponentDialog({
             This can&apos;t be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
+
+        <div style={BODY}>
+          {usage === null ? (
+            <span style={{ ...sans, color: "var(--ink-muted)" }}>
+              Checking what this component is used in…
+            </span>
+          ) : usage.orders > 0 ? (
+            <InlineBanner
+              tone="warning"
+              title={`${usage.orders} past ${usage.orders === 1 ? "order carries" : "orders carry"} ${money(usage.orderCost)} of cost from this component`}
+            >
+              <span data-testid="delete-order-warning">
+                Deleting removes those cost lines, so the recorded margin on orders
+                that already shipped will change. Past orders are not recalculated
+                and cannot be edited.
+              </span>
+            </InlineBanner>
+          ) : (
+            <span
+              data-testid="delete-no-usage"
+              style={{ ...sans, color: "var(--ink-muted)" }}
+            >
+              No product recipe or past order uses this component. Deleting it
+              changes no cost.
+            </span>
+          )}
+        </div>
         <AlertDialogFooter style={FOOT}>
           {/* Destructive fill is `--danger`, NOT `--brand`. Brand red is the live
               register on this system and never fills a control; --danger is
