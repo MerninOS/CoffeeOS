@@ -73,11 +73,27 @@ export async function updateCoffeeInventory(
   }
 ) {
   const supabase = await createClient();
-  const { ownerId, error: ownerError } = await getEffectiveOwnerId();
+  const { ownerId, userId, error: ownerError } = await getEffectiveOwnerId();
 
-  if (ownerError || !ownerId) {
+  if (ownerError || !ownerId || !userId) {
     return { error: ownerError || "Unauthorized" };
   }
+
+  /**
+   * The price BEFORE the update, because `price_per_lb` is the only field on
+   * this screen that reaches product cost — through roasting, into a batch's
+   * green_cost_per_g, into components.cost_per_unit, into a recipe. It could
+   * move with no record anywhere, which is the gap CoffeeOS#72 closes.
+   *
+   * `coffee_inventory_changes` has modelled this since day one: a `price_change`
+   * type and `old_price_per_lb` / `new_price_per_lb` columns, never written.
+   */
+  const { data: before } = await supabase
+    .from("green_coffee_inventory")
+    .select("price_per_lb")
+    .eq("id", id)
+    .eq("user_id", ownerId)
+    .single();
 
   const { error } = await supabase
     .from("green_coffee_inventory")
@@ -87,6 +103,42 @@ export async function updateCoffeeInventory(
 
   if (error) {
     return { error: error.message };
+  }
+
+  /**
+   * ONLY when the price actually moved. An edit touching just the supplier must
+   * not produce a cost-basis entry — a log that records non-events is one an
+   * operator learns to skim, which defeats the panel.
+   *
+   * Compared at the stored precision (DECIMAL(10,4)) rather than with ===, so a
+   * float round-trip of the same number does not register as a change.
+   */
+  const nextPrice = data.price_per_lb;
+  const prevPrice = before?.price_per_lb as number | undefined;
+  const priceMoved =
+    typeof nextPrice === "number" &&
+    typeof prevPrice === "number" &&
+    Math.abs(nextPrice - prevPrice) > 0.00005;
+
+  if (priceMoved) {
+    // A failure here must not fail the edit: the price IS saved, and reporting
+    // an error would invite the operator to retry a write that already
+    // succeeded. The missing row is a gap in history, not a lost change.
+    const { error: logError } = await supabase
+      .from("coffee_inventory_changes")
+      .insert({
+        coffee_id: id,
+        user_id: ownerId,
+        changed_by_user_id: userId,
+        change_type: "price_change",
+        green_quantity_change_g: 0,
+        old_price_per_lb: prevPrice,
+        new_price_per_lb: nextPrice,
+        reference_type: "manual",
+      });
+    if (logError) {
+      console.error("[inventory] price_change row not written", logError.message);
+    }
   }
 
   revalidatePath("/inventory");
@@ -218,12 +270,17 @@ export async function getLotMovements(
   }
 
   // One extra row is the cheapest way to know whether the list is partial.
+  //
+  // The actor is resolved in a SECOND query, not a PostgREST embed.
+  // `changed_by_user_id` has its foreign key to `auth.users`, not to
+  // `profiles`, so `profiles:changed_by_user_id(full_name)` fails outright with
+  // "Could not find a relationship ... in the schema cache". The embed looks
+  // obviously correct and cannot work.
   const { data, error } = await supabase
     .from("coffee_inventory_changes")
     .select(
       `id, change_type, green_quantity_change_g, old_price_per_lb,
-       new_price_per_lb, reference_type, notes, created_at,
-       profiles:changed_by_user_id ( full_name )`,
+       new_price_per_lb, reference_type, notes, created_at, changed_by_user_id`,
     )
     .eq("coffee_id", coffeeId)
     .eq("user_id", ownerId)
@@ -236,29 +293,34 @@ export async function getLotMovements(
 
   const rows = data || [];
   const hasMore = rows.length > MOVEMENT_LIMIT;
+  const page = rows.slice(0, MOVEMENT_LIMIT);
 
-  const mapped: MovementRow[] = rows.slice(0, MOVEMENT_LIMIT).map((row) => {
-    // Supabase types a nested relation as an ARRAY even when it is many-to-one,
-    // so `profiles` arrives typed `{...}[]` while at runtime it is a single
-    // object. Normalise both, exactly as lib/orders/cogs.ts does for the same
-    // quirk, rather than asserting a shape that is untrue to the type.
-    const rel = (row as { profiles?: unknown }).profiles as
-      | { full_name: string | null }
-      | { full_name: string | null }[]
-      | null;
-    const one = Array.isArray(rel) ? rel[0] : rel;
-    return {
-      id: row.id as string,
-      change_type: row.change_type as MovementRow["change_type"],
-      green_quantity_change_g: row.green_quantity_change_g as number | null,
-      old_price_per_lb: row.old_price_per_lb as number | null,
-      new_price_per_lb: row.new_price_per_lb as number | null,
-      reference_type: row.reference_type as MovementRow["reference_type"],
-      notes: row.notes as string | null,
-      created_at: row.created_at as string,
-      actorName: one?.full_name ?? null,
-    };
-  });
+  // One lookup for the distinct actors on this page. Rows whose profile the
+  // reader may not see simply come back absent, which `actorLabel` renders as
+  // "Owner" rather than a blank (Criterion 14a).
+  const actorIds = [...new Set(page.map((r) => r.changed_by_user_id).filter(Boolean))];
+  const names = new Map<string, string | null>();
+  if (actorIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", actorIds as string[]);
+    for (const profile of profiles || []) {
+      names.set(profile.id as string, (profile.full_name as string | null) ?? null);
+    }
+  }
+
+  const mapped: MovementRow[] = page.map((row) => ({
+    id: row.id as string,
+    change_type: row.change_type as MovementRow["change_type"],
+    green_quantity_change_g: row.green_quantity_change_g as number | null,
+    old_price_per_lb: row.old_price_per_lb as number | null,
+    new_price_per_lb: row.new_price_per_lb as number | null,
+    reference_type: row.reference_type as MovementRow["reference_type"],
+    notes: row.notes as string | null,
+    created_at: row.created_at as string,
+    actorName: names.get(row.changed_by_user_id as string) ?? null,
+  }));
 
   return { movements: toMovements(mapped), hasMore };
 }

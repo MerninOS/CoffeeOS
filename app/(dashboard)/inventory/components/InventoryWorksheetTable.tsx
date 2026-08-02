@@ -5,7 +5,10 @@ import { Edit, Scale, Trash2 } from "lucide-react";
 import { mono, overline, sans, money } from "@/lib/instrument/tokens";
 import { gramsToLbs } from "@/lib/inventory/units";
 import { lotValue, stockState } from "@/lib/inventory/valuation";
+import { ChevronRight } from "lucide-react";
 import { Depletion } from "./Depletion";
+import { ExpandedLot } from "./ExpandedLot";
+import type { Movement } from "@/lib/inventory/movements";
 import type { CoffeeInventory } from "./types";
 
 /**
@@ -41,7 +44,8 @@ import type { CoffeeInventory } from "./types";
  * 1180px, matching /orders rather than /products' 1000: nine tracks, and the
  * lot code and purchase date are both mono, which does not compress.
  */
-const GRID = "minmax(0,1fr) 132px 116px 116px 76px 116px 104px 104px 84px";
+const GRID =
+  "32px minmax(0,1fr) 132px 116px 116px 76px 116px 104px 104px 84px";
 const ROW = "flex flex-col min-[1180px]:grid";
 const CELL = "flex items-center px-3 py-1.5 min-[1180px]:py-0 min-[1180px]:h-10";
 const CELL_R = `${CELL} justify-between min-[1180px]:justify-end`;
@@ -85,6 +89,12 @@ export function InventoryWorksheetTable({
   onAdjust,
   onEdit,
   onDelete,
+  expandedId,
+  onToggleExpand,
+  movements,
+  movementsHasMore,
+  movementsLoading,
+  movementsError,
 }: {
   rows: CoffeeInventory[];
   totalGreenLbs: number;
@@ -93,6 +103,12 @@ export function InventoryWorksheetTable({
   onAdjust: (coffee: CoffeeInventory) => void;
   onEdit: (coffee: CoffeeInventory) => void;
   onDelete: (id: string) => void;
+  expandedId: string | null;
+  onToggleExpand: (id: string) => void;
+  movements: Movement[] | null;
+  movementsHasMore: boolean;
+  movementsLoading: boolean;
+  movementsError: string | null;
 }) {
   const figure: React.CSSProperties = {
     ...mono,
@@ -129,6 +145,7 @@ export function InventoryWorksheetTable({
           borderBottom: "1px solid var(--hairline-strong)",
         }}
       >
+        <div className="h-[34px]" />
         <div className="flex items-center px-3 h-[34px]">Coffee</div>
         <div className="flex items-center px-3 h-[34px]">Lot</div>
         <div className="flex items-center px-3 h-[34px]">Supplier</div>
@@ -143,17 +160,38 @@ export function InventoryWorksheetTable({
       {rows.map((coffee) => {
         const greenLbs = gramsToLbs(coffee.current_green_quantity_g);
         const roastedLbs = gramsToLbs(coffee.roasted_stock_g || 0);
+        const open = expandedId === coffee.id;
         return (
+          <div key={coffee.id}>
           <div
-            key={coffee.id}
             data-testid="lot-row"
             data-lot-name={coffee.name}
             className={`${ROW} group`}
             style={{
               gridTemplateColumns: GRID,
-              borderBottom: "1px solid var(--hairline)",
+              borderBottom: open ? "none" : "1px solid var(--hairline)",
+              background: open ? "var(--surface-sunken)" : undefined,
             }}
           >
+            {/* Expansion is the only way to reach a lot's history, so the
+                control is a real button with an accessible name rather than a
+                click handler on the row. */}
+            <div className={`${CELL} px-0 pl-3`}>
+              <button
+                type="button"
+                aria-label={open ? `Collapse ${coffee.name}` : `Expand ${coffee.name}`}
+                aria-expanded={open}
+                onClick={() => onToggleExpand(coffee.id)}
+                className="flex items-center justify-center w-5 h-5 cursor-pointer"
+                style={{
+                  color: "var(--ink-subtle)",
+                  transform: open ? "rotate(90deg)" : undefined,
+                  transition: "transform 140ms cubic-bezier(.2,.6,.2,1)",
+                }}
+              >
+                <ChevronRight size={16} strokeWidth={1.5} />
+              </button>
+            </div>
             <div className={`${CELL} gap-2`}>
               <div className="flex flex-col min-w-0">
                 <span
@@ -250,6 +288,16 @@ export function InventoryWorksheetTable({
               />
             </div>
           </div>
+          {open && (
+            <ExpandedLot
+              lot={coffee}
+              movements={movements}
+              hasMore={movementsHasMore}
+              isLoading={movementsLoading}
+              error={movementsError}
+            />
+          )}
+          </div>
         );
       })}
 
@@ -265,6 +313,7 @@ export function InventoryWorksheetTable({
           background: "var(--surface-sunken)",
         }}
       >
+        <div className="hidden min-[1180px]:block" />
         <div className={`${CELL} min-[1180px]:col-span-5 min-[1180px]:justify-end`}>
           <span style={overline}>Totals</span>
         </div>

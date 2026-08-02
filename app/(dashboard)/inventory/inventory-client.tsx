@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -23,8 +23,10 @@ import {
   LotFormDialog,
 } from "./components/InventoryDialogs";
 import type { CoffeeInventory } from "./components/types";
+import type { Movement } from "@/lib/inventory/movements";
 import {
   createCoffeeInventory,
+  getLotMovements,
   updateCoffeeInventory,
   adjustInventoryQuantity,
   deleteCoffeeInventory,
@@ -62,6 +64,74 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
   const [adjustError, setAdjustError] = useState<string | null>(null);
   const [deletingCoffee, setDeletingCoffee] = useState<CoffeeInventory | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  /**
+   * Movement state for the ONE open lot. Not a cache keyed by lot: only one row
+   * is expanded at a time, and a keyed cache would have to be invalidated per
+   * lot on every mutation — more machinery than the screen earns.
+   */
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [movements, setMovements] = useState<Movement[] | null>(null);
+  const [movementsHasMore, setMovementsHasMore] = useState(false);
+  const [movementsLoading, setMovementsLoading] = useState(false);
+  const [movementsError, setMovementsError] = useState<string | null>(null);
+
+  const loadMovements = useCallback(async (coffeeId: string) => {
+    setMovementsLoading(true);
+    setMovementsError(null);
+    const result = await getLotMovements(coffeeId);
+    if (result.error) {
+      setMovementsError(result.error);
+      setMovements([]);
+      setMovementsHasMore(false);
+    } else {
+      setMovements(result.movements ?? []);
+      setMovementsHasMore(!!result.hasMore);
+    }
+    setMovementsLoading(false);
+  }, []);
+
+  /**
+   * Expanding fetches; collapsing clears, so a stale list cannot be re-shown.
+   *
+   * Reads `expandedId` directly rather than through a setState updater. An
+   * updater runs DURING RENDER, so kicking off the fetch inside one made React
+   * warn "Cannot update a component while rendering a different component" and
+   * the panel never populated — a real correctness bug, caught by the console
+   * rather than by looking at the page.
+   */
+  const toggleExpand = useCallback(
+    (coffeeId: string) => {
+      if (expandedId === coffeeId) {
+        setExpandedId(null);
+        setMovements(null);
+        setMovementsError(null);
+        setMovementsHasMore(false);
+        return;
+      }
+      setExpandedId(coffeeId);
+      setMovements(null);
+      setMovementsHasMore(false);
+      void loadMovements(coffeeId);
+    },
+    [expandedId, loadMovements],
+  );
+
+  /**
+   * Criterion 17a. `router.refresh()` re-renders the SERVER component; it does
+   * not re-run a client-invoked server action, so the movement list would keep
+   * showing the state before the adjustment — on the one panel whose entire job
+   * is explaining where the coffee went. The mutation handlers call this so the
+   * open lot, and only the open lot, refetches.
+   */
+  const refreshOpenLot = useCallback(
+    (mutatedId?: string) => {
+      if (!expandedId) return;
+      if (mutatedId && mutatedId !== expandedId) return;
+      void loadMovements(expandedId);
+    },
+    [expandedId, loadMovements],
+  );
 
   const [formData, setFormData] = useState({
     name: "",
@@ -146,8 +216,10 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
           setFormError(result.error);
         } else {
           setIsAddDialogOpen(false);
+          const mutatedId = editingCoffee.id;
           resetForm();
           router.refresh();
+          refreshOpenLot(mutatedId);
         }
       } else {
         const result = await createCoffeeInventory({
@@ -194,6 +266,7 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
         setAdjustError(result.error);
       } else {
         setIsAdjustDialogOpen(false);
+        const mutatedId = adjustingCoffee.id;
         setAdjustingCoffee(null);
         setAdjustmentData({
           change_type: "manual_green_adjust",
@@ -201,6 +274,7 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
           notes: "",
         });
         router.refresh();
+        refreshOpenLot(mutatedId);
       }
     } finally {
       setIsSubmitting(false);
@@ -222,6 +296,8 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
         // retry. Surfacing it in the confirm dialog would fight the close.
         setFormError(result.error);
       }
+      // A deleted lot cannot stay expanded over a row that no longer exists.
+      if (expandedId === deletingCoffee.id) setExpandedId(null);
       setDeletingCoffee(null);
       router.refresh();
     } finally {
@@ -444,6 +520,12 @@ export function InventoryClient({ initialInventory }: InventoryClientProps) {
           onAdjust={openAdjustDialog}
           onEdit={openEditDialog}
           onDelete={handleDelete}
+          expandedId={expandedId}
+          onToggleExpand={toggleExpand}
+          movements={movements}
+          movementsHasMore={movementsHasMore}
+          movementsLoading={movementsLoading}
+          movementsError={movementsError}
         />
       )}
 
