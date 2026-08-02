@@ -73,12 +73,41 @@ export async function resetSyncFixture(): Promise<void> {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  // Resolve the owner from the seeded products rather than listing auth users:
-  // the seed is the source of truth for which account these specs run against.
+  // Resolve the demo account FIRST, then look for its seeded product — not the
+  // other way round.
+  //
+  // This used to resolve the owner from `products.shopify_id = '1000000005'`
+  // with no account filter, on the reasonable assumption that exactly one demo
+  // account exists. Per-worktree demo accounts (CoffeeOS#106) broke that: the
+  // seed creates the same fixed shopify_ids for EVERY demo account, so an
+  // unscoped `.limit(1)` returns whichever row it happens to hit, and the guard
+  // below then correctly refuses to delete another account's data. Two worktrees
+  // could never both run this spec.
+  //
+  // The safety property is unchanged and is why this order matters: we only ever
+  // delete rows owned by the account named in DEMO_EMAIL. Deriving the owner
+  // from that email rather than from a global row makes that true by
+  // construction instead of by check.
+  const { data: users, error: usersError } = await admin.auth.admin.listUsers()
+  if (usersError) {
+    throw new Error(`reset-sync-fixture could not list accounts: ${usersError.message}`)
+  }
+  const demoUser = users.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())
+  if (!demoUser) {
+    throw new Error(
+      `reset-sync-fixture found no account for ${email}. ` +
+        'Run `node scripts/seed-demo-account.mjs` first.'
+    )
+  }
+  const ownerId = demoUser.id
+
+  // Scoped to that owner: proves the seed ran FOR THIS ACCOUNT, which is the
+  // thing the old global lookup could not tell you.
   const { data: seeded, error: seededError } = await admin
     .from('products')
-    .select('user_id')
+    .select('id')
     .eq('shopify_id', '1000000005')
+    .eq('user_id', ownerId)
     .limit(1)
     .maybeSingle()
 
@@ -88,26 +117,7 @@ export async function resetSyncFixture(): Promise<void> {
   if (!seeded) {
     throw new Error(
       `reset-sync-fixture found no seeded product 1000000005 for ${email}. ` +
-        'Run `node scripts/seed-demo-account.mjs` first.'
-    )
-  }
-
-  const ownerId = seeded.user_id as string
-
-  // The guard. Resolving product 1000000005 proves the seed ran somewhere; it
-  // does NOT prove we are on the demo account. Confirm the owner is actually the
-  // demo user before deleting anything, so a mis-set NEXT_PUBLIC_SUPABASE_URL
-  // fails loudly instead of clearing a real roaster's exclusions.
-  const { data: owner, error: ownerError } = await admin.auth.admin.getUserById(ownerId)
-
-  if (ownerError || !owner?.user) {
-    throw new Error(`reset-sync-fixture could not resolve the owner account: ${ownerError?.message}`)
-  }
-  if (owner.user.email !== email) {
-    throw new Error(
-      `reset-sync-fixture refuses to run: product 1000000005 belongs to ` +
-        `${owner.user.email}, not the demo account (${email}). ` +
-        'Check NEXT_PUBLIC_SUPABASE_URL — this deletes rows with a service-role key.'
+        'Run `node scripts/seed-demo-account.mjs` in this worktree first.'
     )
   }
 
