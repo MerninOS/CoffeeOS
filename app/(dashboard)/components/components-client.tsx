@@ -16,7 +16,13 @@ import { Plus, Search, Package } from "lucide-react";
 import { Button, EmptyState, InlineBanner, Input } from "@merninos/ui/instrument";
 import { isUncosted } from "@/lib/components/format";
 import { mono, sans } from "@/lib/instrument/tokens";
-import { createComponent, updateComponent, deleteComponent } from "./actions";
+import {
+  createComponent,
+  updateComponent,
+  deleteComponent,
+  getComponentUsage,
+  type ComponentUsage,
+} from "./actions";
 import { Worksheet } from "./components/Worksheet";
 import { UncostedHero } from "./components/UncostedHero";
 import {
@@ -56,6 +62,12 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingComponent, setEditingComponent] = useState<Component | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  /**
+   * Fetched when the confirm OPENS, not on page load — the list does not need
+   * it, and it is three queries per component. `null` means "still checking",
+   * which the dialog renders as such rather than as "nothing uses this".
+   */
+  const [deleteUsage, setDeleteUsage] = useState<ComponentUsage | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
@@ -87,6 +99,17 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
     setEditingComponent(null);
     setFormData(EMPTY_FORM);
     setIsDialogOpen(true);
+  };
+
+  const openDeleteDialog = async (id: string) => {
+    setDeleteId(id);
+    setDeleteUsage(null);
+    const { usage } = await getComponentUsage(id);
+    // Ignore a result that arrived after the dialog was dismissed or retargeted.
+    setDeleteId((current) => {
+      if (current === id && usage) setDeleteUsage(usage);
+      return current;
+    });
   };
 
   const openEditDialog = (component: Component) => {
@@ -162,6 +185,7 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
     }
     setIsLoading(false);
     setDeleteId(null);
+    setDeleteUsage(null);
   };
 
   return (
@@ -310,7 +334,7 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
         <Worksheet
           components={filteredComponents}
           onEdit={openEditDialog}
-          onDelete={setDeleteId}
+          onDelete={openDeleteDialog}
         />
       )}
 
@@ -337,9 +361,13 @@ export function ComponentsClient({ initialComponents }: ComponentsClientProps) {
 
       <DeleteComponentDialog
         open={!!deleteId}
-        onOpenChange={() => setDeleteId(null)}
+        onOpenChange={() => {
+          setDeleteId(null);
+          setDeleteUsage(null);
+        }}
         isLoading={isLoading}
         onConfirm={handleDelete}
+        usage={deleteUsage}
       />
     </div>
   );
