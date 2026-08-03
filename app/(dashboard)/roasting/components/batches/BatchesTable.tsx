@@ -97,7 +97,15 @@ const menuTriggerStyle: CSSProperties = {
  */
 const GRID = "minmax(0,1fr) 100px 150px 110px 90px 80px 90px 130px 44px";
 
-const HEADERS = ["Coffee", "Session", "Lot", "Green (lb)", "Roasted", "Loss %", "Sellable", "Component", ""];
+/**
+ * No unit on the weight columns.
+ *
+ * Labelling only Green — "Green (lb)", then a bare "Roasted" and "Sellable" —
+ * reads as though the unit applies to that one column, when all three are
+ * pounds. Repeating "(lb)" three times crowds 90px columns for no information.
+ * The unit is stated once, in the section subtitle above the table.
+ */
+const HEADERS = ["Coffee", "Session", "Lot", "Green", "Roasted", "Loss %", "Sellable", "Component", ""];
 
 /**
  * `lossColor` (costing.ts) is untouched (CoffeeOS#110) and still returns a

@@ -109,7 +109,7 @@ export function BatchesClient({ initialBatches, existingComponents }: BatchesCli
           All Batches
         </h2>
         <p style={{ ...sans, fontSize: "var(--fs-caption)", color: "var(--ink-muted)", marginTop: 2 }}>
-          View all roasting batches across sessions
+          View all roasting batches across sessions · weights in lb
         </p>
       </div>
 
