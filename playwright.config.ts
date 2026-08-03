@@ -117,6 +117,11 @@ export default defineConfig({
     reuseExistingServer: true,
     timeout: 180_000,
     env: {
+      // Turns off the Next dev-tools indicator, whose `nextjs-portal` host can
+      // cover the viewport and swallow clicks meant for the page. Read by
+      // next.config.mjs; see the note there.
+      PLAYWRIGHT: '1',
+
       // Criterion 5 can only detect its bug when the page limit is BINDING —
       // i.e. there are more orders in range than one page returns. At the
       // production default (100) against the demo seed the page and the range
