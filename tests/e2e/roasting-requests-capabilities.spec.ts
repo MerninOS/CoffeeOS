@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Browser } from '@playwright/test'
+import { hideOverlays } from './support/overlays'
 
 /**
  * The five behavioural capabilities of the roast requests queue
@@ -101,21 +102,6 @@ const probeQtyComma = (testInfo: { project: { name: string } }) => toDisplayQty(
  * cleanup needs no quantity guard.
  */
 const PROBE_COFFEE = 'Kenya Nyeri AA'
-
-/**
- * Two overlays that sit over the bottom of the list and intercept clicks at
- * narrow widths — same two the components spec hides, for the same reason:
- * dismissing them persists to localStorage and would change what the visual
- * baseline suite captures, so they are hidden with CSS instead.
- */
-async function hideOverlays(page: Page) {
-  await page.addStyleTag({
-    content: [
-      '[class*="fixed"][class*="bottom-4"][class*="right-4"]{display:none !important}',
-      'nextjs-portal{display:none !important}',
-    ].join(''),
-  })
-}
 
 /**
  * The page renders every ACTIVE row twice — a `request-row` in the
