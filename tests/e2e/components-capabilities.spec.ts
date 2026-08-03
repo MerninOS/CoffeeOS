@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { hideOverlays } from './support/overlays'
 
 /**
  * The four editing capabilities of /components, asserted by their EFFECT ON THE
@@ -47,27 +48,6 @@ const probeName = (testInfo: { project: { name: string } }) =>
  */
 const COST_055 = '$0.5500/each'
 const COST_125 = '$1.25/each'
-
-/**
- * Two overlays that sit over the bottom of the list and intercept clicks at
- * narrow widths. Hidden with CSS rather than dismissed: dismissal persists to
- * localStorage and the tour widget is part of the visual baselines, so clicking
- * it away here would silently change what the baseline suite captures.
- */
-async function hideOverlays(page: Page) {
-  await page.addStyleTag({
-    content: [
-      // The onboarding tour widget, collapsed or expanded — both roots are
-      // `fixed bottom-4 right-4 z-50` and it covers the bottom of the list.
-      '[class*="fixed"][class*="bottom-4"][class*="right-4"]{display:none !important}',
-      // The Next.js dev-tools overlay. It does not exist in production, and at
-      // 375px it sits over the bottom of the viewport where a row scrolled into
-      // view lands — Playwright reported it intercepting pointer events on a
-      // row action that was otherwise the topmost element at its own centre.
-      'nextjs-portal{display:none !important}',
-    ].join(''),
-  })
-}
 
 const rows = (page: Page) => page.locator('[data-testid="component-row"]:visible')
 const rowFor = (page: Page, name: string) =>
