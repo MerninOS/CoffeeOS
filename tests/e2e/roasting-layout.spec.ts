@@ -97,6 +97,73 @@ test.describe('roasting queue layout', () => {
     }
   })
 
+  /**
+   * 3. THE NARROW END. 375 IS snapshotted — and the snapshot still missed this.
+   *
+   * The hero/stat row was `flex flex-wrap` with a `flex-none w-[268px]` hero and
+   * a `flex-1` strip. `flex-1` sets `flex-basis: 0`, so the strip never exceeds
+   * its container and `flex-wrap` never fires: it shrinks instead. At 375 the
+   * content box is 327px, the hero took 268 and the gap 24, leaving the strip
+   * 35px for four stats, which StatStrip then clipped at `overflow-x: hidden`.
+   *
+   * The mobile baseline passed throughout. Clipped digits are a few hundred
+   * pixels of difference in a full-page snapshot, and `maxDiffPixelRatio` is
+   * 0.01 — the same tolerance that let a deliberate "orders"→"ordels" rename
+   * through while proving this suite needs geometric assertions, not only
+   * pictures.
+   *
+   * Asserted as self-clipping (`scrollWidth > clientWidth`) rather than as a
+   * minimum width, so it stays true whatever the strip's final layout is: it
+   * fails whenever a figure is cut off, and passes whenever every figure is
+   * whole.
+   */
+  test('no roasting figure is clipped at mobile widths', async ({ page }) => {
+    // 320 is the narrowest phone still worth supporting; 375 is the baseline
+    // width that missed this; 414 is the common large-phone width.
+    for (const width of [320, 375, 414]) {
+      await page.setViewportSize({ width, height: 812 })
+
+      for (const [label, url] of [
+        ['queue', '/roasting'],
+        ['sessions', '/roasting?tab=sessions'],
+        ['stock', '/roasting?tab=stock'],
+      ] as const) {
+        await page.goto(url)
+        await page.waitForLoadState('networkidle')
+
+        const clipped = await page.evaluate(() => {
+          // Scoped to the roasting page's own regions on purpose. The app shell
+          // header overflows the viewport by ~12px on EVERY authenticated route
+          // (the Sign out button), which is not this page's bug and would make
+          // a document-level assertion here fail for an unrelated reason.
+          const roots = ['[data-testid="roasting-hero"]', '[data-testid="roasting-stats"]']
+            .map((s) => document.querySelector(s))
+            .filter(Boolean) as Element[]
+
+          const out: { text: string; client: number; scroll: number }[] = []
+          for (const root of roots) {
+            for (const el of [root, ...Array.from(root.querySelectorAll('*'))]) {
+              if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0) {
+                out.push({
+                  text: (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 40),
+                  client: el.clientWidth,
+                  scroll: el.scrollWidth,
+                })
+              }
+            }
+          }
+          return out
+        })
+
+        expect(
+          clipped,
+          `at ${width}px the ${label} tab clips: ` +
+            clipped.map((c) => `"${c.text}" (${c.client}px box, ${c.scroll}px content)`).join(', ')
+        ).toEqual([])
+      }
+    }
+  })
+
   test('portalled dialog content resolves instrument tokens', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 })
     await openQueue(page)
