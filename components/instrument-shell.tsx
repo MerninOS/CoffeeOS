@@ -224,13 +224,28 @@ export function InstrumentShell({ user, children }: InstrumentShellProps) {
               {user.role}
             </span>
           </div>
+          {/*
+            Icon-only below md, labelled from md up.
+
+            The header row is menu (34px) + search (113px) + this actions group
+            (168px) at 375, and the group ended at x=387 inside a 375px header —
+            a 13px document overflow on EVERY authenticated route, so every page
+            scrolled sideways on a phone. The breadcrumb nav already collapses to
+            0; the label is the next cheapest 12px, and a bare icon is the
+            conventional mobile treatment for sign-out anyway.
+
+            `aria-label` is unconditional so the accessible name stays "Sign out"
+            when the text is hidden — the roaster settings baseline and the
+            role-gating checks locate this by role+name.
+          */}
           <Button
             size="sm"
             variant="tertiary"
             onClick={handleSignOut}
             iconLeft={<LogOut />}
+            aria-label="Sign out"
           >
-            Sign out
+            <span className="hidden md:inline">Sign out</span>
           </Button>
         </div>
       }
