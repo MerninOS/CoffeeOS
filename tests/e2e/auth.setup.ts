@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { demoAccount, loadEnvLocal, roasterAccount } from './support/env'
+import { hideOverlays } from './support/overlays'
 
 /**
  * Logs in once per seeded account and saves the sessions, so specs don't each
@@ -104,6 +105,22 @@ async function signIn(
 
   try {
     await page.goto('/auth/login')
+
+    // Every capability spec hides these before it touches anything; this file
+    // was the one place that did not, and it is the worst place to skip it.
+    // The Next.js dev overlay's `nextjs-portal` host can sit directly over the
+    // "Sign in" button — confirmed with `document.elementFromPoint()` at the
+    // button's own centre, which returned NEXTJS-PORTAL, not the button.
+    //
+    // Playwright's actionability check then retries the click until the test
+    // times out. Because this is the `setup` project that every browser project
+    // depends on, that single blocked click failed the whole run: 1 failed, 328
+    // did not run. And it reports as "could not sign in as demo@coffeeos.io",
+    // which points at the account — so the documented next step is to re-run
+    // `seed-demo-account.mjs`, wiping a demo account shared by every worktree
+    // on the machine to fix something that was never a data problem at all.
+    await hideOverlays(page)
+
     await page.getByLabel(/email/i).fill(acct.email)
     await page.getByLabel(/password/i).fill(acct.password)
     await page.getByRole('button', { name: /sign in|log in|login/i }).click()
