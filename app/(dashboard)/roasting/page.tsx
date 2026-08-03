@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEffectiveOwnerId } from "@/lib/team";
 import { RoastingPageClient } from "./roasting-page-client";
 import { rollUpSessions } from "./rollup";
+import { sessionCost, type CostMode } from "./session-cost";
 
 export default async function RoastingSessionsPage() {
   const supabase = await createClient();
@@ -96,33 +97,30 @@ export default async function RoastingSessionsPage() {
             ) +
             session.cleanup_minutes) / session.billing_granularity_minutes
         ) * session.billing_granularity_minutes,
-      session_toll_cost: (() => {
-        const totalRoastMinutes = batches.reduce(
-          (sum: number, b: { roast_minutes: number | null }) =>
-            sum + (b.roast_minutes || 0),
-          0
-        );
-        const totalSessionMinutes =
-          session.setup_minutes + totalRoastMinutes + session.cleanup_minutes;
-        const billableMinutes =
-          Math.ceil(totalSessionMinutes / session.billing_granularity_minutes) *
-          session.billing_granularity_minutes;
-
-        if (session.cost_mode === "co_roasting") {
-          return batches.reduce(
-            (sum: number, b: { green_weight_g: number | null }) =>
-              sum + ((b.green_weight_g || 0) / 453.592) * Number(session.rate_per_lb || 0),
-            0
-          );
-        }
-
-        if (session.cost_mode === "power_usage") {
-          const machineKwhPerHour = session.machine_energy_kwh_per_hour || 0;
-          const kwhRate = session.kwh_rate || 0;
-          return (billableMinutes / 60) * machineKwhPerHour * kwhRate;
-        }
-
-        return (billableMinutes / 60) * session.rate_per_hour;
+      /**
+       * Cost AND the arithmetic behind it, from one call so the two cannot
+       * drift. Replaces an inline IIFE that computed only the figure; the
+       * module preserves its arithmetic exactly, including the fact that it
+       * recomputes billable minutes rather than reading the stored column.
+       * See app/(dashboard)/roasting/session-cost.ts.
+       */
+      ...(() => {
+        const c = sessionCost({
+          cost_mode: (session.cost_mode || "toll_roasting") as CostMode,
+          setup_minutes: session.setup_minutes,
+          cleanup_minutes: session.cleanup_minutes,
+          billing_granularity_minutes: session.billing_granularity_minutes,
+          rate_per_hour: session.rate_per_hour,
+          rate_per_lb: session.rate_per_lb ?? null,
+          machine_energy_kwh_per_hour: session.machine_energy_kwh_per_hour,
+          kwh_rate: session.kwh_rate,
+          batches,
+        });
+        return {
+          session_toll_cost: c.cost,
+          cost_basis: c.basis,
+          cost_mode_label: c.modeLabel,
+        };
       })(),
       notes: session.notes,
       created_at: session.created_at,

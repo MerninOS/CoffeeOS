@@ -22,6 +22,7 @@ const FILES = [
   `${ROOT}/layout.tsx`,
   `${ROOT}/roasting-page-client.tsx`,
   `${ROOT}/roast-requests-client.tsx`,
+  `${ROOT}/sessions-client.tsx`,
   `${ROOT}/batches/batches-client.tsx`,
 ]
 /**
@@ -39,7 +40,14 @@ const FILES = [
  * narrow the glob and move on. That trades a red test for an invisible hole.
  * Listing both sides makes converting a directory a deliberate edit here.
  */
-const DIRS = [`${ROOT}/components/requests`, `${ROOT}/components/batches`]
+const DIRS = [
+  `${ROOT}/components/requests`,
+  `${ROOT}/components/batches`,
+  // Arrived with the sessions tab (CoffeeOS#71 stage 2) when it merged into
+  // this branch. The third assertion below is what caught it: the directory
+  // was in neither list, which fails rather than passing unswept.
+  `${ROOT}/components/sessions`,
+]
 const STILL_LOUD: string[] = []
 
 const LOUD =
