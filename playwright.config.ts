@@ -17,7 +17,6 @@ const PORT = process.env.PORT ?? '3000'
 
 export default defineConfig({
   testDir: './tests/e2e',
-  globalSetup: './tests/e2e/global-setup.ts',
 
   // Screenshots are only stable single-threaded — parallel workers race on
   // animation timing and produce flaky diffs.
@@ -50,13 +49,53 @@ export default defineConfig({
     toHaveScreenshot: { maxDiffPixelRatio: 0.01, animations: 'disabled' },
   },
 
-  // Desktop-only baselines are how a completely broken mobile layout shipped:
-  // the nav rail took 236 of 375px, content was crushed into ~140px, and a stat
-  // figure was cut mid-number. Every check passed. Mobile is a separate project
-  // rather than a wider matrix so its baselines are independently reviewable.
   projects: [
-    { name: 'desktop', use: { viewport: { width: 1280, height: 800 } } },
-    { name: 'mobile', use: { viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true } },
+    // Auth lives here rather than in `globalSetup` because globalSetup runs
+    // ahead of EVERY run regardless of which spec you asked for. When it threw,
+    // `playwright test tests/e2e/design-rulings.spec.ts` — a spec that reads
+    // files off disk and never opens a browser — reported "could not sign in",
+    // and no spec in the repo could execute while anything about auth was
+    // broken (CoffeeOS#119). As a dependency it still stops everything that
+    // needs a session, and nothing that doesn't.
+    //
+    // `.setup.ts` is outside the default `**/*.spec.ts` match, so this file is
+    // automatically excluded from the projects below rather than needing to be
+    // ignored by name.
+    //
+    // storageState is cleared because this project WRITES that file: inheriting
+    // `use.storageState` would make it a precondition of producing itself, and
+    // the first run of a fresh checkout would fail on the missing file.
+    {
+      name: 'setup',
+      testMatch: /auth\.setup\.ts/,
+      use: { viewport: { width: 1280, height: 800 }, storageState: undefined },
+    },
+
+    // Specs that assert on source files, not on a rendered page. They need no
+    // session and no viewport, so they neither depend on `setup` nor run twice
+    // across the viewport matrix.
+    {
+      name: 'static',
+      testMatch: /design-rulings\.spec\.ts/,
+      use: { storageState: undefined },
+    },
+
+    // Desktop-only baselines are how a completely broken mobile layout shipped:
+    // the nav rail took 236 of 375px, content was crushed into ~140px, and a stat
+    // figure was cut mid-number. Every check passed. Mobile is a separate project
+    // rather than a wider matrix so its baselines are independently reviewable.
+    {
+      name: 'desktop',
+      testIgnore: /design-rulings\.spec\.ts/,
+      dependencies: ['setup'],
+      use: { viewport: { width: 1280, height: 800 } },
+    },
+    {
+      name: 'mobile',
+      testIgnore: /design-rulings\.spec\.ts/,
+      dependencies: ['setup'],
+      use: { viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true },
+    },
   ],
 
   webServer: {

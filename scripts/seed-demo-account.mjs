@@ -1336,7 +1336,7 @@ async function main() {
  * The ids themselves are not stable across reseeds, so this file is generated
  * rather than committed (see .gitignore) — the same contract as
  * tests/e2e/.auth/storageState.json. A spec that cannot find it should say so
- * and tell you to re-run this script, exactly as global-setup.ts does.
+ * and tell you to re-run this script, exactly as tests/e2e/auth.setup.ts does.
  */
 async function writeOrderIdFixture(admin, ownerId) {
   const { data, error } = await admin
