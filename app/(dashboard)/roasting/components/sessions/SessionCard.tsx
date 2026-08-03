@@ -87,11 +87,12 @@ export function SessionCard({ session, calcWeightLoss, onDelete }: SessionCardPr
         </div>
       </div>
       <div className="flex gap-2">
-        <Btn href={`/roasting/sessions/${session.id}`} className="flex-1 justify-center">
+        <Btn data-testid="session-open" href={`/roasting/sessions/${session.id}`} className="flex-1 justify-center">
           <Eye size={11} strokeWidth={2.2} />
           View Session
         </Btn>
         <IconButton
+          data-testid="session-delete"
           size="sm"
           icon={<Trash2 size={13} strokeWidth={2} />}
           aria-label={`Delete session with ${session.vendor_name}`}

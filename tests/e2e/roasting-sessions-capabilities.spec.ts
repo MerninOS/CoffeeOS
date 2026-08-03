@@ -95,8 +95,20 @@ async function hideOverlays(page: Page) {
  * demonstrably on the page (confirmed the hard way on the requests spec), which
  * turns `toHaveCount(0)` into a false pass.
  */
+/**
+ * `.filter({ visible: true })`, NOT `:visible` inside the selector.
+ *
+ * The selector form — `:is([data-testid="session-row"],[data-testid="session-card"]):visible`
+ * — counts correctly but chaining `.filter({ hasText })` onto it silently
+ * resolves to ZERO. Observed: `count()` returned 2, both elements' innerText
+ * contained the vendor being filtered for, and the filtered locator still
+ * matched nothing. Which read as "the row I just created has vanished" rather
+ * than "the locator is wrong".
+ */
 const sessionRows = (page: Page) =>
-  page.locator(':is([data-testid="session-row"],[data-testid="session-card"]):visible')
+  page
+    .locator('[data-testid="session-row"], [data-testid="session-card"]')
+    .filter({ visible: true })
 
 async function openSessions(page: Page) {
   await page.goto('/roasting?tab=sessions')
@@ -306,8 +318,11 @@ test.describe('roasting sessions capabilities', () => {
     // or not.
     await expectRowStats(probeRow, testInfo.project.name, {
       batches: '0',
-      green: '0',
-      roasted: '0',
+      // Pounds, to one decimal — a brand-new session has no batches, so this is
+      // "0.0 lb" and not "0". Missed when the surface moved off grams: the
+      // seeded row's values were updated and this one was not.
+      green: '0.0',
+      roasted: '0.0',
       cost: '$0.00',
     })
   })
@@ -321,8 +336,21 @@ test.describe('roasting sessions capabilities', () => {
     const probeRow = sessionRows(page).filter({ hasText: vendor })
     await expect(probeRow).toHaveCount(1)
 
-    await probeRow.locator('[data-testid="session-menu"]').click()
-    await page.locator('[data-testid="menu-delete"]').click()
+    /**
+     * The two viewports reach delete differently, and this is a DRIVER
+     * difference — what the test asserts below is identical either way.
+     *
+     * Desktop puts delete behind the row's dropdown. The mobile card has no
+     * dropdown at all: it renders a direct trash IconButton beside "View
+     * Session". Driving the desktop path on mobile times out on a menu that
+     * does not exist, which reads as "the row vanished".
+     */
+    if (testInfo.project.name === 'mobile') {
+      await probeRow.locator('[data-testid="session-delete"]').click()
+    } else {
+      await probeRow.locator('[data-testid="session-menu"]').click()
+      await page.locator('[data-testid="menu-delete"]').click()
+    }
 
     // A Radix AlertDialog, not a native confirm() — unlike the requests tab's
     // delete. Asserting it opened (rather than assuming) is what proves this
