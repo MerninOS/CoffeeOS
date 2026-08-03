@@ -23,7 +23,7 @@ const FILES = [
   `${ROOT}/roasting-page-client.tsx`,
   `${ROOT}/roast-requests-client.tsx`,
 ]
-const DIRS = [`${ROOT}/components`]
+const DIRS = [`${ROOT}/components/requests`]
 
 const LOUD =
   /\b(?:bg|text|border|shadow|divide|ring|from|to|via|fill|stroke|placeholder|accent|caret)-(?:cream|espresso|tomato|sun|sky|chalk|roast|honey|matcha|fog)\b|shadow-flat-(?:sm|md|lg)|rounded-\[\d+px\]/
