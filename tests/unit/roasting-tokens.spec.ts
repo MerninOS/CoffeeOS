@@ -22,6 +22,7 @@ const FILES = [
   `${ROOT}/layout.tsx`,
   `${ROOT}/roasting-page-client.tsx`,
   `${ROOT}/roast-requests-client.tsx`,
+  `${ROOT}/sessions-client.tsx`,
 ]
 const DIRS = [`${ROOT}/components`]
 
