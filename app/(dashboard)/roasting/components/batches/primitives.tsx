@@ -1,8 +1,36 @@
 "use client";
 
-import Link from "next/link";
+import type React from "react";
+import { Button, Input } from "@merninos/ui/instrument";
+import { overline } from "@/lib/instrument/tokens";
 
+/**
+ * Retokenized onto instrument (CoffeeOS#71), matching the shape already proven
+ * out by ../requests/primitives.tsx — same external contract (data-testid,
+ * variant names, value/onChange shapes) so BatchesTable/BatchCard/
+ * ComponentDialog call these without change beyond the import.
+ *
+ * Btn is a thin variant-mapping wrapper around instrument's own `Button`
+ * rather than a hand-rolled style object, for the same reason as the requests
+ * copy: there is nothing left to retokenize once the mapping is in place, and
+ * a second copy of instrument's button geometry here would be exactly the
+ * near-duplicate CoffeeOS#110 warns about for tokens.ts.
+ *
+ * `href` is dropped rather than ported: instrument's Button always renders a
+ * `<button>` (no `asChild`), so the one caller that used to navigate via
+ * `href` (the empty state's "Go to Sessions") now does it the way the other
+ * converted list pages already do — `useRouter().push(...)` on `onClick` (see
+ * inventory-client.tsx) — rather than growing a second, hand-styled anchor
+ * variant here just to keep a `href` prop alive.
+ */
 export type BtnVariant = "primary" | "outline" | "ghost";
+
+const VARIANT_MAP: Record<BtnVariant, "primary" | "secondary" | "tertiary"> = {
+  primary: "primary",
+  outline: "secondary",
+  ghost: "tertiary",
+};
+
 export function Btn({
   "data-testid": testId,
   variant = "primary",
@@ -10,7 +38,6 @@ export function Btn({
   onClick,
   disabled,
   className = "",
-  href,
 }: {
   "data-testid"?: string;
   variant?: BtnVariant;
@@ -18,30 +45,25 @@ export function Btn({
   onClick?: () => void;
   disabled?: boolean;
   className?: string;
-  href?: string;
 }) {
-  const base =
-    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border-[2.5px] font-extrabold text-[11px] uppercase tracking-[.08em] transition-all duration-[120ms] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
-  const variants: Record<BtnVariant, string> = {
-    primary:
-      "bg-tomato text-cream border-espresso shadow-[3px_3px_0_#1C0F05] hover:-translate-x-px hover:-translate-y-px hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
-    outline:
-      "bg-transparent text-espresso border-espresso hover:bg-fog/40",
-    ghost:
-      "bg-transparent text-espresso border-fog hover:border-espresso/40 hover:bg-fog/30",
-  };
-  const cls = `${base} ${variants[variant]} ${className}`;
-  if (href) return <Link href={href} data-testid={testId} className={cls}>{children}</Link>;
   return (
-    <button data-testid={testId} onClick={onClick} disabled={disabled} className={cls}>
+    <Button
+      data-testid={testId}
+      type="button"
+      variant={VARIANT_MAP[variant]}
+      size="sm"
+      onClick={onClick}
+      disabled={disabled}
+      className={className}
+    >
       {children}
-    </button>
+    </Button>
   );
 }
 
 export function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[11px] font-extrabold uppercase tracking-[.08em] text-espresso mb-1.5">
+    <p style={{ ...overline, color: "var(--ink-muted)", marginBottom: 6 }}>
       {children}
     </p>
   );
@@ -65,7 +87,7 @@ export function MerninInput({
   step?: string;
 }) {
   return (
-    <input
+    <Input
       data-testid={testId}
       id={id}
       type={type}
@@ -73,7 +95,6 @@ export function MerninInput({
       onChange={onChange}
       placeholder={placeholder}
       step={step}
-      className="w-full px-3 py-2 rounded-[8px] border-[2.5px] border-espresso bg-cream text-[13px] font-medium text-espresso placeholder:text-espresso/30 shadow-[2px_2px_0_#1C0F05] focus:outline-none focus:shadow-[2px_2px_0_#E8442A] focus:border-tomato"
     />
   );
 }

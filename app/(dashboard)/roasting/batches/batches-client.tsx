@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Search, Package } from "lucide-react";
+import { EmptyState, Input } from "@merninos/ui/instrument";
+import { sans } from "@/lib/instrument/tokens";
 import { deleteBatch, createComponentFromBatch, addToExistingComponent } from "../actions";
 import type { Batch, ExistingComponent } from "../components/batches/types";
 import { getBatchCostPerGram, COST_PER_UNIT_DECIMALS } from "../components/batches/costing";
@@ -17,6 +20,7 @@ interface BatchesClientProps {
 }
 
 export function BatchesClient({ initialBatches, existingComponents }: BatchesClientProps) {
+  const router = useRouter();
   const [batches, setBatches] = useState(initialBatches);
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -99,42 +103,41 @@ export function BatchesClient({ initialBatches, existingComponents }: BatchesCli
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6" style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
       <div>
-        <h2 className="font-extrabold text-[17px] uppercase tracking-[.04em] text-espresso">
+        <h2 style={{ fontFamily: "var(--font-sans)", fontSize: "var(--fs-title-sm)", fontWeight: "var(--fw-semibold)" as unknown as number, color: "var(--ink)" }}>
           All Batches
         </h2>
-        <p className="text-[12px] text-espresso/50 font-medium mt-0.5">
+        <p style={{ ...sans, fontSize: "var(--fs-caption)", color: "var(--ink-muted)", marginTop: 2 }}>
           View all roasting batches across sessions
         </p>
       </div>
 
       {/* Search */}
       <div className="relative w-full md:max-w-sm">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-espresso/40" />
-        <input
+        <Search
+          size={14}
+          style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--ink-subtle)", pointerEvents: "none" }}
+        />
+        <Input
           data-testid="batches-search"
           type="text"
           placeholder="Search by coffee name or lot code..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 rounded-[8px] border-[2.5px] border-espresso bg-cream text-[13px] font-medium text-espresso placeholder:text-espresso/30 shadow-[2px_2px_0_#1C0F05] focus:outline-none focus:shadow-[2px_2px_0_#E8442A] focus:border-tomato"
+          style={{ paddingLeft: 32 }}
         />
       </div>
 
       {batches.length === 0 ? (
-        <div className="bg-chalk border-[3px] border-espresso rounded-[16px] shadow-flat-md flex flex-col items-center justify-center py-14 text-center px-6">
-          <Package size={36} strokeWidth={1.5} className="text-espresso/20 mb-3" />
-          <h3 className="font-extrabold text-[15px] uppercase tracking-[.04em] text-espresso mb-1">
-            No Batches Yet
-          </h3>
-          <p className="text-[12px] text-espresso/50 font-medium mb-4">
-            Create a roasting session and add batches to see them here
-          </p>
-          <Btn href="/roasting">Go to Sessions</Btn>
-        </div>
+        <EmptyState
+          icon={<Package size={28} strokeWidth={1.5} />}
+          title="No Batches Yet"
+          description="Create a roasting session and add batches to see them here"
+          action={<Btn onClick={() => router.push("/roasting")}>Go to Sessions</Btn>}
+        />
       ) : (
-        <>
+        <div style={{ border: "1px solid var(--hairline)", borderRadius: "var(--r-md)", overflow: "hidden", background: "var(--surface)" }}>
           {/* Mobile card layout */}
           <BatchCard
             batches={filteredBatches}
@@ -148,7 +151,7 @@ export function BatchesClient({ initialBatches, existingComponents }: BatchesCli
             onCreateComponent={openCreateComponent}
             onDelete={setDeleteId}
           />
-        </>
+        </div>
       )}
 
       {/* Create Component Dialog */}

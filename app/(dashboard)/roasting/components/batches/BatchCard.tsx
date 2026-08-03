@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import {
@@ -10,8 +11,56 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Trash2, Eye, Package, Plus } from "lucide-react";
+import { Badge } from "@merninos/ui/instrument";
+import { mono, overline, sans } from "@/lib/instrument/tokens";
 import type { Batch } from "./types";
 import { lossColor } from "./costing";
+import { lb } from "../../units";
+
+/**
+ * Mobile (`md:hidden`) stacked-row rendering, retokenized onto instrument
+ * (CoffeeOS#71) — kept as its own file rather than merged with
+ * BatchesTable.tsx, matching the ../requests split.
+ */
+
+const MENU_CONTENT: CSSProperties = {
+  background: "var(--surface)",
+  border: "1px solid var(--hairline-strong)",
+  borderRadius: "var(--r-md)",
+  boxShadow: "var(--shadow-pop)",
+  color: "var(--ink)",
+  padding: 4,
+};
+
+const MENU_ITEM: CSSProperties = {
+  fontFamily: "var(--font-sans)",
+  fontSize: "var(--fs-body)",
+  color: "var(--ink)",
+  borderRadius: "var(--r-sm)",
+};
+
+const menuTriggerStyle: CSSProperties = {
+  display: "flex",
+  height: 28,
+  width: 28,
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: "var(--r-sm)",
+  border: "1px solid var(--hairline)",
+  color: "var(--ink-muted)",
+  background: "transparent",
+  cursor: "pointer",
+};
+
+/**
+ * See BatchesTable.tsx for why these keys are derived by calling `lossColor`
+ * rather than copying its literal Tailwind return strings.
+ */
+const LOSS_TONE: Record<string, string> = {
+  [lossColor(19)]: "var(--danger)",
+  [lossColor(10)]: "var(--warning)",
+  [lossColor(15)]: "var(--success)",
+};
 
 interface BatchCardProps {
   batches: Batch[];
@@ -21,61 +70,68 @@ interface BatchCardProps {
 
 export function BatchCard({ batches, onCreateComponent, onDelete }: BatchCardProps) {
   return (
-    <div className="space-y-2 md:hidden">
-      {batches.map((batch) => (
+    <div className="md:hidden">
+      {batches.map((batch, i) => (
         <div
           key={batch.id}
           data-testid="batch-card"
-          className="bg-chalk border-[2.5px] border-espresso rounded-[12px] shadow-flat-sm p-3"
+          style={{ padding: 12, ...(i > 0 ? { borderTop: "1px solid var(--hairline)" } : {}) }}
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <p data-testid="row-coffee" className="text-[13px] font-bold text-espresso truncate">{batch.coffee_name}</p>
+              <p
+                data-testid="row-coffee"
+                style={{ ...sans, fontWeight: 500, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+              >
+                {batch.coffee_name}
+              </p>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                 {batch.roasting_sessions ? (
                   <Link
                     data-testid="row-session"
                     href={`/roasting/sessions/${batch.roasting_sessions.id}`}
-                    className="text-[11px] text-espresso/50 font-medium hover:text-tomato transition-colors"
+                    style={{ fontSize: "var(--fs-caption)", color: "var(--ink-muted)" }}
                   >
                     {format(new Date(batch.roasting_sessions.session_date), "MMM d, yyyy")}
                   </Link>
                 ) : (
-                  <span data-testid="row-session" className="text-[11px] text-espresso/50 font-medium">
+                  <span data-testid="row-session" style={{ fontSize: "var(--fs-caption)", color: "var(--ink-muted)" }}>
                     {format(new Date(batch.batch_date), "MMM d, yyyy")}
                   </span>
                 )}
                 {batch.lot_code && (
-                  <span data-testid="row-lot" className="inline-flex items-center px-1.5 py-0 rounded-full border-[1.5px] border-fog bg-fog/40 text-[9px] font-extrabold uppercase tracking-[.06em] text-espresso">
-                    {batch.lot_code}
+                  <span data-testid="row-lot">
+                    <Badge tone="neutral" variant="soft" size="sm" mono>
+                      {batch.lot_code}
+                    </Badge>
                   </span>
                 )}
               </div>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button data-testid="batch-menu" className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-fog text-espresso/50 hover:text-espresso hover:border-espresso/40 hover:bg-fog/30 transition-all shrink-0">
+                <button data-testid="batch-menu" style={menuTriggerStyle}>
                   <MoreHorizontal size={14} strokeWidth={2} />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent data-surface="app" align="end" style={MENU_CONTENT}>
                 {batch.roasting_sessions && (
-                  <DropdownMenuItem asChild>
+                  <DropdownMenuItem asChild style={MENU_ITEM}>
                     <Link data-testid="menu-view-session" href={`/roasting/sessions/${batch.roasting_sessions.id}`}>
                       <Eye className="mr-2 h-4 w-4" />View Session
                     </Link>
                   </DropdownMenuItem>
                 )}
                 {!batch.component_id && (
-                  <DropdownMenuItem data-testid="menu-create-component" onClick={() => onCreateComponent(batch)}>
+                  <DropdownMenuItem data-testid="menu-create-component" style={MENU_ITEM} onClick={() => onCreateComponent(batch)}>
                     <Package className="mr-2 h-4 w-4" />Create Component
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   data-testid="menu-delete"
+                  style={{ ...MENU_ITEM, color: "var(--danger)" }}
                   onClick={() => onDelete(batch.id)}
-                  className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />Delete
                 </DropdownMenuItem>
@@ -85,24 +141,22 @@ export function BatchCard({ batches, onCreateComponent, onDelete }: BatchCardPro
 
           <div className="mt-2 grid grid-cols-4 gap-1">
             {[
-              { label: "Green", value: `${batch.green_weight_g.toFixed(0)}g`, testId: "row-green" },
-              { label: "Roasted", value: `${batch.roasted_weight_g.toFixed(0)}g`, testId: "row-roasted" },
+              { label: "Green", value: lb(batch.green_weight_g), testId: "row-green" },
+              { label: "Roasted", value: lb(batch.roasted_weight_g), testId: "row-roasted" },
               {
                 label: "Loss",
                 value: (
-                  <span className={`font-extrabold ${lossColor(batch.loss_percent)}`}>
+                  <span style={{ fontWeight: 600, color: LOSS_TONE[lossColor(batch.loss_percent)] ?? "var(--ink)" }}>
                     {batch.loss_percent.toFixed(1)}%
                   </span>
                 ),
                 testId: "row-loss",
               },
-              { label: "Sellable", value: `${batch.sellable_g.toFixed(0)}g`, testId: "row-sellable" },
+              { label: "Sellable", value: lb(batch.sellable_g), testId: "row-sellable" },
             ].map((stat) => (
               <div key={stat.label} data-testid={stat.testId}>
-                <span className="text-[9px] text-espresso/40 font-extrabold uppercase tracking-[.07em] block">
-                  {stat.label}
-                </span>
-                <span className="text-[12px] font-bold text-espresso">{stat.value}</span>
+                <span style={{ ...overline, display: "block" }}>{stat.label}</span>
+                <span style={{ ...mono, fontWeight: 500, color: "var(--ink)" }}>{stat.value}</span>
               </div>
             ))}
           </div>
@@ -111,7 +165,7 @@ export function BatchCard({ batches, onCreateComponent, onDelete }: BatchCardPro
             <div data-testid="row-component" className="mt-2">
               <Link
                 href="/components"
-                className="inline-flex items-center gap-1 text-[11px] font-bold text-espresso hover:text-tomato transition-colors"
+                style={{ display: "inline-flex", alignItems: "center", gap: 4, fontWeight: 500, color: "var(--ink)", fontSize: "var(--fs-caption)" }}
               >
                 <Package size={10} strokeWidth={2} />
                 {batch.components.name}
@@ -121,7 +175,16 @@ export function BatchCard({ batches, onCreateComponent, onDelete }: BatchCardPro
             <button
               data-testid="row-component"
               onClick={() => onCreateComponent(batch)}
-              className="mt-2 flex w-full items-center justify-center gap-1 py-1 rounded-[6px] border-[1.5px] border-dashed border-espresso/30 text-[10px] font-extrabold uppercase tracking-[.07em] text-espresso/50 hover:border-espresso/60 hover:text-espresso hover:bg-fog/20 transition-all"
+              className="mt-2 flex w-full items-center justify-center gap-1"
+              style={{
+                ...overline,
+                padding: "6px 0",
+                borderRadius: "var(--r-sm)",
+                border: "1px dashed var(--hairline-strong)",
+                color: "var(--ink-muted)",
+                background: "none",
+                cursor: "pointer",
+              }}
             >
               <Plus size={10} strokeWidth={2.5} />
               Create Component

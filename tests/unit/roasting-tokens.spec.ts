@@ -22,6 +22,7 @@ const FILES = [
   `${ROOT}/layout.tsx`,
   `${ROOT}/roasting-page-client.tsx`,
   `${ROOT}/roast-requests-client.tsx`,
+  `${ROOT}/batches/batches-client.tsx`,
 ]
 /**
  * Converted component directories — swept for loud classes.
@@ -38,17 +39,31 @@ const FILES = [
  * narrow the glob and move on. That trades a red test for an invisible hole.
  * Listing both sides makes converting a directory a deliberate edit here.
  */
-const DIRS = [`${ROOT}/components/requests`]
-const STILL_LOUD = [`${ROOT}/components/batches`]
+const DIRS = [`${ROOT}/components/requests`, `${ROOT}/components/batches`]
+const STILL_LOUD: string[] = []
 
 const LOUD =
   /\b(?:bg|text|border|shadow|divide|ring|from|to|via|fill|stroke|placeholder|accent|caret)-(?:cream|espresso|tomato|sun|sky|chalk|roast|honey|matcha|fog)\b|shadow-flat-(?:sm|md|lg)|rounded-\[\d+px\]/
+
+/**
+ * `components/batches/costing.ts` is excluded even though its directory is now
+ * converted (DIRS above). It is frozen — CoffeeOS#110 records that it
+ * deliberately duplicates cost arithmetic that disagrees with another copy on
+ * edge cases, and fixing that is explicitly out of scope here — so it cannot
+ * be edited to stop returning Tailwind class names. Its callers (BatchesTable,
+ * BatchCard) no longer read those strings as classNames; they map them to
+ * `--danger`/`--warning`/`--success` at the call site, which is what this
+ * sweep actually polices. The literal `text-tomato` etc. living on in a return
+ * value it never renders is not a loud-styling regression.
+ */
+const FROZEN = new Set([`${ROOT}/components/batches/costing.ts`])
 
 const walk = (dir: string): string[] =>
   existsSync(dir)
     ? readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
         const p = path.join(dir, e.name)
-        return e.isDirectory() ? walk(p) : /\.tsx?$/.test(e.name) ? [p] : []
+        if (e.isDirectory()) return walk(p)
+        return /\.tsx?$/.test(e.name) && !FROZEN.has(p) ? [p] : []
       })
     : []
 
