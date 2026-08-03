@@ -72,7 +72,6 @@ async function openBatches(page: Page) {
 async function expectRowStats(
   row: ReturnType<typeof batchRows>,
   expected: {
-    session: string
     lot: string
     green: string
     roasted: string
@@ -80,7 +79,23 @@ async function expectRowStats(
     sellable: string
   }
 ) {
-  await expect(row.locator('[data-testid="row-session"]')).toContainText(expected.session)
+  /**
+   * The session date is asserted by SHAPE, not by value — the one field here
+   * that deliberately is not a literal.
+   *
+   * `seed-demo-account.mjs` derives session dates relative to the day it runs,
+   * so the seeded batch renders "Jul 28, 2026" before a re-seed and
+   * "Jul 29, 2026" after one. Pinning the value makes a green suite depend on
+   * when the fixture was last rebuilt, and it fails for a reason that has
+   * nothing to do with the page — which is exactly what happened here.
+   *
+   * The weights below stay literal on purpose. They are fixture CONSTANTS, and
+   * writing them out is what forces a unit change to be made deliberately.
+   * A relative date is not a constant, so it does not get that treatment.
+   */
+  await expect(row.locator('[data-testid="row-session"]')).toHaveText(
+    /^[A-Z][a-z]{2} \d{1,2}, \d{4}$/
+  )
   await expect(row.locator('[data-testid="row-lot"]')).toContainText(expected.lot)
   await expect(row.locator('[data-testid="row-green"]')).toContainText(expected.green)
   await expect(row.locator('[data-testid="row-roasted"]')).toContainText(expected.roasted)
@@ -91,7 +106,6 @@ async function expectRowStats(
 // The two seeded batches, as the page renders them today. Weights are pounds.
 const ETHIOPIA = {
   coffee: 'Ethiopia Yirgacheffe',
-  session: 'Jul 28, 2026',
   lot: 'ETH-YIR-2026-01',
   green: '11.9',
   roasted: '10.0',
@@ -100,7 +114,6 @@ const ETHIOPIA = {
 }
 const GUATEMALA = {
   coffee: 'Guatemala Huehuetenango',
-  session: 'Jul 28, 2026',
   lot: 'GUA-HUE-2026-02',
   green: '11.5',
   roasted: '9.7',
