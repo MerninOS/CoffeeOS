@@ -23,7 +23,23 @@ const FILES = [
   `${ROOT}/roasting-page-client.tsx`,
   `${ROOT}/roast-requests-client.tsx`,
 ]
+/**
+ * Converted component directories — swept for loud classes.
+ *
+ * And `STILL_LOUD`, its opposite: directories that have NOT been converted yet
+ * and are expected to fail this sweep. Every subdirectory of `components/` must
+ * appear in exactly one of the two, and the test below fails on any that appears
+ * in neither.
+ *
+ * That third assertion is the point. Scoping this to a plain allowlist means a
+ * new directory is simply unguarded, silently — which is what happened when
+ * `components/batches` was extracted: the sweep had walked all of `components/`,
+ * the new (correctly still-loud) directory broke it, and the obvious fix was to
+ * narrow the glob and move on. That trades a red test for an invisible hole.
+ * Listing both sides makes converting a directory a deliberate edit here.
+ */
 const DIRS = [`${ROOT}/components/requests`]
+const STILL_LOUD = [`${ROOT}/components/batches`]
 
 const LOUD =
   /\b(?:bg|text|border|shadow|divide|ring|from|to|via|fill|stroke|placeholder|accent|caret)-(?:cream|espresso|tomato|sun|sky|chalk|roast|honey|matcha|fog)\b|shadow-flat-(?:sm|md|lg)|rounded-\[\d+px\]/
@@ -54,6 +70,24 @@ test('the converted roasting surface takes no visual value from a Tailwind class
   expect(
     offenders,
     "this repo's Tailwind theme is the LOUD palette — read tokens as var(--token)"
+  ).toEqual([])
+})
+
+test('every component directory is declared either converted or still-loud', () => {
+  // A directory in neither list is unguarded and nobody would notice.
+  const declared = new Set(
+    [...DIRS, ...STILL_LOUD].map((d) => path.basename(d))
+  )
+  const actual = existsSync(`${ROOT}/components`)
+    ? readdirSync(`${ROOT}/components`, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name)
+    : []
+
+  const undeclared = actual.filter((d) => !declared.has(d))
+  expect(
+    undeclared,
+    'add each new component directory to DIRS (converted) or STILL_LOUD (not yet)'
   ).toEqual([])
 })
 
