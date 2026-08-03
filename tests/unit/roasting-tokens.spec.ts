@@ -23,17 +23,55 @@ const FILES = [
   `${ROOT}/roasting-page-client.tsx`,
   `${ROOT}/roast-requests-client.tsx`,
   `${ROOT}/sessions-client.tsx`,
+  `${ROOT}/batches/batches-client.tsx`,
 ]
-const DIRS = [`${ROOT}/components`]
+/**
+ * Converted component directories — swept for loud classes.
+ *
+ * And `STILL_LOUD`, its opposite: directories that have NOT been converted yet
+ * and are expected to fail this sweep. Every subdirectory of `components/` must
+ * appear in exactly one of the two, and the test below fails on any that appears
+ * in neither.
+ *
+ * That third assertion is the point. Scoping this to a plain allowlist means a
+ * new directory is simply unguarded, silently — which is what happened when
+ * `components/batches` was extracted: the sweep had walked all of `components/`,
+ * the new (correctly still-loud) directory broke it, and the obvious fix was to
+ * narrow the glob and move on. That trades a red test for an invisible hole.
+ * Listing both sides makes converting a directory a deliberate edit here.
+ */
+const DIRS = [
+  `${ROOT}/components/requests`,
+  `${ROOT}/components/batches`,
+  // Arrived with the sessions tab (CoffeeOS#71 stage 2) when it merged into
+  // this branch. The third assertion below is what caught it: the directory
+  // was in neither list, which fails rather than passing unswept.
+  `${ROOT}/components/sessions`,
+]
+const STILL_LOUD: string[] = []
 
 const LOUD =
   /\b(?:bg|text|border|shadow|divide|ring|from|to|via|fill|stroke|placeholder|accent|caret)-(?:cream|espresso|tomato|sun|sky|chalk|roast|honey|matcha|fog)\b|shadow-flat-(?:sm|md|lg)|rounded-\[\d+px\]/
+
+/**
+ * `components/batches/costing.ts` is excluded even though its directory is now
+ * converted (DIRS above). It is frozen — CoffeeOS#110 records that it
+ * deliberately duplicates cost arithmetic that disagrees with another copy on
+ * edge cases, and fixing that is explicitly out of scope here — so it cannot
+ * be edited to stop returning Tailwind class names. Its callers (BatchesTable,
+ * BatchCard) no longer read those strings as classNames; they map them to
+ * `--danger`/`--warning`/`--success` at the call site, which is what this
+ * sweep actually polices. The literal `text-tomato` etc. living on in a return
+ * value it never renders is not a loud-styling regression.
+ */
+const FROZEN = new Set([`${ROOT}/components/batches/costing.ts`])
 
 const walk = (dir: string): string[] =>
   existsSync(dir)
     ? readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
         const p = path.join(dir, e.name)
-        return e.isDirectory() ? walk(p) : /\.tsx?$/.test(e.name) ? [p] : []
+        if (e.isDirectory()) return walk(p)
+        return /\.tsx?$/.test(e.name) && !FROZEN.has(p) ? [p] : []
       })
     : []
 
@@ -55,6 +93,24 @@ test('the converted roasting surface takes no visual value from a Tailwind class
   expect(
     offenders,
     "this repo's Tailwind theme is the LOUD palette — read tokens as var(--token)"
+  ).toEqual([])
+})
+
+test('every component directory is declared either converted or still-loud', () => {
+  // A directory in neither list is unguarded and nobody would notice.
+  const declared = new Set(
+    [...DIRS, ...STILL_LOUD].map((d) => path.basename(d))
+  )
+  const actual = existsSync(`${ROOT}/components`)
+    ? readdirSync(`${ROOT}/components`, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name)
+    : []
+
+  const undeclared = actual.filter((d) => !declared.has(d))
+  expect(
+    undeclared,
+    'add each new component directory to DIRS (converted) or STILL_LOUD (not yet)'
   ).toEqual([])
 })
 
