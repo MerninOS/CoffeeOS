@@ -20,7 +20,7 @@ interface DeleteDialogProps {
 export function DeleteDialog({ deleteId, onOpenChange, onConfirm }: DeleteDialogProps) {
   return (
     <AlertDialog open={!!deleteId} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg max-w-sm">
+      <AlertDialogContent data-testid="delete-dialog" className="p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg max-w-sm">
         <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-extrabold text-[15px] uppercase tracking-[.06em] text-espresso">
@@ -38,6 +38,7 @@ export function DeleteDialog({ deleteId, onOpenChange, onConfirm }: DeleteDialog
             Cancel
           </AlertDialogCancel>
           <AlertDialogAction
+            data-testid="delete-confirm"
             onClick={onConfirm}
             className="inline-flex items-center px-3 py-1.5 rounded-[8px] border-[2.5px] border-espresso bg-tomato text-cream font-extrabold text-[11px] uppercase tracking-[.08em] shadow-[3px_3px_0_#1C0F05] hover:-translate-x-px hover:-translate-y-px hover:shadow-[4px_4px_0_#1C0F05] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"
           >

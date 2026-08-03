@@ -113,6 +113,7 @@ export function BatchesClient({ initialBatches, existingComponents }: BatchesCli
       <div className="relative w-full md:max-w-sm">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-espresso/40" />
         <input
+          data-testid="batches-search"
           type="text"
           placeholder="Search by coffee name or lot code..."
           value={searchQuery}

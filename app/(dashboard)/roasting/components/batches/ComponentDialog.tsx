@@ -54,7 +54,7 @@ export function ComponentDialog({
 }: ComponentDialogProps) {
   return (
     <Dialog open={!!createComponentBatch} onOpenChange={onClose}>
-      <DialogContent className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
+      <DialogContent data-testid="component-dialog" className="max-w-md p-0 gap-0 border-[3px] border-espresso rounded-[16px] overflow-hidden bg-chalk shadow-flat-lg">
         <div className="bg-cream border-b-[3px] border-espresso px-6 py-4">
           <DialogHeader>
             <DialogTitle className="font-extrabold text-[15px] uppercase tracking-[.08em] text-espresso">
@@ -94,7 +94,7 @@ export function ComponentDialog({
             <div>
               <FieldLabel>Select Component</FieldLabel>
               <Select value={selectedComponentId} onValueChange={setSelectedComponentId}>
-                <SelectTrigger className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
+                <SelectTrigger data-testid="field-existing-component" className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
                   <SelectValue placeholder="Choose a component..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -124,6 +124,7 @@ export function ComponentDialog({
               <div>
                 <FieldLabel>Component Name</FieldLabel>
                 <MerninInput
+                  data-testid="field-component-name"
                   id="componentName"
                   value={componentFormData.name}
                   onChange={(e) => setComponentFormData({ ...componentFormData, name: e.target.value })}
@@ -134,6 +135,7 @@ export function ComponentDialog({
                 <div>
                   <FieldLabel>Cost per Unit</FieldLabel>
                   <MerninInput
+                    data-testid="field-cost-per-unit"
                     id="costPerUnit"
                     type="number"
                     step="0.00000001"
@@ -148,7 +150,7 @@ export function ComponentDialog({
                     value={componentFormData.unit}
                     onValueChange={(value) => setComponentFormData({ ...componentFormData, unit: value })}
                   >
-                    <SelectTrigger className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
+                    <SelectTrigger data-testid="field-unit" className="border-[2.5px] border-espresso bg-cream text-espresso font-medium text-[13px] rounded-[8px] shadow-[2px_2px_0_#1C0F05]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -185,6 +187,7 @@ export function ComponentDialog({
         <div className="bg-cream border-t-[3px] border-espresso px-6 py-4 flex justify-end gap-2">
           <Btn variant="outline" onClick={onClose}>Cancel</Btn>
           <Btn
+            data-testid="dialog-submit"
             onClick={onSubmit}
             disabled={
               isSubmitting ||

@@ -4,6 +4,7 @@ import Link from "next/link";
 
 export type BtnVariant = "primary" | "outline" | "ghost";
 export function Btn({
+  "data-testid": testId,
   variant = "primary",
   children,
   onClick,
@@ -11,6 +12,7 @@ export function Btn({
   className = "",
   href,
 }: {
+  "data-testid"?: string;
   variant?: BtnVariant;
   children: React.ReactNode;
   onClick?: () => void;
@@ -29,9 +31,9 @@ export function Btn({
       "bg-transparent text-espresso border-fog hover:border-espresso/40 hover:bg-fog/30",
   };
   const cls = `${base} ${variants[variant]} ${className}`;
-  if (href) return <Link href={href} className={cls}>{children}</Link>;
+  if (href) return <Link href={href} data-testid={testId} className={cls}>{children}</Link>;
   return (
-    <button onClick={onClick} disabled={disabled} className={cls}>
+    <button data-testid={testId} onClick={onClick} disabled={disabled} className={cls}>
       {children}
     </button>
   );
@@ -46,6 +48,7 @@ export function FieldLabel({ children }: { children: React.ReactNode }) {
 }
 
 export function MerninInput({
+  "data-testid": testId,
   id,
   type = "text",
   value,
@@ -53,6 +56,7 @@ export function MerninInput({
   placeholder,
   step,
 }: {
+  "data-testid"?: string;
   id?: string;
   type?: string;
   value: string;
@@ -62,6 +66,7 @@ export function MerninInput({
 }) {
   return (
     <input
+      data-testid={testId}
       id={id}
       type={type}
       value={value}

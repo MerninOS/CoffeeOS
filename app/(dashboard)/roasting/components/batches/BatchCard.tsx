@@ -25,26 +25,28 @@ export function BatchCard({ batches, onCreateComponent, onDelete }: BatchCardPro
       {batches.map((batch) => (
         <div
           key={batch.id}
+          data-testid="batch-card"
           className="bg-chalk border-[2.5px] border-espresso rounded-[12px] shadow-flat-sm p-3"
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-bold text-espresso truncate">{batch.coffee_name}</p>
+              <p data-testid="row-coffee" className="text-[13px] font-bold text-espresso truncate">{batch.coffee_name}</p>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                 {batch.roasting_sessions ? (
                   <Link
+                    data-testid="row-session"
                     href={`/roasting/sessions/${batch.roasting_sessions.id}`}
                     className="text-[11px] text-espresso/50 font-medium hover:text-tomato transition-colors"
                   >
                     {format(new Date(batch.roasting_sessions.session_date), "MMM d, yyyy")}
                   </Link>
                 ) : (
-                  <span className="text-[11px] text-espresso/50 font-medium">
+                  <span data-testid="row-session" className="text-[11px] text-espresso/50 font-medium">
                     {format(new Date(batch.batch_date), "MMM d, yyyy")}
                   </span>
                 )}
                 {batch.lot_code && (
-                  <span className="inline-flex items-center px-1.5 py-0 rounded-full border-[1.5px] border-fog bg-fog/40 text-[9px] font-extrabold uppercase tracking-[.06em] text-espresso">
+                  <span data-testid="row-lot" className="inline-flex items-center px-1.5 py-0 rounded-full border-[1.5px] border-fog bg-fog/40 text-[9px] font-extrabold uppercase tracking-[.06em] text-espresso">
                     {batch.lot_code}
                   </span>
                 )}
@@ -52,25 +54,26 @@ export function BatchCard({ batches, onCreateComponent, onDelete }: BatchCardPro
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-fog text-espresso/50 hover:text-espresso hover:border-espresso/40 hover:bg-fog/30 transition-all shrink-0">
+                <button data-testid="batch-menu" className="flex h-7 w-7 items-center justify-center rounded-[6px] border-[2px] border-fog text-espresso/50 hover:text-espresso hover:border-espresso/40 hover:bg-fog/30 transition-all shrink-0">
                   <MoreHorizontal size={14} strokeWidth={2} />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {batch.roasting_sessions && (
                   <DropdownMenuItem asChild>
-                    <Link href={`/roasting/sessions/${batch.roasting_sessions.id}`}>
+                    <Link data-testid="menu-view-session" href={`/roasting/sessions/${batch.roasting_sessions.id}`}>
                       <Eye className="mr-2 h-4 w-4" />View Session
                     </Link>
                   </DropdownMenuItem>
                 )}
                 {!batch.component_id && (
-                  <DropdownMenuItem onClick={() => onCreateComponent(batch)}>
+                  <DropdownMenuItem data-testid="menu-create-component" onClick={() => onCreateComponent(batch)}>
                     <Package className="mr-2 h-4 w-4" />Create Component
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  data-testid="menu-delete"
                   onClick={() => onDelete(batch.id)}
                   className="text-destructive focus:text-destructive"
                 >
@@ -82,8 +85,8 @@ export function BatchCard({ batches, onCreateComponent, onDelete }: BatchCardPro
 
           <div className="mt-2 grid grid-cols-4 gap-1">
             {[
-              { label: "Green", value: `${batch.green_weight_g.toFixed(0)}g` },
-              { label: "Roasted", value: `${batch.roasted_weight_g.toFixed(0)}g` },
+              { label: "Green", value: `${batch.green_weight_g.toFixed(0)}g`, testId: "row-green" },
+              { label: "Roasted", value: `${batch.roasted_weight_g.toFixed(0)}g`, testId: "row-roasted" },
               {
                 label: "Loss",
                 value: (
@@ -91,10 +94,11 @@ export function BatchCard({ batches, onCreateComponent, onDelete }: BatchCardPro
                     {batch.loss_percent.toFixed(1)}%
                   </span>
                 ),
+                testId: "row-loss",
               },
-              { label: "Sellable", value: `${batch.sellable_g.toFixed(0)}g` },
+              { label: "Sellable", value: `${batch.sellable_g.toFixed(0)}g`, testId: "row-sellable" },
             ].map((stat) => (
-              <div key={stat.label}>
+              <div key={stat.label} data-testid={stat.testId}>
                 <span className="text-[9px] text-espresso/40 font-extrabold uppercase tracking-[.07em] block">
                   {stat.label}
                 </span>
@@ -104,7 +108,7 @@ export function BatchCard({ batches, onCreateComponent, onDelete }: BatchCardPro
           </div>
 
           {batch.components ? (
-            <div className="mt-2">
+            <div data-testid="row-component" className="mt-2">
               <Link
                 href="/components"
                 className="inline-flex items-center gap-1 text-[11px] font-bold text-espresso hover:text-tomato transition-colors"
@@ -115,6 +119,7 @@ export function BatchCard({ batches, onCreateComponent, onDelete }: BatchCardPro
             </div>
           ) : (
             <button
+              data-testid="row-component"
               onClick={() => onCreateComponent(batch)}
               className="mt-2 flex w-full items-center justify-center gap-1 py-1 rounded-[6px] border-[1.5px] border-dashed border-espresso/30 text-[10px] font-extrabold uppercase tracking-[.07em] text-espresso/50 hover:border-espresso/60 hover:text-espresso hover:bg-fog/20 transition-all"
             >
