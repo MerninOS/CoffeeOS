@@ -65,10 +65,20 @@ export default defineConfig({
     // storageState is cleared because this project WRITES that file: inheriting
     // `use.storageState` would make it a precondition of producing itself, and
     // the first run of a fresh checkout would fail on the missing file.
+    //
+    // It must be an explicit EMPTY STATE, not `undefined`. In a Playwright `use`
+    // block `undefined` means "inherit", not "clear", so `storageState: undefined`
+    // still resolved to the top-level path — and the first auth-dependent run on
+    // a checkout without tests/e2e/.auth/ failed with
+    // `ENOENT: tests/e2e/.auth/storageState.json`, from the very project whose
+    // job is to create it. Invisible on any machine that already had a session.
     {
       name: 'setup',
       testMatch: /auth\.setup\.ts/,
-      use: { viewport: { width: 1280, height: 800 }, storageState: undefined },
+      use: {
+        viewport: { width: 1280, height: 800 },
+        storageState: { cookies: [], origins: [] },
+      },
     },
 
     // Specs that assert on source files, not on a rendered page. They need no
