@@ -24,6 +24,12 @@ const FILES = [
   `${ROOT}/roast-requests-client.tsx`,
   `${ROOT}/sessions-client.tsx`,
   `${ROOT}/batches/batches-client.tsx`,
+  // The route's first frame, and it was absent from this list for the whole
+  // conversion — so it stayed loud, silently, while every test here passed.
+  // It is the fallback that paints BEFORE the page, which is exactly the frame
+  // a screenshot suite never catches. tests/unit/loading-tokens.spec.ts now
+  // sweeps every loading.tsx in the group so no route can repeat this omission.
+  `${ROOT}/loading.tsx`,
 ]
 /**
  * Converted component directories — swept for loud classes.
