@@ -66,8 +66,19 @@ export function RoastingPageClient({
         roasted pound is the number that ties this surface to COGS, and it is a
         reduce over sessions the page already loads.
       */}
-      <div className="flex flex-wrap gap-6 items-end">
-        <div className="flex-none w-[268px]" data-testid="roasting-hero">
+      {/*
+        Stacked below md, one ruled line at md and up.
+
+        This was `flex flex-wrap` with a fixed 268px hero and a `flex-1` strip,
+        which cannot wrap: `flex-1` sets `flex-basis: 0`, so the strip never
+        exceeds its container and never triggers `flex-wrap` — it just shrinks.
+        At 375px the content box is 327px, the hero took 268 and the gap 24,
+        leaving the strip 35px to render four stats in. StatStrip clips at
+        `overflow-x: hidden`, so the figures were cut mid-number rather than
+        visibly overflowing.
+      */}
+      <div className="flex flex-col md:flex-row md:flex-wrap gap-6 md:items-end">
+        <div className="w-full md:w-[268px] md:flex-none" data-testid="roasting-hero">
           <HeroMetric
             label="Cost per roasted lb · 30d"
             value={heroValue}
@@ -82,7 +93,7 @@ export function RoastingPageClient({
           ruled line. It also has its own tab now, so the strip stays about cost
           and yield.
         */}
-        <div className="flex-1 min-w-0" data-testid="roasting-stats">
+        <div className="w-full min-w-0 md:flex-1" data-testid="roasting-stats">
           <StatStrip
             stats={[
               { label: "Roasted · 30d", value: lb(rollup.totalRoastedG), unit: "lb" },
