@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test'
-import { computeProcessingFee, type FeeOrder } from '../../lib/orders/fees'
+import {
+  computeProcessingFee,
+  formatProcessingFee,
+  FEE_TITLE,
+  type FeeOrder,
+} from '../../lib/orders/fees'
 
 /**
  * The fee rule decides what every synced order records as its processing
@@ -111,5 +116,72 @@ test.describe('not knowable yet', () => {
       })
     )
     expect(result).toBeNull()
+  })
+})
+
+/**
+ * The DISPLAY rule, which both /orders and /orders/[id] render.
+ *
+ * These exist because a mutation proved the components were unreachable from
+ * this suite: deleting the `~` prefix from the detail worksheet left all 236
+ * tests green, since only the credentialed e2e suite was watching. The
+ * formatter is now the single implementation, and these are the fast tests
+ * that fail when it changes.
+ */
+test.describe('formatProcessingFee', () => {
+  test('an actual fee is plain — no tilde, and no excuse in the tooltip', () => {
+    const result = formatProcessingFee({
+      total_processing_fee: 1.41,
+      processing_fee_source: 'actual',
+    })
+    expect(result).toEqual({ state: 'actual', text: '$1.41' })
+    expect(FEE_TITLE[result.state]).toBeUndefined()
+  })
+
+  test('an estimated fee carries the ~ that separates inferred from reported', () => {
+    // AC 7. The tilde is the ONLY on-screen difference between a figure
+    // Shopify reported and one this code derived — losing it silently
+    // upgrades every estimate to a fact.
+    const result = formatProcessingFee({
+      total_processing_fee: 1.41,
+      processing_fee_source: 'estimated',
+    })
+    expect(result).toEqual({ state: 'estimated', text: '~$1.41' })
+    expect(FEE_TITLE[result.state]).toContain('Estimated')
+  })
+
+  test('a null fee reads as not synced, never as $0.00', () => {
+    const result = formatProcessingFee({ total_processing_fee: null })
+    expect(result).toEqual({ state: 'unknown', text: 'not synced' })
+    expect(FEE_TITLE[result.state]).toContain('unknown')
+  })
+
+  test('a missing fee field is unknown, not a crash and not zero', () => {
+    expect(formatProcessingFee({})).toEqual({ state: 'unknown', text: 'not synced' })
+  })
+
+  test('a genuine $0 fee is a FIGURE, not the unknown sentinel', () => {
+    // The $0-giveaway case. `fee == null` must not catch 0, or every free
+    // order reads as un-synced forever and AC 3 is undone at the last step.
+    const result = formatProcessingFee({
+      total_processing_fee: 0,
+      processing_fee_source: 'actual',
+    })
+    expect(result).toEqual({ state: 'actual', text: '$0.00' })
+  })
+
+  test('an unrecognised source is treated as actual, never dropped', () => {
+    // Defensive: the column is check-constrained, but a future value must
+    // still render its figure rather than vanish behind a sentinel.
+    const result = formatProcessingFee({
+      total_processing_fee: 2.5,
+      processing_fee_source: 'something-new',
+    })
+    expect(result).toEqual({ state: 'actual', text: '$2.50' })
+  })
+
+  test('fees are fixed to two decimals, not left as float noise', () => {
+    expect(formatProcessingFee({ total_processing_fee: 1.4 }).text).toBe('$1.40')
+    expect(formatProcessingFee({ total_processing_fee: 12 }).text).toBe('$12.00')
   })
 })

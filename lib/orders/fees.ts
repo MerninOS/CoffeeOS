@@ -67,6 +67,59 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * order's) also returns null — an unknown fee, never a guess and never a
  * throw. A sync must not fail an order because its fee payload was odd.
  */
+/** An order row as the DISPLAY side sees it — after storage, not before. */
+export interface StoredFee {
+  total_processing_fee?: number | null;
+  processing_fee_source?: string | null;
+}
+
+export type FeeDisplayState = "actual" | "estimated" | "unknown";
+
+/**
+ * Why the figure reads the way it does, keyed by state.
+ *
+ * Lives here rather than in either component for the same reason the
+ * formatter does: two surfaces render this fee, and an explanation that
+ * disagrees between them is worse than none. `actual` has no tooltip — a
+ * reported figure needs no excuse.
+ */
+export const FEE_TITLE: Record<FeeDisplayState, string | undefined> = {
+  unknown: "Fee unknown — the next sync of this order fetches it from Shopify.",
+  estimated:
+    "Estimated at the plan rate (2.9% + 30¢) — Shopify reported no fee data for this order.",
+  actual: undefined,
+};
+
+/**
+ * How a stored fee reads on screen: one state, one string, one place.
+ *
+ * Extracted because /orders and /orders/[id] each rendered these three cases
+ * independently — the list via two JSX branches, the detail via a prefix
+ * ternary — and neither was reachable from the unit suite. A mutation test
+ * proved it: deleting the `~` from the detail page left all 236 unit tests
+ * green, because the only thing watching that marker was the credentialed
+ * e2e suite. Two hand-written copies of a rule, with the fast tests blind to
+ * both, is precisely the drift lib/orders/cogs.ts exists to prevent.
+ *
+ * The `~` is not decoration. It is the only thing on screen separating a
+ * figure Shopify reported from one this code inferred, which AC 7 requires.
+ */
+export function formatProcessingFee(order: StoredFee): {
+  state: FeeDisplayState;
+  text: string;
+} {
+  const fee = order.total_processing_fee;
+
+  // Null is "not yet known", NOT zero — rendering $0.00 here would claim a
+  // knowledge we lack. A re-sync fills it in.
+  if (fee == null) return { state: "unknown", text: "not synced" };
+
+  const amount = `$${fee.toFixed(2)}`;
+  return order.processing_fee_source === "estimated"
+    ? { state: "estimated", text: `~${amount}` }
+    : { state: "actual", text: amount };
+}
+
 export function computeProcessingFee(order: FeeOrder): ProcessingFee | null {
   const currency = order.totalPriceSet?.shopMoney?.currencyCode;
   const total = parseFloat(order.totalPriceSet?.shopMoney?.amount ?? "");

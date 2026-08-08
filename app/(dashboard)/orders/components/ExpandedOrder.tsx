@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { classifyOrder, type ProductLookup } from "@/lib/orders/cogs";
+import { formatProcessingFee, FEE_TITLE } from "@/lib/orders/fees";
 import { mono, overline, sans, money } from "./tokens";
 import type {
   Order,
@@ -412,29 +413,26 @@ export function ExpandedOrder({
               }}
             >
               <span>Processing fee</span>
-              {order.total_processing_fee == null ? (
-                <span
-                  data-testid="processing-fee"
-                  data-state="unknown"
-                  style={{ ...mono, color: "var(--ink-subtle)" }}
-                  title="Fee unknown — the next sync of this order fetches it from Shopify."
-                >
-                  not synced
-                </span>
-              ) : order.processing_fee_source === "estimated" ? (
-                <span
-                  data-testid="processing-fee"
-                  data-state="estimated"
-                  style={mono}
-                  title="Estimated at the plan rate (2.9% + 30¢) — Shopify reported no fee data for this order."
-                >
-                  ~{money(order.total_processing_fee)}
-                </span>
-              ) : (
-                <span data-testid="processing-fee" data-state="actual" style={mono}>
-                  {money(order.total_processing_fee)}
-                </span>
-              )}
+              {(() => {
+                // State and string both come from lib/orders/fees.ts — the
+                // detail worksheet renders the identical call, so the two
+                // surfaces cannot drift.
+                const fee = formatProcessingFee(order);
+                return (
+                  <span
+                    data-testid="processing-fee"
+                    data-state={fee.state}
+                    style={
+                      fee.state === "unknown"
+                        ? { ...mono, color: "var(--ink-subtle)" }
+                        : mono
+                    }
+                    title={FEE_TITLE[fee.state]}
+                  >
+                    {fee.text}
+                  </span>
+                );
+              })()}
             </div>
           </div>
         </div>

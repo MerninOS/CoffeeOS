@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { cogsLabel } from "@/lib/orders/format";
+import { formatProcessingFee, FEE_TITLE } from "@/lib/orders/fees";
 import { IconButton } from "@merninos/ui/instrument";
 import { X } from "lucide-react";
 import { mono, overline, sans, money } from "../../components/tokens";
@@ -374,29 +375,21 @@ export function Worksheet({
           <div className={HEAD_CELL} style={CELL} />
           <div className={HEAD_CELL} style={CELL} />
           <Figure label="Cost" style={mono}>
-            {order.total_processing_fee == null ? (
-              <span
-                data-testid="detail-processing-fee"
-                data-state="unknown"
-                style={{ color: "var(--ink-subtle)" }}
-                title="Fee unknown — the next sync of this order fetches it from Shopify."
-              >
-                not synced
-              </span>
-            ) : (
-              <span
-                data-testid="detail-processing-fee"
-                data-state={order.processing_fee_source === "estimated" ? "estimated" : "actual"}
-                title={
-                  order.processing_fee_source === "estimated"
-                    ? "Estimated at the plan rate (2.9% + 30¢) — Shopify reported no fee data for this order."
-                    : undefined
-                }
-              >
-                {order.processing_fee_source === "estimated" ? "~" : ""}
-                {money(order.total_processing_fee)}
-              </span>
-            )}
+            {(() => {
+              // Identical call to the one /orders makes — see
+              // lib/orders/fees.ts for why this is not inlined twice.
+              const fee = formatProcessingFee(order);
+              return (
+                <span
+                  data-testid="detail-processing-fee"
+                  data-state={fee.state}
+                  style={fee.state === "unknown" ? { color: "var(--ink-subtle)" } : undefined}
+                  title={FEE_TITLE[fee.state]}
+                >
+                  {fee.text}
+                </span>
+              );
+            })()}
           </Figure>
           <div style={{ ...CELL, ...RULE }} />
         </div>
