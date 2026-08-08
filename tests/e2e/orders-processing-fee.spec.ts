@@ -23,7 +23,18 @@ import path from 'node:path'
  *                figures would erase the distinction AC 7 requires.
  */
 
+/** Detail-page subject. Reached by direct URL, so its age does not matter. */
 const ORDER_NAME = '#0902'
+
+/**
+ * List-page subject — and it must be the NEWEST seeded order, not #0902.
+ *
+ * /orders defaults to a 30-day period and the suite pins ORDERS_PAGE_LIMIT=3,
+ * so only the three most recent orders render. #0902 is seeded in 2025 and
+ * never appears there; a list assertion against it fails on an empty locator
+ * for a reason that looks nothing like its cause.
+ */
+const LIST_ORDER_NAME = '#1002'
 
 function orderIdFromFixture(name: string): string {
   const file = path.join(__dirname, '..', 'fixtures', 'seeded-orders.json')
@@ -85,7 +96,9 @@ async function setFee(
 // nobody would connect back to this file.
 test.afterAll(async () => {
   if (!admin) return
-  await setFee(orderIdFromFixture(ORDER_NAME), null, null)
+  for (const name of [ORDER_NAME, LIST_ORDER_NAME]) {
+    await setFee(orderIdFromFixture(name), null, null)
+  }
 })
 
 test('a never-synced order shows its fee as not synced, not as $0', async ({ page }) => {
@@ -100,6 +113,33 @@ test('a never-synced order shows its fee as not synced, not as $0', async ({ pag
   await expect(fee).toBeVisible()
   await expect(fee).toHaveAttribute('data-state', 'unknown')
   await expect(fee).toHaveText('not synced')
+})
+
+test('the LIST row distinguishes estimated from actual, not just unknown', async ({ page }) => {
+  // Guards the row query specifically. It selects `*` while the range
+  // aggregate selects explicit columns, so `processing_fee_source` reaches
+  // the row by inheritance rather than by name — narrow that select and every
+  // estimated fee silently renders as actual, losing the ~ that AC 7 requires.
+  // The unknown-state test above cannot catch it: null short-circuits before
+  // the source is ever read.
+  test.skip(!admin, 'no service-role credentials in this environment')
+  const orderId = orderIdFromFixture(LIST_ORDER_NAME)
+  try {
+    await setFee(orderId, 1.03, 'estimated')
+    await page.goto('/orders')
+    await expect(page).not.toHaveURL(/\/auth\//)
+
+    const row = page.getByTestId('order-row').filter({ hasText: LIST_ORDER_NAME })
+    await expect(row).toBeVisible()
+    await row.click()
+
+    const fee = page.getByTestId('order-expanded').first().getByTestId('processing-fee')
+    await expect(fee).toBeVisible()
+    await expect(fee).toHaveAttribute('data-state', 'estimated')
+    await expect(fee).toHaveText('~$1.03')
+  } finally {
+    await setFee(orderId, null, null)
+  }
 })
 
 test('an estimated fee renders with the ~ prefix on the detail worksheet', async ({ page }) => {
