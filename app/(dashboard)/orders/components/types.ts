@@ -49,6 +49,9 @@ export interface Order {
   subtotal_price: number;
   total_tax: number;
   total_price: number;
+  /** Null = not yet known (pre-feature or unpaid order), not $0. See lib/orders/fees.ts. */
+  total_processing_fee: number | null;
+  processing_fee_source: "actual" | "estimated" | null;
   currency: string;
   ready_to_ship: boolean;
   order_line_items: OrderLineItem[];

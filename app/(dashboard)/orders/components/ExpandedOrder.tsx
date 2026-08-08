@@ -394,6 +394,48 @@ export function ExpandedOrder({
                 {money(order.total_price || 0)}
               </span>
             </div>
+            {/*
+              A COST, not part of the customer total above — it sits with the
+              payment summary because it is what Shopify kept of that money.
+              Three states, mirroring the null-discipline of the column:
+              actual (plain), estimated (~ prefix, since it is the plan-rate
+              formula, not a reported figure), unknown (null — a re-sync
+              fills it; rendering 0 here would claim a knowledge we lack).
+            */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                padding: "var(--space-1) 0 0",
+                ...sans,
+                color: "var(--ink-muted)",
+              }}
+            >
+              <span>Processing fee</span>
+              {order.total_processing_fee == null ? (
+                <span
+                  data-testid="processing-fee"
+                  data-state="unknown"
+                  style={{ ...mono, color: "var(--ink-subtle)" }}
+                  title="Fee unknown — the next sync of this order fetches it from Shopify."
+                >
+                  not synced
+                </span>
+              ) : order.processing_fee_source === "estimated" ? (
+                <span
+                  data-testid="processing-fee"
+                  data-state="estimated"
+                  style={mono}
+                  title="Estimated at the plan rate (2.9% + 30¢) — Shopify reported no fee data for this order."
+                >
+                  ~{money(order.total_processing_fee)}
+                </span>
+              ) : (
+                <span data-testid="processing-fee" data-state="actual" style={mono}>
+                  {money(order.total_processing_fee)}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </SubBlock>
