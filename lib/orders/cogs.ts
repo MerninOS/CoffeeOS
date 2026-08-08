@@ -172,9 +172,22 @@ export interface CogsCustomCost {
 
 export interface CostableOrder {
   total_price: number | null
+  /**
+   * Null means the fee is not yet known (pre-feature order, unpaid order) —
+   * a different fact from a known $0 fee on a free order. Costing treats
+   * null as 0 (the fee is bounded and small, unlike an unknown recipe, so
+   * it never excludes an order from the aggregate); the UI badges it.
+   * See migration 028 / CoffeeOS#133.
+   */
+  total_processing_fee?: number | null
+  processing_fee_source?: string | null
   order_line_items?: CogsLineItem[] | null
   order_components?: CogsOrderComponent[] | null
   order_custom_costs?: CogsCustomCost[] | null
+}
+
+export function getProcessingFee(order: CostableOrder): number {
+  return order.total_processing_fee || 0
 }
 
 export function getLineItemCogs(item: CogsLineItem, products: ProductLookup): number {
@@ -205,7 +218,16 @@ export function getOrderLineItemsCogs(order: CostableOrder, products: ProductLoo
 }
 
 export function getOrderCogs(order: CostableOrder, products: ProductLookup): number {
-  return getOrderLineItemsCogs(order, products) + getTotalAdditionalCosts(order)
+  // The processing fee is a third cost lane, deliberately NOT folded into
+  // getTotalAdditionalCosts: that accessor backs the operator-entered costs
+  // concept (components + custom costs), and the fee is a platform cost the
+  // operator never enters. Lumping them would make the "additional costs"
+  // figure disagree with what the operator can see and edit.
+  return (
+    getOrderLineItemsCogs(order, products) +
+    getTotalAdditionalCosts(order) +
+    getProcessingFee(order)
+  )
 }
 
 

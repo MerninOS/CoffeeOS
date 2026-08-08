@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test'
 import {
   classifyOrder,
   aggregate,
+  getOrderCogs,
+  getProcessingFee,
   type ProductLookup,
 } from '../../lib/orders/cogs'
 
@@ -218,5 +220,66 @@ test.describe('aggregate', () => {
     const result = aggregate([], PRODUCTS)
     expect(result.margin).toBe(0)
     expect(result.totalRevenue).toBe(0)
+  })
+})
+
+test.describe('processing fee lane', () => {
+  test('a known fee joins line items and additional costs in getOrderCogs', () => {
+    const result = getOrderCogs(
+      {
+        total_price: 100,
+        total_processing_fee: 3.2,
+        processing_fee_source: 'actual',
+        order_line_items: [item('p-guji')],
+      },
+      PRODUCTS
+    )
+    expect(result).toBeCloseTo(11.9621825 + 3.2, 4)
+  })
+
+  test('a null fee costs 0 and the order STAYS costed', () => {
+    // The fee rule is deliberately weaker than the recipe rule: an unknown
+    // fee is bounded and small, an unknown recipe is unbounded. Excluding
+    // pre-feature orders would empty the aggregate until the backfill ran.
+    const order = {
+      total_price: 100,
+      total_processing_fee: null,
+      order_line_items: [item('p-guji')],
+    }
+    expect(getProcessingFee(order)).toBe(0)
+    expect(getOrderCogs(order, PRODUCTS)).toBeCloseTo(11.9621825, 4)
+    expect(classifyOrder(order, PRODUCTS).status).toBe('costed')
+  })
+
+  test('the aggregate subtracts fees from costed orders', () => {
+    const result = aggregate(
+      [
+        {
+          total_price: 100,
+          total_processing_fee: 3.2,
+          order_line_items: [item('p-guji')],
+        },
+      ],
+      PRODUCTS
+    )
+    expect(result.cogs).toBeCloseTo(11.9621825 + 3.2, 4)
+    expect(result.profit).toBeCloseTo(100 - 11.9621825 - 3.2, 4)
+  })
+
+  test('a fee on an uncosted order does not sneak it into the aggregate', () => {
+    // classifyOrder never reads fee fields — costability is about recipes
+    // and links. A fee-bearing order missing a recipe stays excluded.
+    const result = aggregate(
+      [
+        {
+          total_price: 43,
+          total_processing_fee: 1.55,
+          order_line_items: [item('p-dayglow')],
+        },
+      ],
+      PRODUCTS
+    )
+    expect(result.excludedUncosted).toBe(1)
+    expect(result.cogs).toBe(0)
   })
 })
