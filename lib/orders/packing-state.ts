@@ -115,6 +115,7 @@ export async function getPackingState(
     .select(
       `
       id, shopify_order_id, order_name, total_price, total_shipping,
+      total_processing_fee, processing_fee_source,
       order_line_items ( id, title, quantity, product_id ),
       order_components ( id, quantity, components ( id, name, unit, cost_per_unit ) ),
       order_custom_costs ( id, description, amount )

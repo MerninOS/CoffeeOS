@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { cogsLabel } from "@/lib/orders/format";
+import { formatProcessingFee, FEE_TITLE } from "@/lib/orders/fees";
 import { IconButton } from "@merninos/ui/instrument";
 import { X } from "lucide-react";
 import { mono, overline, sans, money } from "../../components/tokens";
@@ -356,6 +357,42 @@ export function Worksheet({
           </div>
         ))}
         <div style={{ gridColumn: "1 / -1", ...RULE }}>{addCostRow}</div>
+
+        {/* ── Processing fee ──
+            Its own group, not a custom-cost row: those are operator-entered
+            and removable, this is synced from Shopify and is neither. It must
+            be VISIBLE here because the Cost column reconciles to the COGS
+            figure below, which now includes it (lib/orders/cogs.ts). */}
+        <GroupRow label="Processing fee" note="synced from Shopify — not editable" />
+        <div className={ROW} style={{ borderBottom: "1px solid var(--hairline)" }}>
+          <div style={{ ...CELL, ...RULE }} className="flex items-center">
+            {order.processing_fee_source === "estimated"
+              ? "Shopify Payments (estimated at plan rate)"
+              : "Shopify Payments"}
+          </div>
+          <div className={HEAD_CELL} style={CELL} />
+          <div className={HEAD_CELL} style={CELL} />
+          <div className={HEAD_CELL} style={CELL} />
+          <div className={HEAD_CELL} style={CELL} />
+          <Figure label="Cost" style={mono}>
+            {(() => {
+              // Identical call to the one /orders makes — see
+              // lib/orders/fees.ts for why this is not inlined twice.
+              const fee = formatProcessingFee(order);
+              return (
+                <span
+                  data-testid="detail-processing-fee"
+                  data-state={fee.state}
+                  style={fee.state === "unknown" ? { color: "var(--ink-subtle)" } : undefined}
+                  title={FEE_TITLE[fee.state]}
+                >
+                  {fee.text}
+                </span>
+              );
+            })()}
+          </Figure>
+          <div style={{ ...CELL, ...RULE }} />
+        </div>
 
         {/* ── Totals ──
             Revenue reconciles down the Revenue column and cost down the Cost

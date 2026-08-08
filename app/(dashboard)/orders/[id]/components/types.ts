@@ -57,6 +57,9 @@ export type Order = {
   total_price: number;
   /** Stored by lib/orders/sync.ts. Read it rather than deriving a residual. */
   total_shipping: number | null;
+  /** Null = not yet known (pre-feature or unpaid order), not $0. See lib/orders/fees.ts. */
+  total_processing_fee: number | null;
+  processing_fee_source: "actual" | "estimated" | null;
   currency: string;
   ready_to_ship: boolean;
   order_line_items: OrderLineItem[];

@@ -9,6 +9,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { type ShopifyOrder, parseShopifyGid } from "@/lib/shopify";
+import { computeProcessingFee } from "./fees";
 
 export interface LineItemRow {
   shopify_line_item_id: string;
@@ -68,15 +69,55 @@ export function buildLineItemRows(
   });
 }
 
-export async function upsertShopifyOrder(
-  supabase: SupabaseClient,
-  ownerId: string,
-  order: ShopifyOrder,
-  productMap: Map<string, string>
-): Promise<{ orderId: string } | { error: string }> {
-  const shopifyOrderId = parseShopifyGid(order.id);
+/** What the row already holds, so a re-sync cannot make the record worse. */
+export interface StoredFeeRow {
+  total_processing_fee: number | null;
+  processing_fee_source: string | null;
+}
 
-  const orderFields = {
+/**
+ * The order-row shape both entry points write, extracted so the fee rule can
+ * be tested without a Supabase mock.
+ *
+ * The fee fields are SPREAD IN ONLY WHEN KNOWN, and never when they would
+ * make the stored record less true. Two distinct hazards:
+ *
+ *   1. computeProcessingFee returns null (unpaid, malformed payload, a
+ *      gateway we cannot price). Omitting the keys leaves any stored fee
+ *      untouched, where writing nulls would erase a known figure because one
+ *      re-sync happened to get an odd payload. unpaid→paid still updates:
+ *      once paid, the result is non-null and the keys are present.
+ *
+ *   2. An ESTIMATE would overwrite a figure Shopify actually REPORTED. This
+ *      is not hypothetical and not rare: past Shopify's 60-day protected-order
+ *      window the transactions payload comes back empty, and the dashboard
+ *      sync walks the newest 500 orders on every run. Without this guard every
+ *      order eventually crosses day 60 and has its exact, reported fee
+ *      replaced by 2.9% × total + 30¢, flipping `actual` → `estimated` and
+ *      putting a `~` on a figure that used to be precise. The column would
+ *      degrade monotonically and never recover.
+ *
+ * Downgrade is refused; UPGRADE is not. An estimate replaced by a reported
+ * figure is exactly what should happen, and a re-reported actual may freely
+ * correct an earlier actual.
+ */
+export function buildOrderFields(order: ShopifyOrder, stored?: StoredFeeRow | null) {
+  const processingFee = computeProcessingFee(order);
+
+  const wouldDowngrade =
+    processingFee?.source === "estimated" &&
+    stored?.processing_fee_source === "actual" &&
+    stored.total_processing_fee != null;
+
+  const feeFields =
+    processingFee && !wouldDowngrade
+      ? {
+          total_processing_fee: processingFee.fee,
+          processing_fee_source: processingFee.source,
+        }
+      : {};
+
+  return {
     shopify_order_number: order.name,
     order_name: order.name,
     created_at_shopify: order.createdAt,
@@ -88,14 +129,29 @@ export async function upsertShopifyOrder(
     total_shipping: parseFloat(order.totalShippingPriceSet.shopMoney.amount),
     currency: order.totalPriceSet.shopMoney.currencyCode,
     synced_at: new Date().toISOString(),
+    ...feeFields,
   };
+}
 
+export async function upsertShopifyOrder(
+  supabase: SupabaseClient,
+  ownerId: string,
+  order: ShopifyOrder,
+  productMap: Map<string, string>
+): Promise<{ orderId: string } | { error: string }> {
+  const shopifyOrderId = parseShopifyGid(order.id);
+
+  // Selected BEFORE the row is built: buildOrderFields needs to know what is
+  // already stored so an estimate cannot overwrite a reported fee. Reordered
+  // from its original position below the row construction for that reason.
   const { data: existingOrder } = await supabase
     .from("orders")
-    .select("id")
+    .select("id, total_processing_fee, processing_fee_source")
     .eq("shopify_order_id", shopifyOrderId)
     .eq("user_id", ownerId)
     .maybeSingle();
+
+  const orderFields = buildOrderFields(order, existingOrder);
 
   let orderId: string;
 

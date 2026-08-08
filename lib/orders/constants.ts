@@ -31,6 +31,18 @@ export const DEFAULT_PERIOD: PeriodValue = '30'
 export const ORDERS_PAGE_LIMIT = Number(process.env.ORDERS_PAGE_LIMIT ?? 100)
 
 /**
+ * Shopify Payments online rate for the store's plan (Basic: 2.9% + 30¢),
+ * used ONLY as the estimate fallback when an order carries no transaction
+ * fee data (manual/draft orders). Verified against live orders 2026-08-08:
+ * #1314's actual fee of $1.41 is exactly 38.33 × 0.029 + 0.30.
+ *
+ * Deliberately not configurable in settings — a single-tenant constant until
+ * CoffeeOS has merchants on other plans (spec open question 2, CoffeeOS#133).
+ */
+export const SHOPIFY_FEE_RATE = 0.029
+export const SHOPIFY_FEE_FLAT = 0.3
+
+/**
  * `?period=` is user-editable, so an unrecognised value falls back to the
  * default rather than throwing — a 500 on `?period=banana` would be a
  * self-inflicted outage.

@@ -114,6 +114,7 @@ export default async function OrdersPage({
     .from("orders")
     .select(`
       total_price,
+      total_processing_fee,
       order_line_items ( product_id, quantity ),
       order_components ( quantity, components ( cost_per_unit ) ),
       order_custom_costs ( amount )

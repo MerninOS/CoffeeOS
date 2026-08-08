@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { buildLineItemRows } from '../../lib/orders/sync'
+import { buildLineItemRows, buildOrderFields } from '../../lib/orders/sync'
 import type { ShopifyOrder } from '../../lib/shopify'
 
 const money = (amount: string) => ({ shopMoney: { amount, currencyCode: 'USD' } })
@@ -14,6 +14,14 @@ const order: ShopifyOrder = {
   subtotalPriceSet: money('20.00'),
   totalShippingPriceSet: money('5.00'),
   totalTaxSet: money('0.00'),
+  // The live shape: auth carries no fees, capture carries the real one.
+  transactions: [
+    { gateway: 'shopify_payments', fees: [] },
+    {
+      gateway: 'shopify_payments',
+      fees: [{ amount: { amount: '1.03', currencyCode: 'USD' } }],
+    },
+  ],
   lineItems: {
     edges: [
       {
@@ -88,4 +96,93 @@ test('uses the discounted unit price, not the original, for price and total_pric
   const rows = buildLineItemRows(discountedOrder, new Map())
   expect(rows[0].price).toBe(7.5)
   expect(rows[0].total_price).toBe(15)
+})
+
+test.describe('buildOrderFields processing fee', () => {
+  test('paid order with transaction fees writes the actual figure', () => {
+    const fields = buildOrderFields(order)
+    expect(fields.total_processing_fee).toBe(1.03)
+    expect(fields.processing_fee_source).toBe('actual')
+  })
+
+  test('paid order with no fee rows writes the estimate', () => {
+    const fields = buildOrderFields({
+      ...order,
+      transactions: [{ gateway: 'shopify_payments', fees: [] }],
+    })
+    // 25.00 × 0.029 + 0.30 = 1.025 → 1.03
+    expect(fields.total_processing_fee).toBe(1.03)
+    expect(fields.processing_fee_source).toBe('estimated')
+  })
+
+  test('an estimate NEVER overwrites a fee Shopify actually reported', () => {
+    // The degradation this guard exists to stop. Past Shopify's 60-day
+    // protected-order window the transactions payload comes back empty, and
+    // the dashboard sync walks the newest 500 orders every run — so without
+    // this, every order eventually crosses day 60 and has its exact reported
+    // fee replaced by the plan-rate guess, flipping actual → estimated.
+    const aged = { ...order, transactions: [{ gateway: 'shopify_payments', fees: [] }] }
+    const fields = buildOrderFields(aged, {
+      total_processing_fee: 1.41,
+      processing_fee_source: 'actual',
+    })
+    expect('total_processing_fee' in fields).toBe(false)
+    expect('processing_fee_source' in fields).toBe(false)
+  })
+
+  test('an estimate MAY replace an earlier estimate, and actual may correct actual', () => {
+    // Only the downgrade is refused. Refusing everything would freeze the
+    // column against legitimate corrections.
+    const estimating = { ...order, transactions: [{ gateway: 'shopify_payments', fees: [] }] }
+    expect(
+      buildOrderFields(estimating, {
+        total_processing_fee: 9.99,
+        processing_fee_source: 'estimated',
+      }).total_processing_fee
+    ).toBe(1.03)
+
+    expect(
+      buildOrderFields(order, {
+        total_processing_fee: 9.99,
+        processing_fee_source: 'actual',
+      }).total_processing_fee
+    ).toBe(1.03)
+  })
+
+  test('a reported fee upgrades a stored estimate', () => {
+    const fields = buildOrderFields(order, {
+      total_processing_fee: 1.99,
+      processing_fee_source: 'estimated',
+    })
+    expect(fields.total_processing_fee).toBe(1.03)
+    expect(fields.processing_fee_source).toBe('actual')
+  })
+
+  test('unknowable fee OMITS the keys so an update cannot clobber a stored figure', () => {
+    // Not `undefined`-valued keys: supabase-js serialises those away, but the
+    // contract worth pinning is that the keys are absent, so a re-sync of an
+    // unpaid order (or one with a malformed fee payload) leaves whatever the
+    // row already holds untouched.
+    const fields = buildOrderFields({
+      ...order,
+      displayFinancialStatus: 'PENDING',
+      transactions: [],
+    })
+    expect('total_processing_fee' in fields).toBe(false)
+    expect('processing_fee_source' in fields).toBe(false)
+  })
+
+  test('the base row shape is unchanged by the fee addition', () => {
+    const fields = buildOrderFields(order)
+    expect(fields).toMatchObject({
+      shopify_order_number: '#1001',
+      order_name: '#1001',
+      financial_status: 'PAID',
+      subtotal_price: 20,
+      total_tax: 0,
+      total_price: 25,
+      total_shipping: 5,
+      currency: 'USD',
+    })
+  })
 })

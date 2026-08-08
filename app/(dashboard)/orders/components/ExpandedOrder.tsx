@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { classifyOrder, type ProductLookup } from "@/lib/orders/cogs";
+import { formatProcessingFee, FEE_TITLE } from "@/lib/orders/fees";
 import { mono, overline, sans, money } from "./tokens";
 import type {
   Order,
@@ -393,6 +394,45 @@ export function ExpandedOrder({
               <span style={{ ...mono, fontSize: "var(--fs-data)", color: "var(--ink)" }}>
                 {money(order.total_price || 0)}
               </span>
+            </div>
+            {/*
+              A COST, not part of the customer total above — it sits with the
+              payment summary because it is what Shopify kept of that money.
+              Three states, mirroring the null-discipline of the column:
+              actual (plain), estimated (~ prefix, since it is the plan-rate
+              formula, not a reported figure), unknown (null — a re-sync
+              fills it; rendering 0 here would claim a knowledge we lack).
+            */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                padding: "var(--space-1) 0 0",
+                ...sans,
+                color: "var(--ink-muted)",
+              }}
+            >
+              <span>Processing fee</span>
+              {(() => {
+                // State and string both come from lib/orders/fees.ts — the
+                // detail worksheet renders the identical call, so the two
+                // surfaces cannot drift.
+                const fee = formatProcessingFee(order);
+                return (
+                  <span
+                    data-testid="processing-fee"
+                    data-state={fee.state}
+                    style={
+                      fee.state === "unknown"
+                        ? { ...mono, color: "var(--ink-subtle)" }
+                        : mono
+                    }
+                    title={FEE_TITLE[fee.state]}
+                  >
+                    {fee.text}
+                  </span>
+                );
+              })()}
             </div>
           </div>
         </div>
