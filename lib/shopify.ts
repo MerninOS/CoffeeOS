@@ -248,6 +248,17 @@ export interface ShopifyOrder {
       currencyCode: string;
     };
   };
+  // A plain list, not a connection — no edges/node wrapper (verified against
+  // the live API 2026-08-08). Card orders arrive as AUTHORIZATION (fees: [])
+  // + CAPTURE (the real fee); lib/orders/fees.ts sums across all of them.
+  transactions: Array<{
+    fees: Array<{
+      amount: {
+        amount: string;
+        currencyCode: string;
+      };
+    }>;
+  }>;
   lineItems: {
     edges: Array<{
       node: {
@@ -303,6 +314,14 @@ const ORDER_FIELDS = `
     shopMoney {
       amount
       currencyCode
+    }
+  }
+  transactions(first: 10) {
+    fees {
+      amount {
+        amount
+        currencyCode
+      }
     }
   }
   lineItems(first: 50) {

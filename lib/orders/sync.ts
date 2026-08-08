@@ -9,6 +9,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { type ShopifyOrder, parseShopifyGid } from "@/lib/shopify";
+import { computeProcessingFee } from "./fees";
 
 export interface LineItemRow {
   shopify_line_item_id: string;
@@ -68,15 +69,21 @@ export function buildLineItemRows(
   });
 }
 
-export async function upsertShopifyOrder(
-  supabase: SupabaseClient,
-  ownerId: string,
-  order: ShopifyOrder,
-  productMap: Map<string, string>
-): Promise<{ orderId: string } | { error: string }> {
-  const shopifyOrderId = parseShopifyGid(order.id);
+/**
+ * The order-row shape both entry points write, extracted so the fee rule can
+ * be tested without a Supabase mock.
+ *
+ * The fee fields are SPREAD IN ONLY WHEN KNOWN. computeProcessingFee returns
+ * null for an order whose fee is not yet knowable (unpaid, malformed fee
+ * payload) — omitting the keys makes the update leave any previously stored
+ * fee untouched, where writing nulls would clobber a known figure because one
+ * re-sync happened to get an odd payload. The unpaid→paid transition still
+ * updates: once paid, the result is non-null and the keys are present.
+ */
+export function buildOrderFields(order: ShopifyOrder) {
+  const processingFee = computeProcessingFee(order);
 
-  const orderFields = {
+  return {
     shopify_order_number: order.name,
     order_name: order.name,
     created_at_shopify: order.createdAt,
@@ -88,7 +95,24 @@ export async function upsertShopifyOrder(
     total_shipping: parseFloat(order.totalShippingPriceSet.shopMoney.amount),
     currency: order.totalPriceSet.shopMoney.currencyCode,
     synced_at: new Date().toISOString(),
+    ...(processingFee
+      ? {
+          total_processing_fee: processingFee.fee,
+          processing_fee_source: processingFee.source,
+        }
+      : {}),
   };
+}
+
+export async function upsertShopifyOrder(
+  supabase: SupabaseClient,
+  ownerId: string,
+  order: ShopifyOrder,
+  productMap: Map<string, string>
+): Promise<{ orderId: string } | { error: string }> {
+  const shopifyOrderId = parseShopifyGid(order.id);
+
+  const orderFields = buildOrderFields(order);
 
   const { data: existingOrder } = await supabase
     .from("orders")
