@@ -23,6 +23,12 @@ const fee = (amount: string, currencyCode = 'USD') => ({
   amount: { amount, currencyCode },
 })
 
+/** A Shopify Payments transaction, the only kind the estimate may price. */
+const sp = (fees: ReturnType<typeof fee>[] = []) => ({
+  gateway: 'shopify_payments',
+  fees,
+})
+
 test.describe('actual fees', () => {
   test('auth + capture pair: fee lives on the SECOND transaction', () => {
     // The shape every card order arrives in. Reading only the first
@@ -44,6 +50,19 @@ test.describe('actual fees', () => {
     expect(result).toEqual({ fee: 1.55, source: 'actual' })
   })
 
+  test('every transaction is summed — well past the old first:10 cap', () => {
+    // The query asks for first: 100. It previously asked for 10, which would
+    // have stored a PARTIAL sum under the 'actual' label — the one state with
+    // no tilde and no tooltip — on an order with many partial captures or
+    // retried payments. A plain list carries no pageInfo, so nothing
+    // downstream could ever detect the truncation.
+    const many = Array.from({ length: 11 }, () => sp([fee('0.10')]))
+    expect(computeProcessingFee(order({ transactions: many }))).toEqual({
+      fee: 1.1,
+      source: 'actual',
+    })
+  })
+
   test('single SALE transaction with one fee row', () => {
     // Live order #1313: $64.00, fee $2.16.
     const result = computeProcessingFee(
@@ -57,16 +76,42 @@ test.describe('actual fees', () => {
 })
 
 test.describe('estimate fallback', () => {
-  test('paid order with no fee rows estimates at rate + flat, rounded', () => {
+  test('a Shopify Payments order with no fee rows estimates at rate + flat', () => {
     // 38.33 × 0.029 + 0.30 = 1.41157 → 1.41 (AC 2). Matches what Shopify
-    // actually charged #1314, which is the point of the constants.
-    const result = computeProcessingFee(order({ transactions: [] }))
+    // actually charged #1314, which is the point of the constants. The
+    // gateway must be present: this is the "fee not reachable yet" case,
+    // e.g. an order past the 60-day protected-order window.
+    const result = computeProcessingFee(order({ transactions: [sp()] }))
     expect(result).toEqual({ fee: 1.41, source: 'estimated' })
   })
 
-  test('missing transactions field behaves as no fee rows', () => {
-    const result = computeProcessingFee(order({ transactions: undefined }))
-    expect(result).toEqual({ fee: 1.41, source: 'estimated' })
+  test('a NON-Shopify-Payments order gets no invented fee', () => {
+    // Cash, bank transfer, cheque, gift card, POS, external gateway — a
+    // roaster's wholesale invoices are normally one of these, and Shopify
+    // Payments never touched the money, so the true processing fee is $0.
+    // Booking 2.9% here would invent a cost AND label it "Shopify Payments"
+    // on an order paid in cash. Unknowable beats fabricated.
+    for (const gateway of ['manual', 'cash', 'gift_card', 'paypal']) {
+      const result = computeProcessingFee(
+        order({ transactions: [{ gateway, fees: [] }] })
+      )
+      expect(result, `gateway ${gateway} must not be estimated`).toBeNull()
+    }
+  })
+
+  test('an order with no transactions at all is unknowable, not estimated', () => {
+    // Nothing to prove it was Shopify Payments, so nothing to price.
+    expect(computeProcessingFee(order({ transactions: [] }))).toBeNull()
+    expect(computeProcessingFee(order({ transactions: undefined }))).toBeNull()
+  })
+
+  test('a reported fee is trusted whatever the gateway says', () => {
+    // The gateway gate guards the ESTIMATE only. If Shopify reports a fee,
+    // that is a fact about money already taken and is never second-guessed.
+    const result = computeProcessingFee(
+      order({ transactions: [{ gateway: 'paypal', fees: [fee('1.10')] }] })
+    )
+    expect(result).toEqual({ fee: 1.1, source: 'actual' })
   })
 
   test('$0 order stores a true zero, never the 30¢ flat fee', () => {

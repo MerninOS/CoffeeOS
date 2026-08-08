@@ -252,6 +252,8 @@ export interface ShopifyOrder {
   // the live API 2026-08-08). Card orders arrive as AUTHORIZATION (fees: [])
   // + CAPTURE (the real fee); lib/orders/fees.ts sums across all of them.
   transactions: Array<{
+    /** Only `shopify_payments` carries a fee this app can reason about. */
+    gateway: string | null;
     fees: Array<{
       amount: {
         amount: string;
@@ -316,7 +318,11 @@ const ORDER_FIELDS = `
       currencyCode
     }
   }
-  transactions(first: 10) {
+  # first: 100, not 10. Truncation here would store a PARTIAL sum under the
+  # 'actual' label — the one state with no tilde and no tooltip — and this is
+  # a plain list with no pageInfo, so nothing downstream could ever detect it.
+  transactions(first: 100) {
+    gateway
     fees {
       amount {
         amount

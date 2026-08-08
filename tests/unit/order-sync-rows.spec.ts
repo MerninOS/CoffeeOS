@@ -16,8 +16,11 @@ const order: ShopifyOrder = {
   totalTaxSet: money('0.00'),
   // The live shape: auth carries no fees, capture carries the real one.
   transactions: [
-    { fees: [] },
-    { fees: [{ amount: { amount: '1.03', currencyCode: 'USD' } }] },
+    { gateway: 'shopify_payments', fees: [] },
+    {
+      gateway: 'shopify_payments',
+      fees: [{ amount: { amount: '1.03', currencyCode: 'USD' } }],
+    },
   ],
   lineItems: {
     edges: [
@@ -103,10 +106,56 @@ test.describe('buildOrderFields processing fee', () => {
   })
 
   test('paid order with no fee rows writes the estimate', () => {
-    const fields = buildOrderFields({ ...order, transactions: [] })
+    const fields = buildOrderFields({
+      ...order,
+      transactions: [{ gateway: 'shopify_payments', fees: [] }],
+    })
     // 25.00 × 0.029 + 0.30 = 1.025 → 1.03
     expect(fields.total_processing_fee).toBe(1.03)
     expect(fields.processing_fee_source).toBe('estimated')
+  })
+
+  test('an estimate NEVER overwrites a fee Shopify actually reported', () => {
+    // The degradation this guard exists to stop. Past Shopify's 60-day
+    // protected-order window the transactions payload comes back empty, and
+    // the dashboard sync walks the newest 500 orders every run — so without
+    // this, every order eventually crosses day 60 and has its exact reported
+    // fee replaced by the plan-rate guess, flipping actual → estimated.
+    const aged = { ...order, transactions: [{ gateway: 'shopify_payments', fees: [] }] }
+    const fields = buildOrderFields(aged, {
+      total_processing_fee: 1.41,
+      processing_fee_source: 'actual',
+    })
+    expect('total_processing_fee' in fields).toBe(false)
+    expect('processing_fee_source' in fields).toBe(false)
+  })
+
+  test('an estimate MAY replace an earlier estimate, and actual may correct actual', () => {
+    // Only the downgrade is refused. Refusing everything would freeze the
+    // column against legitimate corrections.
+    const estimating = { ...order, transactions: [{ gateway: 'shopify_payments', fees: [] }] }
+    expect(
+      buildOrderFields(estimating, {
+        total_processing_fee: 9.99,
+        processing_fee_source: 'estimated',
+      }).total_processing_fee
+    ).toBe(1.03)
+
+    expect(
+      buildOrderFields(order, {
+        total_processing_fee: 9.99,
+        processing_fee_source: 'actual',
+      }).total_processing_fee
+    ).toBe(1.03)
+  })
+
+  test('a reported fee upgrades a stored estimate', () => {
+    const fields = buildOrderFields(order, {
+      total_processing_fee: 1.99,
+      processing_fee_source: 'estimated',
+    })
+    expect(fields.total_processing_fee).toBe(1.03)
+    expect(fields.processing_fee_source).toBe('actual')
   })
 
   test('unknowable fee OMITS the keys so an update cannot clobber a stored figure', () => {

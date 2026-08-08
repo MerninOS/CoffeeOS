@@ -25,6 +25,8 @@ export interface FeeOrder {
     };
   };
   transactions?: Array<{
+    /** Which processor took the money. Only Shopify Payments charges OUR rate. */
+    gateway?: string | null;
     fees?: Array<{
       amount: {
         amount: string;
@@ -33,6 +35,20 @@ export interface FeeOrder {
     }> | null;
   }> | null;
 }
+
+/**
+ * The only gateway whose fee the plan rate describes.
+ *
+ * `fees` is populated for Shopify Payments transactions alone, so "no fee
+ * rows on a paid order" spans two unrelated populations: a Shopify Payments
+ * order whose fee is not reachable (past the 60-day protected-order window),
+ * and an order that never touched Shopify Payments at all — cash, bank
+ * transfer, cheque, gift card, POS, or an external gateway. A roaster's
+ * wholesale invoices are normally the second kind, and their true Shopify
+ * processing fee is ZERO. Estimating 2.9% on those books a cost that does
+ * not exist and labels it "Shopify Payments" on an order paid in cash.
+ */
+const SHOPIFY_PAYMENTS_GATEWAY = "shopify_payments";
 
 export interface ProcessingFee {
   fee: number;
@@ -140,7 +156,16 @@ export function computeProcessingFee(order: FeeOrder): ProcessingFee | null {
 
   if (total === 0) return { fee: 0, source: "actual" };
 
-  if (order.displayFinancialStatus === "PAID") {
+  // The estimate applies to Shopify Payments and nothing else. Without this
+  // gate the rule reads "paid, no fee rows -> assume our plan rate", which
+  // quietly fabricates a fee for every cash, bank-transfer, cheque, gift-card
+  // and external-gateway order — see SHOPIFY_PAYMENTS_GATEWAY above. Those
+  // are `null` (not knowable here), never a guess.
+  const viaShopifyPayments = (order.transactions || []).some(
+    (t) => t.gateway === SHOPIFY_PAYMENTS_GATEWAY,
+  );
+
+  if (order.displayFinancialStatus === "PAID" && viaShopifyPayments) {
     return {
       fee: round2(total * SHOPIFY_FEE_RATE + SHOPIFY_FEE_FLAT),
       source: "estimated",
