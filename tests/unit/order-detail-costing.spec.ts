@@ -69,6 +69,17 @@ test.describe('the figures', () => {
     expect(money(getOrderCogs(ORDER_1312, productOnly))).toBe(11.23)
   })
 
+  test('the processing fee joins the detail total, and null costs nothing', () => {
+    // #1312's real fee (verified live 2026-08-08): $1.29 actual. The detail
+    // page's COGS figure must move by exactly that, and a pre-backfill order
+    // (null fee) must cost what it did before the column existed.
+    const lookup = buildProductLookup(PRODUCTS_1312, VARIANTS_1312)
+    const withFee = { ...ORDER_1312, total_processing_fee: 1.29, processing_fee_source: 'actual' }
+    expect(money(getOrderCogs(withFee, lookup))).toBe(28.94)
+    const preBackfill = { ...ORDER_1312, total_processing_fee: null }
+    expect(money(getOrderCogs(preBackfill, lookup))).toBe(27.65)
+  })
+
   test('order components and custom costs are both in the total', () => {
     const lookup = buildProductLookup(PRODUCTS_1312, VARIANTS_1312)
     const withoutExtras = { ...ORDER_1312, order_components: [], order_custom_costs: [] }

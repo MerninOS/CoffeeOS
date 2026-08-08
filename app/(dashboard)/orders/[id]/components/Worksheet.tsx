@@ -357,6 +357,50 @@ export function Worksheet({
         ))}
         <div style={{ gridColumn: "1 / -1", ...RULE }}>{addCostRow}</div>
 
+        {/* ── Processing fee ──
+            Its own group, not a custom-cost row: those are operator-entered
+            and removable, this is synced from Shopify and is neither. It must
+            be VISIBLE here because the Cost column reconciles to the COGS
+            figure below, which now includes it (lib/orders/cogs.ts). */}
+        <GroupRow label="Processing fee" note="synced from Shopify — not editable" />
+        <div className={ROW} style={{ borderBottom: "1px solid var(--hairline)" }}>
+          <div style={{ ...CELL, ...RULE }} className="flex items-center">
+            {order.processing_fee_source === "estimated"
+              ? "Shopify Payments (estimated at plan rate)"
+              : "Shopify Payments"}
+          </div>
+          <div className={HEAD_CELL} style={CELL} />
+          <div className={HEAD_CELL} style={CELL} />
+          <div className={HEAD_CELL} style={CELL} />
+          <div className={HEAD_CELL} style={CELL} />
+          <Figure label="Cost" style={mono}>
+            {order.total_processing_fee == null ? (
+              <span
+                data-testid="detail-processing-fee"
+                data-state="unknown"
+                style={{ color: "var(--ink-subtle)" }}
+                title="Fee unknown — the next sync of this order fetches it from Shopify."
+              >
+                not synced
+              </span>
+            ) : (
+              <span
+                data-testid="detail-processing-fee"
+                data-state={order.processing_fee_source === "estimated" ? "estimated" : "actual"}
+                title={
+                  order.processing_fee_source === "estimated"
+                    ? "Estimated at the plan rate (2.9% + 30¢) — Shopify reported no fee data for this order."
+                    : undefined
+                }
+              >
+                {order.processing_fee_source === "estimated" ? "~" : ""}
+                {money(order.total_processing_fee)}
+              </span>
+            )}
+          </Figure>
+          <div style={{ ...CELL, ...RULE }} />
+        </div>
+
         {/* ── Totals ──
             Revenue reconciles down the Revenue column and cost down the Cost
             column, so the two are legible against each other. The old page
